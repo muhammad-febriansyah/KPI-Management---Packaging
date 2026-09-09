@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2547F9" />
+  <title>Dashboard · KPI Management Co-Packing</title>
+  <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="assets/css/tailwind.css" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <div class="admin-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi utama">
+      <div class="sidebar-head">
+        <img src="assets/images/logo.svg" alt="KPI Management Co-Packing" />
+        <button class="square-btn mobile-brand" type="button" data-sidebar-toggle aria-label="Tutup sidebar" aria-expanded="false"><span data-icon="x-mark"></span></button>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-link active" href="dashboard.html" title="Dashboard"><span class="icon-wrap" data-icon="home"></span><span class="nav-label">Dashboard</span></a>
+        <a class="nav-link" href="#" title="Master Client"><span class="icon-wrap" data-icon="building-office-2"></span><span class="nav-label">Master Client</span></a>
+        <a class="nav-link" href="#" title="Karyawan"><span class="icon-wrap" data-icon="users"></span><span class="nav-label">Karyawan</span></a>
+        <a class="nav-link" href="#" title="Produk"><span class="icon-wrap" data-icon="cube"></span><span class="nav-label">Produk</span></a>
+        <a class="nav-link" href="#" title="Realisasi Pekerjaan"><span class="icon-wrap" data-icon="clipboard-document-list"></span><span class="nav-label">Realisasi Pekerjaan</span></a>
+        <a class="nav-link" href="#" title="Potongan Gaji"><span class="icon-wrap" data-icon="wallet"></span><span class="nav-label">Potongan Gaji</span></a>
+        <a class="nav-link" href="#" title="Laporan Gaji"><span class="icon-wrap" data-icon="document-chart-bar"></span><span class="nav-label">Laporan Gaji</span></a>
+        <a class="nav-link" href="#" title="Laporan Hasil Pekerjaan"><span class="icon-wrap" data-icon="chart-bar"></span><span class="nav-label">Laporan Hasil Pekerjaan</span></a>
+        <a class="nav-link" href="#" title="User & Hak Akses"><span class="icon-wrap" data-icon="shield-check"></span><span class="nav-label">User & Hak Akses</span></a>
+        <a class="nav-link" href="#" title="Audit Log"><span class="icon-wrap" data-icon="clock"></span><span class="nav-label">Audit Log</span></a>
+      </nav>
+      <div class="sidebar-foot">KPI Management Co-Packing<br />Multi-client workspace</div>
+    </aside>
+
+    <div class="overlay" id="sidebarOverlay"></div>
+
+    <div class="main-area">
+      <header class="topbar">
+        <button class="square-btn" type="button" data-sidebar-toggle aria-label="Tampilkan atau sembunyikan sidebar" aria-controls="sidebar" aria-expanded="false"><span data-icon="bars-3"></span></button>
+
+        <div class="client-switch">
+          <button class="client-button" type="button" data-dropdown-button="clientDropdown" aria-haspopup="true">
+            <span data-icon="building-office-2"></span><span class="label">PT Sinar Maju Sejahtera</span><span class="chev" data-icon="chevron-down" data-icon-size="sm"></span>
+          </button>
+          <div class="dropdown-menu" id="clientDropdown" hidden>
+            <button class="dropdown-item">PT Sinar Maju Sejahtera</button>
+            <button class="dropdown-item">PT Prima Pack Indonesia</button>
+            <button class="dropdown-item">PT Contoh Client</button>
+          </div>
+        </div>
+
+        <label class="global-search">
+          <span class="sr-only">Pencarian global</span><span class="search-icon" data-icon="magnifying-glass"></span>
+          <input type="search" placeholder="Cari data karyawan, produk, atau laporan..." />
+        </label>
+        <div class="topbar-spacer"></div>
+        <button class="square-btn notification" type="button" aria-label="Notifikasi"><span data-icon="bell"></span><span class="notification-dot" aria-hidden="true"></span></button>
+        <div class="profile-wrap">
+          <button class="profile-button" type="button" data-dropdown-button="profileDropdown" aria-haspopup="true">
+            <span class="avatar">AD</span><span class="profile-copy"><strong>Admin</strong><span>Super Admin</span></span><span class="chev" data-icon="chevron-down" data-icon-size="sm"></span>
+          </button>
+          <div class="dropdown-menu" id="profileDropdown" hidden><a class="dropdown-item" href="#">Profil Saya</a><a class="dropdown-item" href="login.html">Keluar</a></div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="page-head">
+          <div>
+            <div class="breadcrumb"><span data-icon="home" data-icon-size="sm"></span><span data-icon="chevron-right" data-icon-size="sm"></span><span>Dashboard</span></div>
+            <h1>Ringkasan Performa</h1>
+            <p>Pantau hasil pekerjaan dan performa co-packing dari client yang sedang aktif.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" id="filterButton" type="button"><span data-icon="funnel"></span>Filter</button>
+            <button class="btn btn-primary" type="button"><span data-icon="arrow-down-tray"></span>Unduh Laporan</button>
+          </div>
+        </section>
+
+        <section class="kpi-grid" aria-label="Ringkasan KPI">
+          <article class="kpi-card"><div class="kpi-icon" data-icon="clipboard-document-list"></div><div><div class="kpi-label">Total Realisasi Hari Ini</div><div class="kpi-value">12.480</div><div class="kpi-helper good"><span data-icon="arrow-trending-up" data-icon-size="sm"></span>Naik 12% dari kemarin</div></div></article>
+          <article class="kpi-card"><div class="kpi-icon" data-icon="cube"></div><div><div class="kpi-label">Output Hari Ini</div><div class="kpi-value">12.480</div><div class="kpi-helper good"><span data-icon="arrow-trending-up" data-icon-size="sm"></span>Naik 12% dari kemarin</div></div></article>
+          <article class="kpi-card"><div class="kpi-icon" data-icon="users"></div><div><div class="kpi-label">Karyawan Aktif</div><div class="kpi-value">28</div><div class="kpi-helper">dari 32 karyawan</div></div></article>
+          <article class="kpi-card"><div class="kpi-icon" data-icon="cube"></div><div><div class="kpi-label">Produk Aktif</div><div class="kpi-value">14</div><div class="kpi-helper">dari 18 produk</div></div></article>
+          <article class="kpi-card"><div class="kpi-icon" data-icon="shield-check"></div><div><div class="kpi-label">Total Komplain</div><div class="kpi-value">3</div><div class="kpi-helper good"><span data-icon="arrow-trending-down" data-icon-size="sm"></span>Turun 50% dari kemarin</div></div></article>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="card">
+            <header class="card-head"><h2 class="card-title">Tren Output 7 Hari</h2><select class="select-compact" aria-label="Periode tren"><option>7 Hari Terakhir</option><option>30 Hari Terakhir</option></select></header>
+            <div class="card-body chart-wrap">
+              <svg class="bar-chart" viewBox="0 0 700 250" role="img" aria-label="Grafik batang tren output tujuh hari">
+                <line class="chart-grid-line" x1="52" y1="20" x2="680" y2="20"/><line class="chart-grid-line" x1="52" y1="70" x2="680" y2="70"/><line class="chart-grid-line" x1="52" y1="120" x2="680" y2="120"/><line class="chart-grid-line" x1="52" y1="170" x2="680" y2="170"/><line class="chart-grid-line" x1="52" y1="220" x2="680" y2="220"/>
+                <text class="chart-axis" x="6" y="23">20.000</text><text class="chart-axis" x="6" y="73">15.000</text><text class="chart-axis" x="6" y="123">10.000</text><text class="chart-axis" x="16" y="173">5.000</text><text class="chart-axis" x="37" y="223">0</text>
+                <g fill="#81A7FF"><rect x="83" y="137" width="46" height="83" rx="5"/><rect x="170" y="119" width="46" height="101" rx="5"/><rect x="257" y="124" width="46" height="96" rx="5"/><rect x="344" y="106" width="46" height="114" rx="5"/><rect x="431" y="95" width="46" height="125" rx="5"/><rect x="518" y="88" width="46" height="132" rx="5"/></g><rect x="605" y="95" width="46" height="125" rx="5" fill="#2547F9"/>
+                <g class="chart-value" text-anchor="middle"><text x="106" y="129">8.240</text><text x="193" y="111">10.120</text><text x="280" y="116">9.560</text><text x="367" y="98">11.340</text><text x="454" y="87">12.480</text><text x="541" y="80">13.200</text><text x="628" y="87">12.480</text></g>
+                <g class="chart-axis" text-anchor="middle"><text x="106" y="241">12 Apr</text><text x="193" y="241">13 Apr</text><text x="280" y="241">14 Apr</text><text x="367" y="241">15 Apr</text><text x="454" y="241">16 Apr</text><text x="541" y="241">17 Apr</text><text x="628" y="241">18 Apr</text></g>
+              </svg>
+            </div>
+          </article>
+
+          <article class="card">
+            <header class="card-head"><h2 class="card-title">Output per Shift</h2><select class="select-compact"><option>Hari Ini</option><option>Minggu Ini</option></select></header>
+            <div class="card-body donut-layout">
+              <div class="donut"><div class="donut-center"><strong>12.480</strong><span>Total Output</span></div></div>
+              <div class="legend">
+                <div class="legend-row"><i class="dot" style="background:#2547F9"></i><span>Shift Pagi</span><strong>5.120</strong><span class="percent">41%</span></div>
+                <div class="legend-row"><i class="dot" style="background:#6D95FF"></i><span>Shift Siang</span><strong>4.320</strong><span class="percent">35%</span></div>
+                <div class="legend-row"><i class="dot" style="background:#B7CCFF"></i><span>Shift Malam</span><strong>3.040</strong><span class="percent">24%</span></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="tables-grid">
+          <article class="card">
+            <header class="card-head"><h2 class="card-title">Realisasi Terbaru</h2><a class="card-link" href="#">Lihat Semua <span data-icon="chevron-right" data-icon-size="sm"></span></a></header>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Produk</th><th>Shift</th><th>Output</th><th>Status</th></tr></thead><tbody>
+              <tr><td>18 Apr 2026 14:32</td><td>Sachet Kopi 25g</td><td>Pagi</td><td>2.400</td><td><span class="badge">Selesai</span></td></tr>
+              <tr><td>18 Apr 2026 13:10</td><td>Teh Celup 2g</td><td>Siang</td><td>1.800</td><td><span class="badge">Selesai</span></td></tr>
+              <tr><td>18 Apr 2026 11:05</td><td>Gula Sachet 5g</td><td>Pagi</td><td>3.200</td><td><span class="badge">Selesai</span></td></tr>
+              <tr><td>18 Apr 2026 09:20</td><td>Minuman Serbuk 20g</td><td>Pagi</td><td>1.600</td><td><span class="badge">Selesai</span></td></tr>
+            </tbody></table></div>
+          </article>
+
+          <article class="card">
+            <header class="card-head"><h2 class="card-title">Aktivitas Terbaru</h2><a class="card-link" href="#">Lihat Semua <span data-icon="chevron-right" data-icon-size="sm"></span></a></header>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>Waktu</th><th>Aktivitas</th><th>User</th></tr></thead><tbody>
+              <tr><td>18 Apr 2026 14:35</td><td>Menambahkan realisasi pekerjaan<span class="sub">Produk: Teh Celup 2g (1.800 pcs)</span></td><td>Siti Rahma</td></tr>
+              <tr><td>18 Apr 2026 13:10</td><td>Login ke sistem</td><td>Budi Santoso</td></tr>
+              <tr><td>18 Apr 2026 11:22</td><td>Mengubah data produk<span class="sub">Sachet Kopi 25g</span></td><td>Admin</td></tr>
+              <tr><td>18 Apr 2026 09:15</td><td>Menambahkan karyawan baru</td><td>Admin</td></tr>
+            </tbody></table></div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <aside class="filter-panel" id="filterPanel" aria-label="Filter dashboard">
+    <div class="filter-panel-head"><strong>Filter Dashboard</strong><button class="square-btn" id="filterClose" type="button" aria-label="Tutup filter"><span data-icon="x-mark"></span></button></div>
+    <div class="filter-panel-body">
+      <label>Rentang Tanggal<input type="text" placeholder="Pilih rentang tanggal" /></label>
+      <label>Shift<select><option>Semua Shift</option><option>Pagi</option><option>Siang</option><option>Malam</option></select></label>
+      <label>Produk<select><option>Semua Produk</option><option>Sachet Kopi 25g</option><option>Teh Celup 2g</option></select></label>
+      <button class="btn btn-primary">Terapkan Filter</button>
+      <button class="btn btn-secondary">Reset Filter</button>
+    </div>
+  </aside>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

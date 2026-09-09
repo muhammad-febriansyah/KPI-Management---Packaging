@@ -1,0 +1,43 @@
+<x-layouts.app title="Realisasi Pekerjaan" active="realizations" :current-client="$currentClient" :user="$user">
+    <div class="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
+        <div><p class="text-xs text-slate-500">Transaksi / Realisasi</p><h1 class="mt-2 text-2xl font-semibold text-slate-950">{{ $user->is_super_admin ? 'Realisasi Pekerjaan' : 'Tugas Realisasi Saya' }}</h1><p class="mt-1 text-sm text-slate-500">{{ $user->is_super_admin ? 'Catat realisasi pekerjaan; seluruh field dan assignment karyawan bersifat opsional.' : 'Lihat pekerjaan yang ditugaskan kepada Anda dan isi hasilnya.' }}</p></div>
+        @if($user->is_super_admin)<a href="{{ route('realizations.create') }}" class="inline-flex h-11 items-center gap-2 rounded-lg bg-primary-600 px-4 text-sm font-semibold text-white hover:bg-primary-700"><x-icon name="plus" size="size-4" /> Tambah realisasi</a>@endif
+    </div>
+    <x-card :padding="false"><table data-server-table class="w-full text-left text-sm"><thead><tr><th>Tanggal borongan</th><th>Shift</th><th>Nomor batch</th><th>SKU</th><th>Nama produk</th><th>Total (Karton/Kg)</th><th>Total harga</th><th>Jumlah karyawan</th><th>Aksi</th></tr></thead><tbody></tbody></table></x-card>
+    @if($user->is_super_admin)
+        <div data-realization-assign-modal class="fixed inset-0 z-[90] hidden place-items-center overflow-y-auto bg-slate-950/40 p-4">
+            <div class="my-4 max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl sm:p-8">
+                <div class="mb-6 flex items-start justify-between gap-4">
+                    <div><h2 class="text-xl font-semibold text-slate-950">Assign ke Karyawan</h2><p class="mt-1 text-sm text-slate-500">Pilih satu atau beberapa karyawan untuk realisasi pekerjaan ini.</p></div>
+                    <button type="button" data-realization-assign-close class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Tutup"><x-icon name="x-mark" /></button>
+                </div>
+                <form data-realization-assign-form class="grid gap-5">
+                    <div data-realization-assign-section class="rounded-xl border border-line bg-slate-50 p-4 sm:p-5">
+                        <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 class="text-sm font-semibold text-slate-900">Daftar karyawan</h3><p class="mt-1 text-xs text-slate-500">Assignment dapat dilakukan sekarang atau ditambahkan kembali nanti.</p></div><div class="flex flex-wrap gap-2"><select data-realization-assign-group class="h-10 rounded-lg border border-line bg-white px-3 text-xs"><option value="">Tambah dari group...</option>@foreach($employees->pluck('group')->filter()->unique('id')->sortBy('name') as $group)<option value="{{ $group->id }}">{{ $group->name }} ({{ $employees->where('group_id', $group->id)->count() }} karyawan)</option>@endforeach</select><button type="button" data-realization-assign-add-group class="inline-flex h-10 items-center gap-1.5 rounded-lg bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><x-icon name="plus" size="size-4" /> Group</button></div></div>
+                        <div data-realization-assign-rows class="mt-4 grid gap-2"><div data-realization-assign-row class="flex items-center gap-2"><select name="employee_ids[]" data-realization-assign-employee class="h-11 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"><option value="">Pilih karyawan...</option>@foreach($employees as $employee)<option value="{{ $employee->id }}" data-employee-group="{{ $employee->group_id }}">{{ $employee->employee_no }} — {{ $employee->full_name }}</option>@endforeach</select><button type="button" data-realization-assign-remove class="hidden rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100" aria-label="Hapus karyawan"><x-icon name="trash" size="size-4" /></button><button type="button" data-realization-assign-add class="rounded-lg bg-emerald-50 p-2 text-emerald-700 hover:bg-emerald-100" aria-label="Tambah karyawan"><x-icon name="plus" size="size-4" /></button></div></div>
+                    </div>
+                    <div class="flex justify-end gap-3"><button type="button" data-realization-assign-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button><button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-700"><x-icon name="users" size="size-4" /> Simpan assignment</button></div>
+                </form>
+            </div>
+        </div>
+    @endif
+    @unless($user->is_super_admin)
+        <div data-realization-fill-modal class="fixed inset-0 z-[90] hidden place-items-center bg-slate-950/40 p-4">
+            <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+                <div class="mb-5 flex items-start justify-between gap-4">
+                    <div><h2 class="text-lg font-semibold text-slate-950">Isi hasil pekerjaan</h2><p class="mt-1 text-sm text-slate-500">Semua field bersifat opsional.</p></div>
+                    <button type="button" data-realization-fill-close class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Tutup"><x-icon name="x-mark" /></button>
+                </div>
+                <form data-realization-fill-form class="grid gap-4"><input type="hidden" name="_method" value="PUT">
+                    <label class="grid gap-2 text-sm font-semibold"><span>Total (<span data-realization-fill-unit>Pcs</span>)</span><input type="number" step="0.001" min="0" name="total_output" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <label class="grid gap-2 text-sm font-semibold"><span>Waktu mulai</span><input type="time" name="start_time" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
+                        <label class="grid gap-2 text-sm font-semibold"><span>Waktu selesai</span><input type="time" name="end_time" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
+                    </div>
+                    <label class="grid gap-2 text-sm font-semibold"><span>Report</span><textarea name="report" rows="3" placeholder="Tambahkan catatan hasil pekerjaan jika diperlukan" class="rounded-lg border border-line px-3 py-2 font-normal"></textarea></label>
+                    <div class="flex justify-end gap-3"><button type="button" data-realization-fill-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button><button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"><x-icon name="check-circle" size="size-4" /> Kirim realisasi</button></div>
+                </form>
+            </div>
+        </div>
+    @endunless
+</x-layouts.app>

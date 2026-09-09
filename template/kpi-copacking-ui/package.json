@@ -1,0 +1,13 @@
+{
+  "name": "kpi-copacking-ui",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npx @tailwindcss/cli -i ./src/input.css -o ./assets/css/tailwind.css --minify",
+    "watch": "npx @tailwindcss/cli -i ./src/input.css -o ./assets/css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "4.3.3",
+    "@tailwindcss/cli": "4.3.3"
+  }
+}

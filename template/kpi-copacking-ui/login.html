@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2547F9" />
+  <title>Masuk · KPI Management Co-Packing</title>
+  <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="assets/css/tailwind.css" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <main class="login-page">
+    <section class="login-brand" aria-label="Informasi aplikasi">
+      <img class="brand-logo" src="assets/images/logo.svg" alt="KPI Management Co-Packing" />
+      <div class="brand-copy">
+        <h1>Pantau Kinerja,<br />Kelola Operasional Lebih Baik</h1>
+        <p>Satu ruang kerja untuk mengelola performa co-packing, master data, dan laporan setiap client secara lebih rapi dan terukur.</p>
+        <div class="brand-features">
+          <article class="feature-row">
+            <div class="feature-icon" data-icon="users"></div>
+            <div><h3>Kelola Data Multi-Client</h3><p>Berpindah client tanpa mencampurkan data operasional antar perusahaan.</p></div>
+          </article>
+          <article class="feature-row">
+            <div class="feature-icon" data-icon="chart-bar"></div>
+            <div><h3>Pantau Performa Harian</h3><p>Lihat output, realisasi, shift, dan KPI penting dari dashboard yang ringkas.</p></div>
+          </article>
+          <article class="feature-row">
+            <div class="feature-icon" data-icon="document-chart-bar"></div>
+            <div><h3>Akses Laporan Lebih Cepat</h3><p>Filter dan unduh laporan sesuai client dan hak akses pengguna.</p></div>
+          </article>
+        </div>
+      </div>
+      <img class="brand-preview" src="assets/images/dashboard-preview.svg" alt="Pratinjau dashboard KPI Management Co-Packing" />
+      <div class="brand-footer">KPI Management Co-Packing · Sistem internal perusahaan</div>
+    </section>
+
+    <section class="login-form-side">
+      <div class="login-card">
+        <span class="welcome-pill">Selamat Datang</span>
+        <h2>Masuk ke akun Anda</h2>
+        <p class="lead">Masuk untuk mengelola performa co-packing, master data, dan laporan client.</p>
+
+        <form id="loginForm" novalidate>
+          <div id="formAlert" class="alert" role="alert" hidden></div>
+          <div class="field-group">
+            <label class="field-label" for="username">Username atau Email<span class="required" aria-hidden="true">*</span></label>
+            <div class="input-wrap">
+              <span class="input-icon" data-icon="user"></span>
+              <input class="form-input" id="username" name="username" autocomplete="username" placeholder="Masukkan username atau email" required />
+            </div>
+            <p class="field-error" hidden>Username atau email wajib diisi.</p>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="password">Password<span class="required" aria-hidden="true">*</span></label>
+            <div class="input-wrap">
+              <span class="input-icon" data-icon="lock-closed"></span>
+              <input class="form-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required />
+              <button class="icon-button" id="togglePassword" type="button" data-icon="eye" aria-label="Tampilkan password"></button>
+            </div>
+            <p class="field-error" hidden>Password wajib diisi.</p>
+          </div>
+
+          <div class="form-row">
+            <label class="checkbox-label"><input type="checkbox" name="remember" /> <span>Ingat saya</span></label>
+            <a class="text-link" href="#">Lupa password?</a>
+          </div>
+
+          <button class="btn btn-primary btn-full" type="submit">Masuk</button>
+          <div class="login-note">Hanya pengguna yang memiliki akses yang dapat masuk ke sistem.</div>
+        </form>
+      </div>
+      <nav class="login-links" aria-label="Tautan bantuan"><a href="#">Kebijakan Privasi</a><a href="#">Syarat Penggunaan</a><a href="#">Bantuan</a></nav>
+    </section>
+  </main>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\AssignWorkRealizationRequest;
+use App\Http\Requests\StoreWorkRealizationRequest;
+use App\Http\Requests\UpdateWorkRealizationRequest;
+use App\Models\Batch;
+use App\Models\Employee;
+use App\Models\Product;
+use App\Models\RealizationEmployee;
+use App\Models\Shift;
+use App\Models\User;
+use App\Models\WorkRealization;
+use App\Notifications\RealizationAssigned;
+use App\Notifications\RealizationSubmitted;
+use App\Services\CurrentClientService;
+use App\Services\RichTextSanitizer;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\View\View;
+use Yajra\DataTables\Facades\DataTables;
+
+class WorkRealizationController extends Controller
+{
+    public function index(Request $request, CurrentClientService $client): View|JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        Gate::authorize('viewAny', WorkRealization::class);
+        $query = WorkRealization::query()->where('client_id', $client->id())->with(['shift', 'batch', 'product', 'employeeAssignments'])->withCount('employeeAssignments')->latest('work_date');
+        if ($request->user()->roleCodeFor($client->get()) === 'employee') {
+            $query->whereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $request->user()->id));
+        }
+        if ($request->has('draw') || $request->expectsJson()) {
+            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($i->employeeAssignments->sum(fn (RealizationEmployee $assignment): float => (float) ($assignment->allocation_output ?? $i->total_output ?? 0) * (float) $assignment->rate_per_unit_snapshot), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
+                // Alerts the viewer, right next to Detail, whether the assigned employee has
+                // actually filled in the work result yet — instead of making them open every
+                // row to find out. When it's still pending and this viewer is the one who can
+                // fill it in, the alert itself is the button that opens the quick-fill modal.
+                $isDone = $i->status === 'submitted';
+                $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
+
+                if ($isDone) {
+                    $workBadge = view('components.badge', ['variant' => 'success', 'slot' => 'Sudah dikerjakan'])->render();
+                } elseif ($request->user()->can('update', $i)) {
+                    $workBadge = '<button type="button" data-realization-fill-open data-url="'.route('realizations.update', $i).'" data-unit="'.e($i->unit_name_snapshot ?: 'Pcs').'" class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Belum dikerjakan</button>';
+                } else {
+                    $workBadge = view('components.badge', ['variant' => 'warning', 'slot' => 'Belum dikerjakan'])->render();
+                }
+
+                if (! $request->user()->is_super_admin) {
+                    return '<div class="flex flex-wrap items-center gap-2">'.$workBadge.$detailAction.'</div>';
+                }
+
+                $assignAction = '<button type="button" data-realization-assign-open data-url="'.route('realizations.assign', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#users"></use></svg>Assign</button>';
+
+                return '<div class="flex flex-wrap items-center gap-2">'.$workBadge.$assignAction.$detailAction.'</div>';
+            })->rawColumns(['action'])->toJson();
+        }
+
+        return view('realizations.index', [
+            'currentClient' => $client->get(),
+            'user' => $request->user(),
+            'employees' => $request->user()->is_super_admin
+                ? Employee::query()->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group')->orderBy('full_name')->get()
+                : collect(),
+        ]);
+    }
+
+    public function create(Request $request, CurrentClientService $client): View
+    {
+        Gate::authorize('create', WorkRealization::class);
+
+        return view('realizations.create', ['currentClient' => $client->get(), 'user' => $request->user(), 'shifts' => Shift::query()->where('client_id', $client->id())->where('status', 'active')->get(), 'batches' => Batch::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('batch_no')->get(), 'products' => Product::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('sku')->get(), 'employees' => Employee::query()->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group')->orderBy('full_name')->get()]);
+    }
+
+    public function show(Request $request, WorkRealization $realization, CurrentClientService $client): View
+    {
+        abort_unless($realization->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        abort_unless($request->user()->can('view', $realization), 404);
+
+        return view('realizations.show', ['realization' => $realization->load(['shift', 'batch', 'product', 'employeeAssignments.employee']), 'currentClient' => $client->get(), 'user' => $request->user(), 'employees' => $request->user()->is_super_admin ? Employee::query()->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group')->orderBy('full_name')->get() : collect()]);
+    }
+
+    public function shiftOptions(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        $search = trim((string) $request->string('q'));
+        $shifts = Shift::query()->where('client_id', $client->id())->where('status', 'active')->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))->orderBy('name')->limit(30)->get();
+
+        return response()->json(['results' => $shifts->map(fn (Shift $shift): array => ['id' => $shift->id, 'text' => $shift->name])]);
+    }
+
+    public function batchOptions(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        $search = trim((string) $request->string('q'));
+        $productId = $request->filled('product_id') ? $request->integer('product_id') : null;
+        $batches = Batch::query()->where('client_id', $client->id())->where('status', 'active')
+            ->when($productId, fn ($query) => $query->where('product_id', $productId))
+            ->when($search !== '', fn ($query) => $query->where('batch_no', 'like', "%{$search}%"))
+            ->orderBy('batch_no')->limit(30)->get();
+
+        return response()->json(['results' => $batches->map(fn (Batch $batch): array => ['id' => $batch->id, 'text' => $batch->batch_no])]);
+    }
+
+    public function store(StoreWorkRealizationRequest $request, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('create', WorkRealization::class);
+
+        $data = $request->validated();
+        $product = filled($data['product_id'] ?? null)
+            ? Product::query()->where('client_id', $client->id())->findOrFail($data['product_id'])
+            : null;
+        $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
+        unset($data['employee_ids']);
+
+        DB::transaction(function () use ($data, $employeeIds, $client, $product, $request): void {
+            $realization = WorkRealization::query()->create($data + [
+                'client_id' => $client->id(),
+                'sku_snapshot' => $product?->sku,
+                'product_name_snapshot' => $product?->name,
+                'unit_name_snapshot' => $product?->unit?->name,
+                'created_by' => $request->user()->id,
+                'status' => $employeeIds === [] ? 'draft' : 'assigned',
+                'is_complaint' => false,
+            ]);
+
+            foreach ($employeeIds as $employeeId) {
+                $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
+                $rate = $product === null ? 0 : ($employee->rate_category === 'lama' ? $product->old_employee_rate : $product->new_employee_rate);
+                $realization->employeeAssignments()->create([
+                    'client_id' => $client->id(),
+                    'employee_id' => $employee->id,
+                    'rate_category_snapshot' => $employee->rate_category,
+                    'rate_per_unit_snapshot' => $rate,
+                    'allocation_output' => $data['total_output'] ?? null,
+                    'gross_amount' => ($data['total_output'] ?? null) === null ? 0 : (int) round((float) $data['total_output'] * (float) $rate),
+                ]);
+                $employee->user?->notify(new RealizationAssigned($realization));
+            }
+        });
+
+        return response()->json(['message' => 'Realisasi berhasil disimpan.'], 201);
+    }
+
+    public function update(UpdateWorkRealizationRequest $request, WorkRealization $realization, CurrentClientService $client, RichTextSanitizer $sanitizer): JsonResponse
+    {
+        abort_unless($realization->client_id === $client->id(), 404);
+        Gate::authorize('update', $realization);
+
+        $data = $request->validated();
+        $data['report'] = $sanitizer->sanitize($data['report'] ?? null);
+
+        DB::transaction(function () use ($data, $realization): void {
+            $realization->update($data + ['status' => 'submitted']);
+
+            foreach ($realization->employeeAssignments as $assignment) {
+                $assignment->update([
+                    'allocation_output' => $realization->total_output,
+                    'gross_amount' => (int) round((float) $realization->total_output * (float) $assignment->rate_per_unit_snapshot),
+                ]);
+            }
+        });
+
+        $notification = new RealizationSubmitted($realization, $request->user()->name);
+        User::query()->where('is_super_admin', true)->get()->each->notify($notification);
+
+        return response()->json(['message' => 'Realisasi berhasil dikirim.']);
+    }
+
+    public function assign(AssignWorkRealizationRequest $request, WorkRealization $realization, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($realization->client_id === $client->id(), 404);
+        Gate::authorize('create', WorkRealization::class);
+
+        foreach ($request->validated('employee_ids') as $employeeId) {
+            $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
+            $rate = $realization->product?->{$employee->rate_category === 'lama' ? 'old_employee_rate' : 'new_employee_rate'} ?? 0;
+
+            $assignment = $realization->employeeAssignments()->firstOrCreate(
+                ['employee_id' => $employee->id],
+                [
+                    'client_id' => $client->id(),
+                    'rate_category_snapshot' => $employee->rate_category,
+                    'rate_per_unit_snapshot' => $rate,
+                    'allocation_output' => $realization->total_output,
+                    'gross_amount' => $realization->total_output === null ? 0 : (int) round((float) $realization->total_output * (float) $rate),
+                ],
+            );
+
+            if ($assignment->wasRecentlyCreated) {
+                $employee->user?->notify(new RealizationAssigned($realization));
+            }
+        }
+
+        $realization->update(['status' => 'assigned']);
+
+        return response()->json(['message' => 'Karyawan berhasil di-assign.']);
+    }
+}

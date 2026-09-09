@@ -1,0 +1,333 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../views/**/*.blade.php';
+@source '../js/**/*.js';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-primary-50: #f3f6ff;
+    --color-primary-100: #dce5ff;
+    --color-primary-600: #2547f9;
+    --color-primary-700: #1d37d8;
+    --color-canvas: #f8fafc;
+    --color-surface: #ffffff;
+    --color-ink: #111827;
+    --color-muted: #6b7280;
+    --color-line: #e5e7eb;
+    --color-success: #16a34a;
+    --color-warning: #d97706;
+    --color-danger: #dc2626;
+    --color-info: #0284c7;
+
+    --radius-card: 0.75rem;
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.03);
+}
+
+@layer base {
+    html {
+        background: var(--color-canvas);
+    }
+
+    body {
+        color: var(--color-ink);
+        font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+        text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+        background: var(--color-primary-100);
+        color: var(--color-primary-700);
+    }
+
+    button,
+    a,
+    input,
+    select,
+    textarea {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    button:not(:disabled),
+    a,
+    [role='button'] {
+        cursor: pointer;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+    }
+}
+
+@layer components {
+    /* datatables.net-dt v3 uses the `dt-*` class prefix (not the legacy
+       `dataTables_wrapper` / `paginate_button` names from DataTables 1.x). */
+    .dt-container {
+        color: var(--color-muted);
+        font-size: 0.8125rem;
+    }
+
+    .dt-container td a,
+    .dt-container td button {
+        white-space: nowrap;
+    }
+
+    .dt-layout-row:first-child {
+        padding: 1.25rem !important;
+        margin: 0 !important;
+        border-bottom: 1px solid var(--color-line);
+    }
+
+    /* DataTables appends a hidden `.dt-autosize` helper node after the
+       bottom controls row, so that row is never actually `:last-child` —
+       target it as "the row after the table" instead. */
+    .dt-layout-table ~ .dt-layout-row {
+        padding: 1.25rem !important;
+        margin: 0 !important;
+        border-top: 1px solid var(--color-line);
+    }
+
+    .dt-length label,
+    .dt-search label {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        margin: 0;
+        color: var(--color-muted);
+    }
+
+    .dt-input {
+        border: 1px solid var(--color-line) !important;
+        border-radius: 0.5rem;
+        background: var(--color-surface) !important;
+        color: var(--color-ink) !important;
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.8125rem;
+        outline: none;
+    }
+
+    .dt-input:focus {
+        border-color: var(--color-primary-600);
+        box-shadow: 0 0 0 3px var(--color-primary-100);
+    }
+
+    .dt-search .dt-input {
+        min-width: 240px;
+    }
+
+    table.dataTable {
+        width: 100% !important;
+        border-collapse: collapse;
+    }
+
+    table.dataTable thead th {
+        border-bottom: 1px solid var(--color-line) !important;
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 0.6875rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    table.dataTable thead th.dt-orderable-asc,
+    table.dataTable thead th.dt-orderable-desc {
+        cursor: pointer;
+    }
+
+    table.dataTable tbody td {
+        border-bottom: 1px solid #f1f5f9;
+        color: var(--color-ink);
+    }
+
+    table.dataTable tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    table.dataTable tbody tr:hover td {
+        background: var(--color-canvas);
+    }
+
+    table.dataTable td.dt-empty {
+        padding: 3rem 1.25rem;
+        text-align: center;
+        color: var(--color-muted);
+    }
+
+    .dt-paging .dt-paging-button {
+        display: inline-flex;
+        min-width: 2.25rem;
+        height: 2.25rem;
+        align-items: center;
+        justify-content: center;
+        margin-left: 0.25rem;
+        border: 1px solid var(--color-line) !important;
+        border-radius: 0.5rem;
+        background: var(--color-surface) !important;
+        color: var(--color-ink) !important;
+        padding: 0 0.5rem;
+    }
+
+    .dt-paging .dt-paging-button.current {
+        border-color: var(--color-primary-600) !important;
+        background: var(--color-primary-600) !important;
+        color: white !important;
+    }
+
+    .dt-paging .dt-paging-button.disabled {
+        opacity: 0.4;
+    }
+
+    .dt-processing {
+        color: var(--color-muted);
+    }
+
+    /* Tom Select — restyled to match the app's h-11 rounded-lg inputs.
+       Tom Select copies the original <select>'s classes (h-11, border,
+       rounded-lg, bg-white, px-3...) onto its own `.ts-wrapper` div, so
+       without this reset the wrapper renders its own bordered box AROUND
+       `.ts-control` (which we also style below) — two nested boxes that
+       read as a doubled input. Strip the wrapper back to invisible and let
+       `.ts-control` be the only visible box. */
+    .ts-wrapper {
+        font-family: inherit;
+        height: auto !important;
+        min-height: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    .ts-wrapper.single .ts-control {
+        min-height: 2.75rem;
+        border: 1px solid var(--color-line) !important;
+        border-radius: 0.5rem !important;
+        background: var(--color-surface) !important;
+        padding: 0 0.75rem;
+        display: flex;
+        align-items: center;
+        box-shadow: none !important;
+    }
+
+    .ts-wrapper.single.focus .ts-control {
+        border-color: var(--color-primary-600) !important;
+        box-shadow: 0 0 0 3px var(--color-primary-100) !important;
+    }
+
+    .ts-control > input {
+        color: var(--color-ink);
+        font-size: inherit;
+    }
+
+    .ts-control > input::placeholder {
+        color: #94a3b8;
+    }
+
+    .ts-wrapper.single .ts-control > .item {
+        color: var(--color-ink);
+    }
+
+    .ts-dropdown {
+        border-color: var(--color-line) !important;
+        border-radius: 0.5rem !important;
+        overflow: hidden;
+        margin-top: 0.25rem;
+        font-family: inherit;
+    }
+
+    .ts-dropdown .option,
+    .ts-dropdown .no-results {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .ts-dropdown .active {
+        background-color: var(--color-primary-50) !important;
+        color: var(--color-primary-700) !important;
+    }
+
+    .select2-container {
+        width: 100% !important;
+        font-family: inherit;
+    }
+
+    .select2-container .select2-selection--single {
+        height: 2.75rem;
+        border: 1px solid var(--color-line);
+        border-radius: 0.5rem;
+        background: var(--color-surface);
+    }
+
+    .select2-container--default.select2-container--open .select2-selection--single,
+    .select2-container--default.select2-container--focus .select2-selection--single {
+        border-color: var(--color-primary-600);
+        box-shadow: 0 0 0 3px var(--color-primary-100);
+    }
+
+    .select2-container .select2-selection--single .select2-selection__rendered {
+        padding: 0 2.25rem 0 0.75rem;
+        line-height: 2.65rem;
+        color: var(--color-ink);
+    }
+
+    .select2-container .select2-selection--single .select2-selection__placeholder {
+        color: #94a3b8;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 2.65rem;
+        right: 0.5rem;
+    }
+
+    .select2-dropdown {
+        border-color: var(--color-line);
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .select2-container--default .select2-results__option--highlighted[aria-selected] {
+        background: var(--color-primary-600);
+    }
+
+    /* Quill — the toolbar and editor render as two separate boxes by
+       default; wrap both in `.rich-editor` and strip their own borders so
+       together they read as a single rounded-lg border-line input. */
+    .rich-editor {
+        border: 1px solid var(--color-line);
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .rich-editor:focus-within {
+        border-color: var(--color-primary-600);
+        box-shadow: 0 0 0 3px var(--color-primary-100);
+    }
+
+    .rich-editor .ql-toolbar.ql-snow {
+        border: none !important;
+        border-bottom: 1px solid var(--color-line) !important;
+        background: var(--color-canvas);
+        font-family: inherit;
+    }
+
+    .rich-editor .ql-container.ql-snow {
+        border: none !important;
+        font-family: inherit;
+        font-size: 0.8125rem;
+    }
+
+    .rich-editor .ql-editor {
+        min-height: 8rem;
+        color: var(--color-ink);
+    }
+
+    .rich-editor .ql-editor.ql-blank::before {
+        color: #94a3b8;
+        font-style: normal;
+    }
+
+    .rich-editor .ql-snow .ql-picker {
+        font-family: inherit;
+    }
+}
