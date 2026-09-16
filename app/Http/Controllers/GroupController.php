@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreGroupRequest;
 use App\Http\Requests\UpdateGroupRequest;
 use App\Models\Group;
@@ -15,6 +16,8 @@ use Yajra\DataTables\Facades\DataTables;
 
 class GroupController extends Controller
 {
+    use DeletesRestrictedRecords;
+
     public function index(Request $request, CurrentClientService $currentClient): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
@@ -59,6 +62,7 @@ class GroupController extends Controller
 
     public function store(StoreGroupRequest $request, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Group::query()->create([...$request->validated(), 'client_id' => $currentClient->id()]);
 
         return $request->expectsJson() || $request->ajax() ? response()->json(['message' => 'Group berhasil ditambahkan.']) : to_route('groups.index')->with('status', 'Group berhasil ditambahkan.');
@@ -76,6 +80,7 @@ class GroupController extends Controller
     public function update(UpdateGroupRequest $request, Group $group, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
         abort_unless($group->client_id === $currentClient->id(), 404);
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('update', $group);
         $group->update($request->validated());
 
@@ -85,8 +90,9 @@ class GroupController extends Controller
     public function destroy(Request $request, Group $group, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
         abort_unless($group->client_id === $currentClient->id(), 404);
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('delete', $group);
-        $group->delete();
+        $this->deleteRestricted($group, 'Group tidak dapat dihapus karena masih dipakai pada produk atau karyawan.');
 
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json(['message' => 'Group berhasil dihapus.']);

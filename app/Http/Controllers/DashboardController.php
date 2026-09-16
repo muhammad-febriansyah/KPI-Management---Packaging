@@ -45,8 +45,8 @@ class DashboardController extends Controller
             'metrics' => [
                 'employees' => $currentClient ? Employee::where('client_id', $currentClient->id)->where('status', 'active')->count() : 0,
                 'products' => $currentClient ? Product::where('client_id', $currentClient->id)->where('status', 'active')->count() : 0,
-                'realizations' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->whereDate('work_date', today())->count() : 0,
-                'output' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->whereDate('work_date', today())->sum('total_output') : 0,
+                'realizations' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->where('work_date', today()->toDateString())->count() : 0,
+                'output' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->where('work_date', today()->toDateString())->sum('total_output') : 0,
                 'complaints' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->where('is_complaint', true)->count() : 0,
             ],
         ]);
@@ -62,16 +62,16 @@ class DashboardController extends Controller
             'currentClient' => $currentClient,
             'user' => $user,
             'metrics' => [
-                'realizationsToday' => (clone $own)->whereDate('work_date', today())->count(),
-                'outputToday' => (clone $own)->whereDate('work_date', today())->sum('total_output'),
-                'realizationsThisMonth' => (clone $own)->whereMonth('work_date', today()->month)->whereYear('work_date', today()->year)->count(),
+                'realizationsToday' => (clone $own)->where('work_date', today()->toDateString())->count(),
+                'outputToday' => (clone $own)->where('work_date', today()->toDateString())->sum('total_output'),
+                'realizationsThisMonth' => (clone $own)->whereBetween('work_date', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()])->count(),
                 'realizationsTotal' => (clone $own)->count(),
             ],
             'recentRealizations' => (clone $own)->with(['shift', 'product'])->latest('work_date')->latest('id')->limit(8)->get(),
             'pendingRealizations' => (clone $own)->where('status', '!=', 'submitted')->with(['shift', 'product'])->orderBy('work_date')->limit(10)->get(),
             'outputTrend' => $this->outputTrend($own),
             'deduction' => $user->employee ? EmployeeDeduction::query()->where('employee_id', $user->employee->id)
-                ->whereHas('deductionPeriod', fn ($query) => $query->whereYear('month', today()->year)->whereMonth('month', today()->month))
+                ->whereHas('deductionPeriod', fn ($query) => $query->whereBetween('month', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()]))
                 ->first() : null,
         ]);
     }

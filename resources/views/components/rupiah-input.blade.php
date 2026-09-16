@@ -7,7 +7,7 @@
 ])
 
 <div class="relative" data-rupiah-field data-rupiah-decimals="{{ $decimals }}">
-    <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">Rp</span>
+    <span data-rupiah-prefix class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">Rp</span>
     <input type="hidden" name="{{ $name }}" data-rupiah-raw value="{{ is_numeric($value) ? $value : '' }}">
     <input
         type="text"

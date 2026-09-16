@@ -25,7 +25,7 @@ class SearchController extends Controller
             return response()->json(['employees' => [], 'products' => [], 'reports' => []]);
         }
 
-        $employees = Gate::allows('viewAny', Employee::class)
+        $employees = $request->user()->canAccessMenu('employees', $client->get()) && Gate::allows('viewAny', Employee::class)
             ? Employee::query()
                 ->where('client_id', $client->id())
                 ->where(fn ($q) => $q->where('full_name', 'like', "%{$search}%")->orWhere('employee_no', 'like', "%{$search}%"))
@@ -40,7 +40,7 @@ class SearchController extends Controller
                 ])
             : collect();
 
-        $products = Gate::allows('viewAny', Product::class)
+        $products = $request->user()->canAccessMenu('products', $client->get()) && Gate::allows('viewAny', Product::class)
             ? Product::query()
                 ->where('client_id', $client->id())
                 ->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))
@@ -56,10 +56,13 @@ class SearchController extends Controller
             : collect();
 
         $reports = collect([
-            ['title' => 'Laporan Payroll', 'subtitle' => 'Rekap gaji karyawan', 'url' => route('reports.payroll')],
-            ['title' => 'Laporan Realisasi Kerja', 'subtitle' => 'Rekap hasil kerja harian', 'url' => route('reports.work')],
-            ['title' => 'Log Audit', 'subtitle' => 'Riwayat aktivitas pengguna', 'url' => route('audit.index')],
-        ])->filter(fn (array $report): bool => Str::contains($report['title'], $search, true))->values();
+            ['menu' => 'reports', 'title' => 'Laporan Payroll', 'subtitle' => 'Rekap gaji karyawan', 'url' => route('reports.payroll')],
+            ['menu' => 'work-reports', 'title' => 'Laporan Realisasi Kerja', 'subtitle' => 'Rekap hasil kerja harian', 'url' => route('reports.work')],
+            ['menu' => null, 'title' => 'Log Audit', 'subtitle' => 'Riwayat aktivitas pengguna', 'url' => route('audit.index')],
+        ])->filter(fn (array $report): bool => ($report['menu'] === null ? $request->user()->is_super_admin : $request->user()->canAccessMenu($report['menu'], $client->get()))
+            && Str::contains($report['title'], $search, true))
+            ->map(fn (array $report): array => collect($report)->except('menu')->all())
+            ->values();
 
         return response()->json(['employees' => $employees, 'products' => $products, 'reports' => $reports]);
     }

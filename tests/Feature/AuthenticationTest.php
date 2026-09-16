@@ -11,15 +11,19 @@ uses(RefreshDatabase::class);
 it('renders the login page for guests', function () {
     $response = $this->get(route('login'));
 
-    $response->assertOk()->assertSee('Masuk ke akun Anda');
+    $response->assertOk()
+        ->assertSee('Masuk ke akun Anda')
+        ->assertSee(asset('images/logo-white.png'), false)
+        ->assertSee(asset('favicon.ico'), false)
+        ->assertDontSee('Kode Client');
 });
 
-it('authenticates active users with a username or email and selects the default client', function (string $login) {
+it('authenticates active users with a username or email and selects their default client', function (string $login) {
     $user = User::factory()->create([
         'username' => 'rani.kusuma',
         'email' => 'rani@example.com',
     ]);
-    $client = Client::factory()->create();
+    $client = Client::factory()->create(['code' => 'CLIENT001']);
     $role = Role::factory()->create();
     $user->clients()->attach($client, [
         'role_id' => $role->getKey(),
@@ -50,7 +54,6 @@ it('rejects invalid credentials with a generic message', function () {
         'username' => 'rani.kusuma',
         'email' => 'rani@example.com',
     ]);
-
     $response = $this->from(route('login'))->post(route('login.store'), [
         'login' => 'rani.kusuma',
         'password' => 'not-the-password',
@@ -64,7 +67,14 @@ it('rejects invalid credentials with a generic message', function () {
 });
 
 it('rejects inactive accounts', function () {
-    User::factory()->inactive()->create(['username' => 'inactive.user']);
+    $client = Client::factory()->create();
+    $user = User::factory()->inactive()->create(['username' => 'inactive.user']);
+    $role = Role::factory()->create();
+    $user->clients()->attach($client, [
+        'role_id' => $role->getKey(),
+        'is_default' => true,
+        'status' => 'active',
+    ]);
 
     $response = $this->from(route('login'))->post(route('login.store'), [
         'login' => 'inactive.user',
@@ -107,6 +117,20 @@ it('logs out and invalidates the session', function () {
     $response
         ->assertRedirectToRoute('login')
         ->assertSessionMissing('current_client_id');
+    $this->assertGuest();
+});
+
+it('rejects valid credentials when the user has no active client access', function () {
+    User::factory()->create(['username' => 'rani.kusuma']);
+
+    $response = $this->from(route('login'))->post(route('login.store'), [
+        'login' => 'rani.kusuma',
+        'password' => 'password',
+    ]);
+
+    $response
+        ->assertRedirectToRoute('login')
+        ->assertSessionHasErrors(['login' => 'Username atau password tidak sesuai.']);
     $this->assertGuest();
 });
 

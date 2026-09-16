@@ -19,11 +19,8 @@ use App\Http\Controllers\SearchController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\WorkRealizationController;
-use App\Services\CurrentClientService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\WorkReportController;
 use Illuminate\Support\Facades\Route;
-use Yajra\DataTables\Facades\DataTables;
 
 Route::get('/', function () {
     return redirect()->route(auth()->check() ? 'dashboard' : 'login');
@@ -59,6 +56,7 @@ Route::middleware('auth')->group(function (): void {
     Route::resource('employees', EmployeeController::class)->except(['show', 'create', 'edit'])->middleware('client');
     Route::resource('products', ProductController::class)->only(['index', 'store', 'update', 'destroy'])->middleware('client');
     Route::get('/products/options', [ProductController::class, 'options'])->name('products.options')->middleware('client');
+    Route::get('/clients/options', [ClientController::class, 'options'])->name('clients.options')->middleware('client');
     Route::get('/realizations', [WorkRealizationController::class, 'index'])->name('realizations.index')->middleware('client');
     Route::get('/realizations/create', [WorkRealizationController::class, 'create'])->name('realizations.create')->middleware('client');
     Route::get('/batches/options', [WorkRealizationController::class, 'batchOptions'])->name('batches.options')->middleware('client');
@@ -79,53 +77,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/reports/payroll/export/pdf', [PayrollReportController::class, 'exportPdf'])->name('reports.payroll.export.pdf')->middleware('client');
     Route::get('/reports/payroll/payslip', [PayslipController::class, 'bulk'])->name('reports.payroll.payslip.bulk')->middleware('client');
     Route::get('/reports/payroll/payslip/{employee}', [PayslipController::class, 'show'])->name('reports.payroll.payslip')->middleware('client');
-    Route::get('/reports/work', function (Request $request, CurrentClientService $client) {
-        abort_unless($request->user()->canAccessMenu('work-reports', $client->get()), 403);
-        $query = DB::table('realization_employees as assignment')
-            ->join('employees', 'employees.id', '=', 'assignment.employee_id')
-            ->join('work_realizations as realization', 'realization.id', '=', 'assignment.work_realization_id')
-            ->where('realization.client_id', $client->id())
-            ->select([
-                'realization.work_date',
-                'realization.shift_id',
-                'realization.status',
-                DB::raw('COALESCE(employees.sim_id, employees.employee_no) AS sim_id'),
-                'employees.full_name',
-                'realization.product_name_snapshot as product_name',
-                'realization.total_output as realization',
-                DB::raw("COALESCE(realization.report, '') AS description"),
-            ])
-            ->orderByDesc('realization.work_date');
-        if ($request->filled('date_from')) {
-            $query->whereDate('realization.work_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('realization.work_date', '<=', $request->date_to);
-        }
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('realization.status', $request->status);
-        }
-        if (! $request->user()->is_super_admin && $request->user()->roleCodeFor($client->get()) === 'employee') {
-            $query->where('employees.user_id', $request->user()->id);
-        }
-        if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::query($query)
-                ->editColumn('work_date', fn ($item): string => $item->work_date ? date('d/m/Y', strtotime($item->work_date)) : '—')
-                // The employee this row is assigned to may not have submitted their
-                // result yet — "realization" and "description" below are only real
-                // once this says "Sudah dikerjakan", not while it's still pending.
-                ->addColumn('work_status', fn ($item): string => view('components.badge', [
-                    'variant' => $item->status === 'submitted' ? 'success' : 'warning',
-                    'slot' => $item->status === 'submitted' ? 'Sudah dikerjakan' : 'Belum dikerjakan',
-                ])->render())
-                ->rawColumns(['work_status'])
-                ->toJson();
-        }
-
-        return view('reports.work', ['currentClient' => $client->get(), 'user' => $request->user()]);
-    })->name('reports.work')->middleware('client');
+    Route::get('/reports/work', WorkReportController::class)->name('reports.work')->middleware('client');
     Route::get('/settings/access', [AccessController::class, 'index'])->name('settings.access')->middleware('client');
     Route::put('/settings/access/roles/{role}', [AccessController::class, 'updateRolePermissions'])->name('settings.access.roles.update');
+    Route::put('/settings/access/users/{user}/status', [AccessController::class, 'toggleUserStatus'])->name('settings.access.users.status')->middleware('client');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit.index')->middleware('client');
     Route::resource('clients', ClientController::class)->only(['index', 'store', 'update', 'destroy'])->withoutMiddleware('client');
 });

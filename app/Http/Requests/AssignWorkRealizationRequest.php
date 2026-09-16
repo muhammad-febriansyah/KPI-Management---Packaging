@@ -20,6 +20,25 @@ class AssignWorkRealizationRequest extends FormRequest
     }
 
     /**
+     * The assignment form renders a blank employee row as its "add another" affordance,
+     * so drop the empty values before the rules below see them. An assignment with no
+     * employee at all still fails on the "required" rule for employee_ids itself.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('employee_ids')) {
+            return;
+        }
+
+        $this->merge([
+            'employee_ids' => array_values(array_filter(
+                (array) $this->input('employee_ids'),
+                fn ($employeeId): bool => filled($employeeId),
+            )),
+        ]);
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, ValidationRule|array<mixed>|string>

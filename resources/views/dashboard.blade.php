@@ -37,14 +37,6 @@
             <h1 class="text-[clamp(1.65rem,2.2vw,2rem)] font-semibold leading-tight tracking-[-0.035em] text-slate-950">Ringkasan performa</h1>
             <p class="mt-1.5 text-sm text-slate-500">Pantau hasil pekerjaan dan performa co-packing dari client yang sedang aktif.</p>
         </div>
-        <div class="flex w-full gap-2 sm:w-auto">
-            <button type="button" data-filter-toggle class="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-primary-600 bg-white px-4 text-sm font-semibold text-primary-600 hover:bg-primary-50 focus-visible:outline-2 focus-visible:outline-primary-600 sm:flex-none">
-                <x-icon name="funnel" size="size-4" /> Filter
-            </button>
-            <button type="button" class="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 text-sm font-semibold text-white hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 sm:flex-none">
-                <x-icon name="arrow-down-tray" size="size-4" /> Unduh laporan
-            </button>
-        </div>
     </section>
 
     <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Ringkasan KPI">

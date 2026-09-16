@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreCostCenterRequest;
 use App\Http\Requests\UpdateCostCenterRequest;
 use App\Models\CostCenter;
@@ -15,6 +16,8 @@ use Yajra\DataTables\Facades\DataTables;
 
 class CostCenterController extends Controller
 {
+    use DeletesRestrictedRecords;
+
     public function index(Request $request, CurrentClientService $client): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
@@ -54,6 +57,7 @@ class CostCenterController extends Controller
 
     public function store(StoreCostCenterRequest $request, CurrentClientService $client): RedirectResponse|JsonResponse
     {
+        abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         CostCenter::query()->create([...$request->validated(), 'client_id' => $client->id()]);
 
         return $request->expectsJson() || $request->ajax() ? response()->json(['message' => 'Cost center berhasil ditambahkan.']) : to_route('cost-centers.index')->with('status', 'Cost center berhasil ditambahkan.');
@@ -71,6 +75,7 @@ class CostCenterController extends Controller
     public function update(UpdateCostCenterRequest $request, CostCenter $costCenter, CurrentClientService $client): RedirectResponse|JsonResponse
     {
         abort_unless($costCenter->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('update', $costCenter);
         $costCenter->update($request->validated());
 
@@ -80,8 +85,9 @@ class CostCenterController extends Controller
     public function destroy(Request $request, CostCenter $costCenter, CurrentClientService $client): JsonResponse|RedirectResponse
     {
         abort_unless($costCenter->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('delete', $costCenter);
-        $costCenter->delete();
+        $this->deleteRestricted($costCenter, 'Cost center tidak dapat dihapus karena masih dipakai pada produk.');
 
         return $request->expectsJson() || $request->ajax() ? response()->json(['message' => 'Cost center berhasil dihapus.']) : to_route('cost-centers.index');
     }

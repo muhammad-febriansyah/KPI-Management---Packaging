@@ -27,7 +27,7 @@ class PayslipController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
         [$dateFrom, $dateTo] = $this->resolveRange($request);
-        $rows = $builder->forClient($client->id(), $dateFrom, $dateTo)->get();
+        $rows = $builder->forClient($client->id(), $dateFrom, $dateTo)->lazy(500);
 
         $pdf = Pdf::loadView('reports.payslip', ['rows' => $rows, 'client' => $client->get(), 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
 
@@ -37,8 +37,12 @@ class PayslipController extends Controller
     /** @return array{0: string, 1: string} */
     private function resolveRange(Request $request): array
     {
-        $dateFrom = $request->filled('date_from') ? $request->input('date_from') : now()->startOfMonth()->toDateString();
-        $dateTo = $request->filled('date_to') ? $request->input('date_to') : now()->endOfMonth()->toDateString();
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ]);
+        $dateFrom = $validated['date_from'] ?? now()->startOfMonth()->toDateString();
+        $dateTo = $validated['date_to'] ?? now()->endOfMonth()->toDateString();
 
         return [$dateFrom, $dateTo];
     }

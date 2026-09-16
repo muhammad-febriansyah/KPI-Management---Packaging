@@ -27,8 +27,6 @@ class PayrollReportController extends Controller
                 ->editColumn('gender', fn (object $row): string => $row->gender === 'male' ? 'Laki-laki' : 'Perempuan')
                 ->addColumn('bpjs_employment', fn (object $row): int => PayrollReportBuilder::bpjsEmployment($row))
                 ->addColumn('net_salary', fn (object $row): int => PayrollReportBuilder::netSalary($row))
-                ->addColumn('action', fn (object $row): string => '<a href="'.route('reports.payroll.payslip', ['employee' => $row->id, 'date_from' => $dateFrom, 'date_to' => $dateTo]).'" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#printer"></use></svg>Cetak</a>')
-                ->rawColumns(['action'])
                 ->toJson();
         }
 
@@ -50,7 +48,7 @@ class PayrollReportController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
         [$dateFrom, $dateTo] = $this->resolveRange($request);
-        $rows = $builder->forClient($client->id(), $dateFrom, $dateTo)->get();
+        $rows = $builder->forClient($client->id(), $dateFrom, $dateTo)->lazy(500);
         $pdf = Pdf::loadView('reports.payroll-pdf', [
             'client' => $client->get(),
             'dateFrom' => $dateFrom,
@@ -64,9 +62,14 @@ class PayrollReportController extends Controller
     /** @return array{0: string, 1: string} */
     private function resolveRange(Request $request): array
     {
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ]);
+
         return [
-            $request->filled('date_from') ? $request->input('date_from') : now()->startOfMonth()->toDateString(),
-            $request->filled('date_to') ? $request->input('date_to') : now()->endOfMonth()->toDateString(),
+            $validated['date_from'] ?? now()->startOfMonth()->toDateString(),
+            $validated['date_to'] ?? now()->endOfMonth()->toDateString(),
         ];
     }
 }

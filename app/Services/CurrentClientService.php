@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\User;
+use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 
@@ -34,6 +35,22 @@ class CurrentClientService
     public function id(): int
     {
         return (int) $this->get()->getKey();
+    }
+
+    /**
+     * Run a tenant-owned write against another client without changing the
+     * request's selected client for the rest of the page.
+     */
+    public function runAs(Client $client, Closure $callback): mixed
+    {
+        $previousClient = $this->client;
+        $this->client = $client;
+
+        try {
+            return $callback();
+        } finally {
+            $this->client = $previousClient;
+        }
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\Client;
 use App\Models\User;
 use App\Models\WorkRealization;
+use App\Services\CurrentClientService;
 
 class WorkRealizationPolicy
 {
@@ -46,7 +47,10 @@ class WorkRealizationPolicy
      */
     public function create(User $user): bool
     {
-        return $user->status === 'active' && $user->is_super_admin;
+        $client = app(CurrentClientService::class);
+
+        return $user->status === 'active'
+            && ($user->is_super_admin || ($client->isResolved() && $user->roleCodeFor($client->get()) === 'employee'));
     }
 
     /**

@@ -225,6 +225,70 @@ const initializeFilterPanel = () => {
     });
 };
 
+const formatUploadFileSize = (bytes) => {
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const replaceInputFile = (input, file) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+};
+
+const compressImage = (file, maxBytes) => new Promise((resolve) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    const candidates = [
+        { maxDimension: 2400, quality: 0.82 },
+        { maxDimension: 2000, quality: 0.72 },
+        { maxDimension: 1600, quality: 0.62 },
+        { maxDimension: 1280, quality: 0.52 },
+    ];
+
+    image.onload = async () => {
+        try {
+            for (const candidate of candidates) {
+                const scale = Math.min(1, candidate.maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                const context = canvas.getContext('2d');
+
+                if (!context) {
+                    resolve(null);
+                    return;
+                }
+
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                const blob = await new Promise((blobResolve) => canvas.toBlob(blobResolve, 'image/jpeg', candidate.quality));
+
+                if (blob && blob.size <= maxBytes) {
+                    const name = file.name.replace(/\.[^.]+$/, '') || 'gambar-hasil';
+                    resolve(new File([blob], `${name}.jpg`, { type: 'image/jpeg', lastModified: Date.now() }));
+                    return;
+                }
+            }
+
+            resolve(null);
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    };
+
+    image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+    };
+    image.src = objectUrl;
+});
+
 const initializeFileUploads = () => {
     document.querySelectorAll('[data-file-upload]').forEach((upload) => {
         const input = upload.querySelector('input[type="file"]');
@@ -237,13 +301,13 @@ const initializeFileUploads = () => {
             return;
         }
 
-        const displayFile = (file) => {
+        const displayFile = (file, suffix = '') => {
             if (!file) {
                 return;
             }
 
             fileName.textContent = file.name;
-            fileMeta.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+            fileMeta.textContent = `${formatUploadFileSize(file.size)}${suffix}`;
 
             if (previewUrl) {
                 URL.revokeObjectURL(previewUrl);
@@ -259,7 +323,44 @@ const initializeFileUploads = () => {
             }
         };
 
-        input.addEventListener('change', () => displayFile(input.files?.[0]));
+        const handleFile = async (file) => {
+            if (!file) {
+                return;
+            }
+
+            const maxBytes = Number(upload.dataset.fileMaxSize || 0);
+            const shouldCompress = upload.dataset.fileCompress === 'true';
+
+            if (maxBytes && file.size > maxBytes && shouldCompress) {
+                fileName.textContent = 'Mengompres gambar...';
+                fileMeta.textContent = 'Mohon tunggu sebentar';
+                const compressedFile = await compressImage(file, maxBytes);
+
+                if (!compressedFile) {
+                    input.value = '';
+                    fileName.textContent = 'Pilih file atau seret ke area ini';
+                    fileMeta.textContent = `Gambar tidak dapat dikompres hingga maksimal ${formatUploadFileSize(maxBytes)}`;
+                    await Swal.fire({ title: 'Gambar terlalu besar', text: 'Pilih gambar yang lebih kecil atau kurangi resolusinya.', icon: 'warning' });
+                    return;
+                }
+
+                replaceInputFile(input, compressedFile);
+                displayFile(compressedFile, ` • dikompres dari ${formatUploadFileSize(file.size)}`);
+                return;
+            }
+
+            if (maxBytes && file.size > maxBytes) {
+                input.value = '';
+                fileName.textContent = 'Pilih file atau seret ke area ini';
+                fileMeta.textContent = `Maksimal ${formatUploadFileSize(maxBytes)}`;
+                await Swal.fire({ title: 'File terlalu besar', text: `Ukuran file maksimal ${formatUploadFileSize(maxBytes)}.`, icon: 'warning' });
+                return;
+            }
+
+            displayFile(file);
+        };
+
+        input.addEventListener('change', () => { void handleFile(input.files?.[0]); });
 
         upload.addEventListener('dragover', (event) => {
             event.preventDefault();
@@ -278,8 +379,8 @@ const initializeFileUploads = () => {
                 return;
             }
 
-            input.files = event.dataTransfer.files;
-            displayFile(input.files[0]);
+            replaceInputFile(input, event.dataTransfer.files[0]);
+            void handleFile(input.files[0]);
         });
     });
 };
@@ -368,7 +469,7 @@ const initializeServerTables = () => {
         const dataTable = new DataTable(table, {
             processing: true,
             serverSide: true,
-            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; params.status = workFilters.querySelector('[data-work-status]')?.value; } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } } },
+            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; const statusFilter = workFilters.querySelector('[data-work-status]'); if (statusFilter) { params.status = statusFilter.value; } } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } } },
             pageLength: 10,
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
@@ -378,11 +479,13 @@ const initializeServerTables = () => {
             ] : resource === 'employees' ? [
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'group_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'products' ? [
-                { data: 'sku' }, { data: 'name' }, { data: 'unit_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'client_name' }, { data: 'sku' }, { data: 'name' }, { data: 'unit_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'realizations' ? [
                 { data: 'work_date' }, { data: 'shift_name' }, { data: 'batch_label' }, { data: 'sku_snapshot' }, { data: 'product_label' }, { data: 'total_output' }, { data: 'total_price' }, { data: 'assignment_count' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'reports/work' ? [
-                { data: 'work_date' }, { data: 'sim_id' }, { data: 'full_name' }, { data: 'product_name' }, { data: 'work_status', orderable: false, searchable: false }, { data: 'realization' }, { data: 'description', defaultContent: '—' },
+                { data: 'work_date' }, { data: 'sim_id' }, { data: 'full_name' }, { data: 'shift_name' }, { data: 'sku_snapshot' }, { data: 'product_name' },
+                { data: 'target', orderable: false, searchable: false }, { data: 'target_price', orderable: false, searchable: false },
+                { data: 'actual' }, { data: 'actual_price', orderable: false, searchable: false }, { data: 'description', defaultContent: '—' },
             ] : resource === 'reports/payroll' ? [
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'gender' }, { data: 'attendance_days' },
                 { data: 'net_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
@@ -394,7 +497,6 @@ const initializeServerTables = () => {
                 { data: 'salary_advance_value', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'correction_minus', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'correction_plus', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
-                { data: 'action', orderable: false, searchable: false },
             ] : resource === 'deductions' ? [
                 { data: 'created_at' }, { data: 'periode' }, { data: 'sim_id' }, { data: 'full_name' },
                 { data: 'bpjs_health' }, { data: 'bpjs_employment' },
@@ -404,9 +506,9 @@ const initializeServerTables = () => {
             ] : resource === 'audit-logs' ? [
                 { data: 'created_at' }, { data: 'description' }, { data: 'ip_address' }, { data: 'user_name' },
             ] : resource === 'settings/access' ? [
-                { data: 'name' }, { data: 'email' }, { data: 'role_name' }, { data: 'status' },
+                { data: 'name' }, { data: 'email' }, { data: 'role_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'clients' ? [
-                { data: 'code' }, { data: 'name' }, { data: 'timezone' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'code' }, { data: 'name' }, { data: 'login_email', defaultContent: '—' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : [
                 { data: 'code', defaultContent: '—', createdCell: (cell) => cell.classList.add('px-5', 'py-4', 'font-medium', 'text-slate-900') },
                 { data: 'name', createdCell: (cell) => cell.classList.add('px-5', 'py-4', 'text-slate-600') },
@@ -483,6 +585,89 @@ const initializeRoleAccessForms = () => {
     });
 };
 
+const initializeUserStatusToggle = () => {
+    document.addEventListener('click', async (event) => {
+        const button = event.target.closest?.('[data-user-status-toggle]');
+        if (!button) return;
+
+        const isActive = button.dataset.status === 'active';
+        const action = isActive ? 'menonaktifkan' : 'mengaktifkan';
+        const result = await Swal.fire({
+            title: `${isActive ? 'Nonaktifkan' : 'Aktifkan'} user?`,
+            text: `Anda akan ${action} ${button.dataset.userName ?? 'user ini'}.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: isActive ? 'Ya, nonaktifkan' : 'Ya, aktifkan',
+            cancelButtonText: 'Batal',
+        });
+        if (!result.isConfirmed) return;
+
+        button.disabled = true;
+        try {
+            const response = await $.ajax({
+                url: button.dataset.url,
+                type: 'PUT',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
+                dataType: 'json',
+            });
+            reloadServerTables();
+            await Swal.fire({ title: 'Berhasil', text: response.message ?? 'Status user berhasil diperbarui.', icon: 'success', timer: 1500, showConfirmButton: false });
+        } catch (error) {
+            await Swal.fire({ title: 'Gagal', text: error.responseJSON?.message ?? 'Status user tidak dapat diperbarui.', icon: 'error' });
+        } finally {
+            button.disabled = false;
+        }
+    });
+};
+
+const initializeAccessTabs = () => {
+    const tabsContainer = document.querySelector('[data-access-tabs]');
+    if (!tabsContainer) return;
+
+    const tabs = [...tabsContainer.querySelectorAll('[data-access-tab]')];
+    const panels = [...tabsContainer.querySelectorAll('[data-access-panel]')];
+
+    const activate = (key, focus = false) => {
+        tabs.forEach((tab) => {
+            const isActive = tab.dataset.accessTab === key;
+            tab.setAttribute('aria-selected', String(isActive));
+            tab.classList.toggle('bg-white', isActive);
+            tab.classList.toggle('shadow-sm', isActive);
+            tab.classList.toggle('ring-1', isActive);
+            tab.classList.toggle('ring-slate-200/70', isActive);
+            tab.classList.toggle('text-primary-600', isActive);
+            tab.classList.toggle('bg-transparent', !isActive);
+            tab.classList.toggle('text-slate-500', !isActive);
+
+            if (isActive && focus) tab.focus();
+        });
+
+        panels.forEach((panel) => {
+            panel.hidden = panel.dataset.accessPanel !== key;
+        });
+    };
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activate(tab.dataset.accessTab));
+        tab.addEventListener('keydown', (event) => {
+            const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+            if (event.key === 'Home' || event.key === 'End') {
+                event.preventDefault();
+                const target = tabs[event.key === 'Home' ? 0 : tabs.length - 1];
+                activate(target.dataset.accessTab, true);
+                return;
+            }
+            if (!direction) return;
+
+            event.preventDefault();
+            const nextIndex = (index + direction + tabs.length) % tabs.length;
+            activate(tabs[nextIndex].dataset.accessTab, true);
+        });
+    });
+
+    activate(tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')?.dataset.accessTab ?? tabs[0]?.dataset.accessTab);
+};
+
 const initializeProductDetailModal = () => {
     const modal = document.querySelector('[data-product-detail-modal]');
     if (!modal) return;
@@ -499,6 +684,9 @@ const initializeProductDetailModal = () => {
         if (!trigger) return;
 
         const data = JSON.parse(trigger.dataset.productDetail);
+        set('client', data.client_name);
+        set('client-code', data.client_code);
+        modal.querySelector('[data-product-detail-client-status]').innerHTML = `<span class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold ${data.client_status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600'}">${data.client_status === 'active' ? 'Aktif' : 'Nonaktif'}</span>`;
         set('sku', data.sku);
         set('name', data.name);
         set('unit', data.unit_name);
@@ -682,6 +870,15 @@ const initializeDatepickers = () => {
     });
 };
 
+// Switching the active client submits the header form straight away, so the page reloads
+// scoped to the newly picked client. CurrentClientController redirects back to the same page.
+const initializeClientSwitcher = () => {
+    document.addEventListener('change', (event) => {
+        const select = event.target.closest?.('[data-client-switcher]');
+        select?.form?.submit();
+    });
+};
+
 const initializeTomSelect = () => {
     document.querySelectorAll('[data-tom-select]').forEach((select) => {
         if (select.tomselect) {
@@ -699,6 +896,10 @@ const initializeTomSelect = () => {
                 valueField: 'id',
                 labelField: 'text',
                 searchField: [],
+                // Without this the control opens empty and only fills once the user types,
+                // which reads as a broken dropdown. Loading the first page on focus keeps
+                // the search itself server-side, so a large catalog is still never dumped.
+                preload: 'focus',
                 load: (query, callback) => {
                     const params = new URLSearchParams({ q: query });
                     const dependsOnValue = dependsOnParam && dependsOnSelector ? document.querySelector(dependsOnSelector)?.value : '';
@@ -772,13 +973,23 @@ const initializeSelect2 = () => {
             width: '100%',
             placeholder: select.data('select2-placeholder') ?? 'Pilih...',
             allowClear: true,
+            ...(remoteUrl ? { minimumInputLength: 1 } : {}),
             ...(remoteUrl ? {
                 ajax: {
                     url: remoteUrl,
                     dataType: 'json',
                     delay: 250,
                     data: (params) => ({ q: params.term ?? '', page: params.page ?? 1 }),
-                    processResults: (data) => ({ results: data.results ?? [], pagination: data.pagination ?? { more: false } }),
+                    processResults: (data) => ({
+                        // Select2's bundled AJAX adapter normalizes remote results
+                        // without its adapter context; pre-seeding the result id
+                        // keeps that normalization path context-independent.
+                        results: (data.results ?? []).map((item) => ({
+                            ...item,
+                            _resultId: `select2-result-${select.attr('id') ?? 'remote'}-${item.id}`,
+                        })),
+                        pagination: data.pagination ?? { more: false },
+                    }),
                     cache: true,
                 },
             } : {}),
@@ -841,6 +1052,9 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
             input.value = item[field] ?? '';
             input.dispatchEvent(new Event('input', { bubbles: true })); // repaint dependents like rupiah-input displays
         });
+        form.querySelectorAll('[data-required-on-create]').forEach((input) => {
+            input.required = !item;
+        });
         form.querySelectorAll('[data-default-on-create]').forEach((input) => {
             input.value = item ? '' : input.dataset.defaultOnCreate;
         });
@@ -858,6 +1072,7 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         });
         form.querySelectorAll('[data-datepicker], input[type="date"], input[type="month"]').forEach((input) => { if (input.value) input._flatpickr?.setDate(input.value, false); });
         form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.setValue(select.value, true));
+        form.querySelectorAll('[data-select2-select]').forEach((select) => $(select).val(select.value).trigger('change'));
         if (title) title.textContent = item ? `Edit ${confirmTitle}` : `Tambah ${confirmTitle}`;
         modal.classList.remove('hidden');
         modal.classList.add('grid');
@@ -882,7 +1097,8 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         const result = await Swal.fire({ title: `${isEdit ? 'Perbarui' : 'Simpan'} ${confirmTitle}?`, icon: 'question', showCancelButton: true, confirmButtonText: isEdit ? 'Perbarui' : 'Simpan', cancelButtonText: 'Batal' });
         if (!result.isConfirmed) return;
         try {
-            await $.ajax({ url: form.action, type: 'POST', data: $(form).serialize(), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            if (!(await validateRealizationImage(form))) return;
+            await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             close();
             reloadServerTables();
             refreshMasterSelectOptions();
@@ -987,6 +1203,35 @@ const initializeRealizationProductPreview = () => {
     update();
 };
 
+const initializeRealizationPricePreview = () => {
+    const form = document.querySelector('[data-realization-form]');
+    const input = document.querySelector('[data-total-output-input]');
+    const preview = document.querySelector('[data-total-price-preview]');
+    const productSelect = document.querySelector('[data-product-select]');
+
+    if (!form || !input || !preview) return;
+
+    const update = () => {
+        const selectedTomOption = productSelect?.tomselect?.options?.[productSelect.value];
+        const output = Number(input.value || 0);
+        const selectedCategories = [...document.querySelectorAll('[data-assignment-employee]')]
+            .map((select) => select.selectedOptions[0]?.dataset.employeeRateCategory)
+            .filter(Boolean);
+        const categories = selectedCategories.length > 0 ? selectedCategories : [form.dataset.currentRateCategory].filter(Boolean);
+        const rate = categories.reduce((total, category) => total + Number(
+            category === 'lama' ? selectedTomOption?.old_employee_rate : selectedTomOption?.new_employee_rate,
+        ), 0);
+        const totalPrice = Number.isFinite(output) ? Math.round(output * rate) : 0;
+
+        preview.value = `Rp ${totalPrice.toLocaleString('id-ID')}`;
+    };
+
+    input.addEventListener('input', update);
+    productSelect?.addEventListener('change', update);
+    document.querySelector('[data-assignment-section]')?.addEventListener('change', update);
+    update();
+};
+
 const initializeRealizationAssignments = () => {
     const section = document.querySelector('[data-assignment-section]');
     const rows = section?.querySelector('[data-assignment-rows]');
@@ -1047,7 +1292,8 @@ const initializeRealizationAssignments = () => {
             return;
         }
         toAdd.forEach((option) => { addRow(option.value); });
-        if (groupSelect) groupSelect.value = '';
+        if (groupSelect?.tomselect) groupSelect.tomselect.clear();
+        else if (groupSelect) groupSelect.value = '';
     });
     refreshButtons();
 };
@@ -1070,6 +1316,24 @@ const initializeRealizationCreatePage = () => {
     });
 };
 
+const validateRealizationImage = async (form) => {
+    const file = form.querySelector('input[name="result_image"]')?.files?.[0];
+
+    if (!file) {
+        return true;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const maxSize = 3 * 1024 * 1024;
+
+    if (!allowedTypes.includes(file.type) || file.size > maxSize) {
+        await Swal.fire({ title: 'File tidak valid', text: 'Pilih gambar JPG, PNG, atau WEBP dengan ukuran maksimal 3 MB.', icon: 'warning' });
+        return false;
+    }
+
+    return true;
+};
+
 const initializeRealizationSubmitPage = () => {
     const form = document.querySelector('[data-realization-submit-form]');
     if (!form) return;
@@ -1078,9 +1342,10 @@ const initializeRealizationSubmitPage = () => {
         event.preventDefault();
         const result = await Swal.fire({ title: 'Kirim hasil pekerjaan?', icon: 'question', showCancelButton: true, confirmButtonText: 'Kirim', cancelButtonText: 'Batal' });
         if (!result.isConfirmed) return;
+        if (!(await validateRealizationImage(form))) return;
 
         try {
-            await $.ajax({ url: form.action, type: 'POST', data: $(form).serialize(), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             await Swal.fire({ title: 'Berhasil', text: 'Realisasi berhasil dikirim.', icon: 'success' });
             window.location.href = form.dataset.redirect;
         } catch (error) {
@@ -1146,11 +1411,13 @@ const initializeRealizationAssignModal = () => {
         refreshButtons();
     };
 
-    const resetRows = () => {
+    const resetRows = (assignedEmployeeIds = []) => {
         rows.querySelectorAll('[data-realization-assign-row]').forEach((row) => row.querySelector('[data-realization-assign-employee]')?.tomselect?.destroy());
-        rows.replaceChildren(pristineRow.cloneNode(true));
-        initializeRowSelect(rows.querySelector('[data-realization-assign-row]'));
-        if (groupSelect) groupSelect.value = '';
+        rows.replaceChildren();
+        const employeeIds = assignedEmployeeIds.length > 0 ? assignedEmployeeIds : [''];
+        employeeIds.forEach((employeeId) => addRow(employeeId));
+        if (groupSelect?.tomselect) groupSelect.tomselect.clear();
+        else if (groupSelect) groupSelect.value = '';
         refreshButtons();
     };
 
@@ -1185,7 +1452,8 @@ const initializeRealizationAssignModal = () => {
             return;
         }
         toAdd.forEach((option) => addRow(option.value));
-        groupSelect.value = '';
+        if (groupSelect.tomselect) groupSelect.tomselect.clear();
+        else groupSelect.value = '';
     });
 
     document.addEventListener('click', (event) => {
@@ -1193,7 +1461,13 @@ const initializeRealizationAssignModal = () => {
         if (!trigger) return;
         event.preventDefault();
         form.action = trigger.dataset.url;
-        resetRows();
+        let assignedEmployeeIds = [];
+        try {
+            assignedEmployeeIds = JSON.parse(trigger.dataset.assignedEmployeeIds ?? '[]');
+        } catch {
+            assignedEmployeeIds = [];
+        }
+        resetRows(assignedEmployeeIds);
         modal.classList.remove('hidden');
         modal.classList.add('grid');
         document.body.classList.add('overflow-hidden');
@@ -1255,9 +1529,10 @@ const initializeRealizationFillModal = () => {
         event.preventDefault();
         const result = await Swal.fire({ title: 'Kirim hasil pekerjaan?', icon: 'question', showCancelButton: true, confirmButtonText: 'Kirim', cancelButtonText: 'Batal' });
         if (!result.isConfirmed) return;
+        if (!(await validateRealizationImage(form))) return;
 
         try {
-            await $.ajax({ url: form.action, type: 'POST', data: $(form).serialize(), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             close();
             await Swal.fire({ title: 'Berhasil', text: 'Realisasi berhasil dikirim.', icon: 'success' });
             // This modal appears both on the DataTable-driven realization list and on the
@@ -1290,6 +1565,35 @@ const initializeDeductionCreatePage = () => {
             const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
             await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data tidak valid.', icon: 'error' });
         }
+    });
+};
+
+const initializeSalaryAdvanceFields = () => {
+    document.querySelectorAll('[data-salary-advance-fields]').forEach((container) => {
+        const typeSelect = container.querySelector('select[name="salary_advance_type"]');
+        const valueField = container.querySelector('[data-salary-advance-value]');
+        const valueInput = container.querySelector('[data-salary-advance-value-input]');
+        const valueLabel = container.querySelector('[data-salary-advance-value-label]');
+        const prefix = container.querySelector('[data-rupiah-prefix]');
+        const suffix = container.querySelector('[data-salary-advance-suffix]');
+
+        if (!typeSelect || !valueField || !valueInput) return;
+
+        const update = () => {
+            const type = typeSelect.value;
+            const hasValue = type === 'fixed' || type === 'percentage';
+            const isPercentage = type === 'percentage';
+
+            valueField.classList.toggle('hidden', !hasValue);
+            valueInput.placeholder = isPercentage ? 'Contoh: 10' : 'Masukkan nilai DP';
+            valueLabel.textContent = isPercentage ? 'Nilai DP Gaji (%)' : 'Nilai DP Gaji (Rupiah)';
+            prefix?.classList.toggle('hidden', isPercentage);
+            suffix?.classList.toggle('hidden', !isPercentage);
+        };
+
+        typeSelect.addEventListener('change', update);
+        typeSelect.addEventListener('input', update);
+        update();
     });
 };
 
@@ -1336,8 +1640,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeServerTables();
     initializeAjaxDeletes();
     initializeRoleAccessForms();
+    initializeUserStatusToggle();
+    initializeAccessTabs();
     initializeDatepickers();
     initializeRupiahInputs();
+    initializeClientSwitcher();
     initializeTomSelect();
     initializeSelect2();
     initializeRichTextEditors();
@@ -1349,9 +1656,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
     initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['employee_no', 'sim_id', 'full_name', 'email', 'phone', 'join_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Password awal menggunakan password.', successUpdate: 'Karyawan berhasil diperbarui.' });
-    initializeMasterModal({ name: 'product', plural: 'products', fields: ['sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'old_employee_rate', 'new_employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
-    initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'timezone', 'status'], confirmTitle: 'client', successCreate: 'Client berhasil ditambahkan.', successUpdate: 'Client berhasil diperbarui.' });
+    initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'old_employee_rate', 'new_employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
+    initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'account_name', 'login_username', 'login_email', 'password', 'password_confirmation', 'status'], confirmTitle: 'client', successCreate: 'Client dan akun login berhasil ditambahkan.', successUpdate: 'Client dan akun login berhasil diperbarui.' });
     initializeRealizationProductPreview();
+    initializeRealizationPricePreview();
     initializeRealizationAssignments();
     initializeRealizationCreatePage();
     initializeRealizationSubmitPage();
@@ -1359,6 +1667,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRealizationAssignModal();
     initializeRealizationFillModal();
     initializeDeductionCreatePage();
+    initializeSalaryAdvanceFields();
     initializeMasterModal({ name: 'deduction-row', plural: 'deductions', fields: ['uniform_amount', 'equipment_amount', 'meal_amount', 'bpjs_health_percent', 'bpjs_employment_percent', 'salary_advance_type', 'salary_advance_value', 'correction_minus', 'correction_plus', 'notes'], confirmTitle: 'potongan gaji', successCreate: 'Potongan gaji berhasil diperbarui.', successUpdate: 'Potongan gaji berhasil diperbarui.' });
     initializeDeductionImport();
     initializeActionButtonStyles();

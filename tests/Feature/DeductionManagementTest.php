@@ -32,6 +32,39 @@ it('renders the deduction create page for the current client', function () {
     $response->assertSee(route('deductions.store'), false);
 });
 
+it('only offers deduction weeks one and two', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('deductions.create'));
+
+    $response->assertOk()
+        ->assertSee('Minggu 1')
+        ->assertSee('Minggu 2')
+        ->assertDontSee('Minggu 3')
+        ->assertDontSee('Minggu 4')
+        ->assertDontSee('Minggu 5');
+});
+
+it('rejects deduction weeks beyond week two', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'status' => 'active']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->post(route('deductions.store'), [
+            'month' => '2026-09',
+            'week_no' => '3',
+            'employee_ids' => [$employee->getKey()],
+        ]);
+
+    $response->assertSessionHasErrors('week_no');
+    expect(DeductionPeriod::query()->where('client_id', $client->getKey())->exists())->toBeFalse();
+});
+
 it('stores deductions from the create page and redirects to the index', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
@@ -49,6 +82,23 @@ it('stores deductions from the create page and redirects to the index', function
     $response->assertRedirect(route('deductions.index'));
     $this->assertDatabaseHas('deduction_periods', ['client_id' => $client->getKey(), 'month' => '2026-09-01 00:00:00', 'week_no' => 2]);
     $this->assertDatabaseHas('employee_deductions', ['client_id' => $client->getKey(), 'employee_id' => $employee->getKey(), 'uniform_amount' => 50000]);
+});
+
+it('limits salary advance percentages to 100', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'status' => 'active']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->post(route('deductions.store'), [
+            'month' => '2026-09',
+            'salary_advance_type' => 'percentage',
+            'salary_advance_value' => 100.001,
+            'employee_ids' => [$employee->getKey()],
+        ]);
+
+    $response->assertSessionHasErrors('salary_advance_value');
 });
 
 it('lists employee deduction rows per employee for the current client', function () {

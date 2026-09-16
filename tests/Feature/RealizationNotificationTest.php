@@ -2,6 +2,7 @@
 
 use App\Models\Client;
 use App\Models\Employee;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Shift;
 use App\Models\Unit;
@@ -18,6 +19,8 @@ uses(RefreshDatabase::class);
 function notifiableEmployeeUser(Client $client): array
 {
     $role = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan']);
+    $permission = Permission::query()->firstOrCreate(['code' => 'menu.realizations'], ['name' => 'Menu: Realisasi']);
+    $role->permissions()->syncWithoutDetaching([$permission->getKey()]);
     $employeeUser = User::factory()->create();
     $employeeUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
     $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $employeeUser->getKey()]);

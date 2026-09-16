@@ -32,9 +32,10 @@ class UpdateWorkRealizationRequest extends FormRequest
     {
         return [
             'total_output' => ['nullable', 'numeric', 'min:0'],
-            'start_time' => ['nullable', 'date_format:H:i'],
-            'end_time' => ['nullable', 'date_format:H:i'],
+            'start_time' => ['nullable', 'date_format:H:i,H:i:s'],
+            'end_time' => ['nullable', 'date_format:H:i,H:i:s'],
             'report' => ['nullable', 'string'],
+            'result_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
         ];
     }
 }

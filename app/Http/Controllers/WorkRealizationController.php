@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -29,34 +30,32 @@ class WorkRealizationController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('viewAny', WorkRealization::class);
-        $query = WorkRealization::query()->where('client_id', $client->id())->with(['shift', 'batch', 'product', 'employeeAssignments'])->withCount('employeeAssignments')->latest('work_date');
+        $query = WorkRealization::query()
+            ->select(['id', 'client_id', 'work_date', 'shift_id', 'batch_id', 'product_id', 'sku_snapshot', 'product_name_snapshot', 'total_output', 'status'])
+            ->where('client_id', $client->id())
+            ->with([
+                'shift:id,client_id,name',
+                'batch:id,client_id,batch_no',
+                'product:id,client_id,sku,name',
+                'employeeAssignments:id,client_id,work_realization_id,employee_id,rate_per_unit_snapshot,allocation_output',
+            ])
+            ->withCount('employeeAssignments')
+            ->latest('work_date');
         if ($request->user()->roleCodeFor($client->get()) === 'employee') {
             $query->whereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $request->user()->id));
         }
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($i->employeeAssignments->sum(fn (RealizationEmployee $assignment): float => (float) ($assignment->allocation_output ?? $i->total_output ?? 0) * (float) $assignment->rate_per_unit_snapshot), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
-                // Alerts the viewer, right next to Detail, whether the assigned employee has
-                // actually filled in the work result yet — instead of making them open every
-                // row to find out. When it's still pending and this viewer is the one who can
-                // fill it in, the alert itself is the button that opens the quick-fill modal.
-                $isDone = $i->status === 'submitted';
+            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($i->employeeAssignments->sum(fn (RealizationEmployee $assignment): float => (float) ($assignment->allocation_output ?? $i->total_output ?? 0) * (float) $assignment->rate_per_unit_snapshot), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
                 $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
 
-                if ($isDone) {
-                    $workBadge = view('components.badge', ['variant' => 'success', 'slot' => 'Sudah dikerjakan'])->render();
-                } elseif ($request->user()->can('update', $i)) {
-                    $workBadge = '<button type="button" data-realization-fill-open data-url="'.route('realizations.update', $i).'" data-unit="'.e($i->unit_name_snapshot ?: 'Pcs').'" class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Belum dikerjakan</button>';
-                } else {
-                    $workBadge = view('components.badge', ['variant' => 'warning', 'slot' => 'Belum dikerjakan'])->render();
-                }
-
                 if (! $request->user()->is_super_admin) {
-                    return '<div class="flex flex-wrap items-center gap-2">'.$workBadge.$detailAction.'</div>';
+                    return $detailAction;
                 }
 
-                $assignAction = '<button type="button" data-realization-assign-open data-url="'.route('realizations.assign', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#users"></use></svg>Assign</button>';
+                $assignedEmployeeIds = $i->employeeAssignments->pluck('employee_id')->values()->all();
+                $assignAction = '<button type="button" data-realization-assign-open data-url="'.route('realizations.assign', $i).'" data-assigned-employee-ids="'.e(json_encode($assignedEmployeeIds, JSON_THROW_ON_ERROR)).'" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#users"></use></svg>Assign</button>';
 
-                return '<div class="flex flex-wrap items-center gap-2">'.$workBadge.$assignAction.$detailAction.'</div>';
+                return '<div class="flex flex-wrap items-center gap-2">'.$assignAction.$detailAction.'</div>';
             })->rawColumns(['action'])->toJson();
         }
 
@@ -64,16 +63,37 @@ class WorkRealizationController extends Controller
             'currentClient' => $client->get(),
             'user' => $request->user(),
             'employees' => $request->user()->is_super_admin
-                ? Employee::query()->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group')->orderBy('full_name')->get()
+                ? Employee::query()->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group:id,client_id,name')->orderBy('full_name')->get()
                 : collect(),
         ]);
     }
 
+    private function formatQuantity(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',');
+    }
+
     public function create(Request $request, CurrentClientService $client): View
     {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('create', WorkRealization::class);
 
-        return view('realizations.create', ['currentClient' => $client->get(), 'user' => $request->user(), 'shifts' => Shift::query()->where('client_id', $client->id())->where('status', 'active')->get(), 'batches' => Batch::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('batch_no')->get(), 'products' => Product::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('sku')->get(), 'employees' => Employee::query()->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group')->orderBy('full_name')->get()]);
+        return view('realizations.create', [
+            'currentClient' => $client->get(),
+            'user' => $request->user(),
+            'employees' => Employee::query()
+                ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
+                ->where('client_id', $client->id())
+                ->where('status', 'active')
+                ->whereNotNull('user_id')
+                ->with('group:id,client_id,name')
+                ->orderBy('full_name')
+                ->get(),
+        ]);
     }
 
     public function show(Request $request, WorkRealization $realization, CurrentClientService $client): View
@@ -82,7 +102,7 @@ class WorkRealizationController extends Controller
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         abort_unless($request->user()->can('view', $realization), 404);
 
-        return view('realizations.show', ['realization' => $realization->load(['shift', 'batch', 'product', 'employeeAssignments.employee']), 'currentClient' => $client->get(), 'user' => $request->user(), 'employees' => $request->user()->is_super_admin ? Employee::query()->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group')->orderBy('full_name')->get() : collect()]);
+        return view('realizations.show', ['realization' => $realization->load(['shift', 'batch', 'product', 'employeeAssignments.employee']), 'currentClient' => $client->get(), 'user' => $request->user()]);
     }
 
     public function shiftOptions(Request $request, CurrentClientService $client): JsonResponse
@@ -107,15 +127,30 @@ class WorkRealizationController extends Controller
         return response()->json(['results' => $batches->map(fn (Batch $batch): array => ['id' => $batch->id, 'text' => $batch->batch_no])]);
     }
 
-    public function store(StoreWorkRealizationRequest $request, CurrentClientService $client): JsonResponse
+    public function store(StoreWorkRealizationRequest $request, CurrentClientService $client, RichTextSanitizer $sanitizer): JsonResponse
     {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('create', WorkRealization::class);
 
         $data = $request->validated();
+        $data['report'] = $sanitizer->sanitize($data['report'] ?? null);
+        if ($request->hasFile('result_image')) {
+            $data['result_image_path'] = $request->file('result_image')->store('realizations', 'public');
+        }
+
+        unset($data['result_image']);
+
         $product = filled($data['product_id'] ?? null)
             ? Product::query()->where('client_id', $client->id())->findOrFail($data['product_id'])
             : null;
-        $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
+        $employeeIds = $request->user()->is_super_admin
+            ? array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)))
+            : [Employee::query()
+                ->where('client_id', $client->id())
+                ->where('user_id', $request->user()->id)
+                ->where('status', 'active')
+                ->firstOrFail()
+                ->getKey()];
         unset($data['employee_ids']);
 
         DB::transaction(function () use ($data, $employeeIds, $client, $product, $request): void {
@@ -150,10 +185,20 @@ class WorkRealizationController extends Controller
     public function update(UpdateWorkRealizationRequest $request, WorkRealization $realization, CurrentClientService $client, RichTextSanitizer $sanitizer): JsonResponse
     {
         abort_unless($realization->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('update', $realization);
 
         $data = $request->validated();
         $data['report'] = $sanitizer->sanitize($data['report'] ?? null);
+        $oldImagePath = $realization->result_image_path;
+        $newImagePath = null;
+
+        if ($request->hasFile('result_image')) {
+            $newImagePath = $request->file('result_image')->store('realizations', 'public');
+            $data['result_image_path'] = $newImagePath;
+        }
+
+        unset($data['result_image']);
 
         DB::transaction(function () use ($data, $realization): void {
             $realization->update($data + ['status' => 'submitted']);
@@ -166,6 +211,10 @@ class WorkRealizationController extends Controller
             }
         });
 
+        if ($newImagePath !== null && $oldImagePath !== null) {
+            Storage::disk('public')->delete($oldImagePath);
+        }
+
         $notification = new RealizationSubmitted($realization, $request->user()->name);
         User::query()->where('is_super_admin', true)->get()->each->notify($notification);
 
@@ -175,6 +224,7 @@ class WorkRealizationController extends Controller
     public function assign(AssignWorkRealizationRequest $request, WorkRealization $realization, CurrentClientService $client): JsonResponse
     {
         abort_unless($realization->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('create', WorkRealization::class);
 
         foreach ($request->validated('employee_ids') as $employeeId) {

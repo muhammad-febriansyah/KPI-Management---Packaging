@@ -3,6 +3,7 @@
 use App\Models\Batch;
 use App\Models\Client;
 use App\Models\Employee;
+use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Shift;
@@ -38,6 +39,8 @@ function linkedEmployee(Client $client): array
 {
     $employeeUser = User::factory()->create();
     $role = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan']);
+    $permission = Permission::query()->firstOrCreate(['code' => 'menu.realizations'], ['name' => 'Menu: Realisasi']);
+    $role->permissions()->syncWithoutDetaching([$permission->getKey()]);
     $employeeUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
     $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $employeeUser->getKey()]);
 
@@ -72,6 +75,26 @@ it('sanitizes the report field before storing it', function () {
 
     $response->assertOk();
     $realization->refresh();
+    expect($realization->report)
+        ->toContain('<p>Hasil <strong>bagus</strong></p>')
+        ->not->toContain('<script>')
+        ->not->toContain('alert');
+});
+
+it('sanitizes the report field when creating a realization', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $payload = validRealizationPayload([
+        'client' => $client,
+        'report' => '<p>Hasil <strong>bagus</strong></p><script>alert("xss")</script>',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), $payload);
+
+    $response->assertCreated();
+    $realization = WorkRealization::query()->where('client_id', $client->id)->firstOrFail();
     expect($realization->report)
         ->toContain('<p>Hasil <strong>bagus</strong></p>')
         ->not->toContain('<script>')

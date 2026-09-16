@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreUnitRequest;
 use App\Http\Requests\UpdateUnitRequest;
 use App\Models\Unit;
@@ -15,6 +16,8 @@ use Yajra\DataTables\Facades\DataTables;
 
 class UnitController extends Controller
 {
+    use DeletesRestrictedRecords;
+
     public function index(Request $request, CurrentClientService $currentClient): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
@@ -63,6 +66,7 @@ class UnitController extends Controller
 
     public function store(StoreUnitRequest $request, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('create', Unit::class);
 
         Unit::query()->create([...$request->validated(), 'client_id' => $currentClient->id()]);
@@ -98,6 +102,7 @@ class UnitController extends Controller
     public function update(UpdateUnitRequest $request, Unit $unit, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
         abort_unless($unit->client_id === $currentClient->id(), 404);
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('update', $unit);
         $unit->update($request->validated());
 
@@ -111,8 +116,9 @@ class UnitController extends Controller
     public function destroy(Request $request, Unit $unit, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
         abort_unless($unit->client_id === $currentClient->id(), 404);
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('delete', $unit);
-        $unit->delete();
+        $this->deleteRestricted($unit, 'Satuan tidak dapat dihapus karena masih dipakai pada produk.');
 
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json(['message' => 'Satuan berhasil dihapus.']);

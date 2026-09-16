@@ -14,9 +14,31 @@ class StoreWorkRealizationRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->is_super_admin === true
-            && $this->user()?->status === 'active'
-            && app(CurrentClientService::class)->isResolved();
+        $user = $this->user();
+        $client = app(CurrentClientService::class);
+
+        return $user?->status === 'active'
+            && $client->isResolved()
+            && ($user->is_super_admin || $user->roleCodeFor($client->get()) === 'employee');
+    }
+
+    /**
+     * The assignment section renders a blank employee row as its "add another" affordance,
+     * so the form always submits one empty value. Assignment is optional here, and an
+     * untouched blank row must not fail validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('employee_ids')) {
+            return;
+        }
+
+        $this->merge([
+            'employee_ids' => array_values(array_filter(
+                (array) $this->input('employee_ids'),
+                fn ($employeeId): bool => filled($employeeId),
+            )),
+        ]);
     }
 
     /**
@@ -40,9 +62,10 @@ class StoreWorkRealizationRequest extends FormRequest
             })],
             'product_id' => ['nullable', Rule::exists('products', 'id')->where(fn ($query) => $query->where('client_id', $clientId)->where('status', 'active'))],
             'total_output' => ['nullable', 'numeric', 'min:0'],
-            'start_time' => ['nullable', 'date_format:H:i'],
-            'end_time' => ['nullable', 'date_format:H:i'],
+            'start_time' => ['nullable', 'date_format:H:i,H:i:s'],
+            'end_time' => ['nullable', 'date_format:H:i,H:i:s'],
             'report' => ['nullable', 'string'],
+            'result_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
             'is_complaint' => ['boolean'],
             'employee_ids' => ['nullable', 'array'],
             'employee_ids.*' => [

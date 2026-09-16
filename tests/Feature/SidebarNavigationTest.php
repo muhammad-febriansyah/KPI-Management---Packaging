@@ -22,7 +22,7 @@ it('only shows menus granted to the user\'s role in the sidebar', function () {
     $response->assertOk()
         ->assertSee(route('dashboard'), false)
         ->assertDontSee(route('products.index'), false);
-})->skip('Menu access enforcement is paused — see User::allowedMenuKeys().');
+});
 
 it('reflects a menu revoked by the super admin without redeploying', function () {
     $client = Client::factory()->create();
@@ -39,4 +39,27 @@ it('reflects a menu revoked by the super admin without redeploying', function ()
     $role->permissions()->detach($products);
 
     $this->actingAs($user)->get(route('dashboard'))->assertDontSee(route('products.index'), false);
-})->skip('Menu access enforcement is paused — see User::allowedMenuKeys().');
+});
+
+it('shows master client under the setting menu for super admins', function () {
+    $admin = User::factory()->superAdmin()->create();
+
+    $response = $this->actingAs($admin)->get(route('dashboard'));
+
+    $response->assertOk()
+        ->assertSee(route('clients.index'), false)
+        ->assertSee(route('units.index'), false)
+        ->assertSee(route('groups.index'), false)
+        ->assertSee(route('cost-centers.index'), false)
+        ->assertSee(asset('images/logo-white.png'), false)
+        ->assertSee(asset('favicon.ico'), false);
+
+    $content = $response->getContent();
+
+    expect(strpos($content, route('units.index')))
+        ->toBeLessThan(strpos($content, route('products.index')))
+        ->and(strpos($content, route('groups.index')))
+        ->toBeLessThan(strpos($content, route('products.index')))
+        ->and(strpos($content, route('cost-centers.index')))
+        ->toBeLessThan(strpos($content, route('products.index')));
+});

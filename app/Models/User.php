@@ -60,11 +60,6 @@ class User extends Authenticatable
      */
     public function allowedMenuKeys(?Client $client): ?array
     {
-        // Paused: the "Hak Akses Menu per Role" UI is hidden for now, so every role
-        // sees the full sidebar again, same as before this feature existed. Delete
-        // this early return (and the one in canAccessMenu() below) to resume.
-        return null;
-
         if ($this->is_super_admin) {
             return null;
         }
@@ -90,10 +85,6 @@ class User extends Authenticatable
      */
     public function canAccessMenu(string $menuKey, ?Client $client): bool
     {
-        // Paused alongside allowedMenuKeys() above — every menu-gated controller
-        // allows any active client member again, matching pre-feature behavior.
-        return true;
-
         if ($this->is_super_admin) {
             return true;
         }

@@ -25,7 +25,34 @@ it('renders the payroll report page with a default current-month date range', fu
     $response->assertViewHas('dateTo', now()->endOfMonth()->toDateString());
     $response->assertSee('data-payroll-export-excel');
     $response->assertSee('data-payroll-export-pdf');
+    $response->assertSee('<th>NIK</th>', false);
+    $response->assertSee('<th>Gaji bersih</th>', false);
+    $response->assertSee('<th>Gaji kotor</th>', false);
+    $response->assertSee('<th>BPJS Ketenagakerjaan</th>', false);
+    $response->assertSee('<th>Seragam (Kaos/Celana)</th>', false);
+    $response->assertDontSee('<th>Aksi</th>', false);
     $response->assertDontSee('Slip gaji');
+});
+
+it('uses the requirement order for payroll export columns', function () {
+    $export = new PayrollReportExport(1, '2026-09-01', '2026-09-30');
+
+    expect($export->headings())->toBe([
+        'No',
+        'NIK',
+        'Nama Lengkap',
+        'Jenis Kelamin',
+        'Total Hari Masuk',
+        'Gaji Bersih',
+        'Gaji Kotor',
+        'BPJS Ketenagakerjaan',
+        'Seragam (Kaos/Celana)',
+        'Perlengkapan Kerja',
+        'Uang Makan',
+        'DP Gaji',
+        'Koreksi Pengurangan',
+        'Koreksi Penambahan',
+    ]);
 });
 
 it('downloads the payroll report as an Excel file for the selected period', function () {

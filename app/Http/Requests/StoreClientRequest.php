@@ -25,6 +25,15 @@ class StoreClientRequest extends FormRequest
      */
     public function rules(): array
     {
-        return ['code' => ['required', 'string', 'max:50', 'unique:clients,code'], 'name' => ['required', 'string', 'max:150'], 'timezone' => ['required', 'timezone'], 'status' => ['required', Rule::in(['active', 'inactive'])], 'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048']];
+        return [
+            'code' => ['required', 'string', 'max:50', 'unique:clients,code'],
+            'name' => ['required', 'string', 'max:150'],
+            'account_name' => ['required', 'string', 'max:150'],
+            'login_username' => ['required', 'string', 'max:100', 'unique:users,username'],
+            'login_email' => ['required', 'email', 'max:150', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+        ];
     }
 }

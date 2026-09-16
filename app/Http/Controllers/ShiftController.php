@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreShiftRequest;
 use App\Http\Requests\UpdateShiftRequest;
 use App\Models\Shift;
@@ -14,10 +15,10 @@ use Yajra\DataTables\Facades\DataTables;
 
 class ShiftController extends Controller
 {
+    use DeletesRestrictedRecords;
+
     public function index(Request $request, CurrentClientService $client): View|JsonResponse
     {
-        // Shift has no quick-manage entry point on any menu-gated screen (unlike
-        // Unit/Group/Cost Center via the product form), so it stays super-admin-only.
         abort_unless($request->user()->is_super_admin, 403);
         Gate::authorize('viewAny', Shift::class);
         $query = Shift::query()->where('client_id', $client->id())->orderBy('name');
@@ -33,6 +34,7 @@ class ShiftController extends Controller
 
     public function store(StoreShiftRequest $request, CurrentClientService $client): JsonResponse
     {
+        abort_unless($request->user()->is_super_admin, 403);
         $shift = Shift::query()->create([...$request->validated(), 'client_id' => $client->id()]);
 
         return response()->json(['message' => 'Shift berhasil ditambahkan.', 'data' => $shift], 201);
@@ -41,6 +43,7 @@ class ShiftController extends Controller
     public function update(UpdateShiftRequest $request, Shift $shift, CurrentClientService $client): JsonResponse
     {
         abort_unless($shift->client_id === $client->id(), 404);
+        abort_unless($request->user()->is_super_admin, 403);
         Gate::authorize('update', $shift);
         $shift->update($request->validated());
 
@@ -50,8 +53,9 @@ class ShiftController extends Controller
     public function destroy(Request $request, Shift $shift, CurrentClientService $client): JsonResponse
     {
         abort_unless($shift->client_id === $client->id(), 404);
+        abort_unless($request->user()->is_super_admin, 403);
         Gate::authorize('delete', $shift);
-        $shift->delete();
+        $this->deleteRestricted($shift, 'Shift tidak dapat dihapus karena masih dipakai pada realisasi kerja.');
 
         return response()->json(['message' => 'Shift berhasil dihapus.']);
     }

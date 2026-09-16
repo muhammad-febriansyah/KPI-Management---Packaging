@@ -36,7 +36,45 @@ it('lets a super admin view the settings/access page', function () {
         ->withSession(['current_client_id' => $client->getKey()])
         ->get(route('settings.access'));
 
-    $response->assertOk()->assertSee('User & Hak Akses');
+    $response->assertOk()
+        ->assertSee('User & Hak Akses')
+        ->assertSee('data-access-tab="users"', false)
+        ->assertSee('data-access-tab="permissions"', false)
+        ->assertSee('data-access-panel="users"', false)
+        ->assertSee('data-access-panel="permissions"', false);
+});
+
+it('lets a super admin toggle a client user status', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $user = User::factory()->create(['name' => 'User Uji']);
+    attachRole($user, $client, 'client');
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.users.status', $user));
+
+    $response->assertOk()->assertJsonPath('status', 'inactive');
+    $this->assertDatabaseHas('users', ['id' => $user->getKey(), 'status' => 'inactive']);
+    $this->assertDatabaseHas('client_user', ['client_id' => $client->getKey(), 'user_id' => $user->getKey(), 'status' => 'inactive']);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.users.status', $user))
+        ->assertOk()
+        ->assertJsonPath('status', 'active');
+});
+
+it('rejects a non super admin from toggling a user status', function () {
+    $client = Client::factory()->create();
+    $user = User::factory()->create();
+    attachRole($user, $client, 'client');
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.users.status', $user));
+
+    $response->assertForbidden();
 });
 
 it('lets a super admin update which menus a role can see', function () {

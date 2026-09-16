@@ -59,7 +59,6 @@
                         <th>DP gaji</th>
                         <th>Koreksi pengurangan</th>
                         <th>Koreksi penambahan</th>
-                        <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody></tbody>

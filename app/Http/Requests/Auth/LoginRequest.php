@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\Client;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -61,8 +62,6 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        RateLimiter::clear($this->throttleKey());
-
         $user = Auth::user();
 
         if (! $user instanceof User) {
@@ -72,6 +71,24 @@ class LoginRequest extends FormRequest
                 'login' => 'Username atau password tidak sesuai.',
             ]);
         }
+
+        $hasActiveClient = $user->is_super_admin
+            ? Client::query()->active()->exists()
+            : $user->clients()
+                ->where('clients.status', 'active')
+                ->wherePivot('status', 'active')
+                ->exists();
+
+        if (! $hasActiveClient) {
+            Auth::logout();
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'login' => 'Username atau password tidak sesuai.',
+            ]);
+        }
+
+        RateLimiter::clear($this->throttleKey());
 
         return $user;
     }

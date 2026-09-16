@@ -53,7 +53,6 @@
                                 <p class="truncate text-sm font-semibold text-slate-900">{{ $realization->product_name_snapshot }}</p>
                                 <p class="mt-0.5 text-xs text-slate-500">{{ $realization->work_date?->format('d/m/Y') ?? '—' }} · {{ $realization->shift?->name ?? '—' }}</p>
                             </div>
-                            <button type="button" data-realization-fill-open data-url="{{ route('realizations.update', $realization) }}" data-unit="{{ $realization->unit_name_snapshot ?: 'Pcs' }}" class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><x-icon name="pencil" size="size-3.5" /> Isi sekarang</button>
                         </div>
                     @endforeach
                 </div>
@@ -145,21 +144,4 @@
         </x-card>
     </section>
 
-    <div data-realization-fill-modal class="fixed inset-0 z-[90] hidden place-items-center bg-slate-950/40 p-4">
-        <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-            <div class="mb-5 flex items-start justify-between gap-4">
-                <div><h2 class="text-lg font-semibold text-slate-950">Isi hasil pekerjaan</h2><p class="mt-1 text-sm text-slate-500">Semua field bersifat opsional.</p></div>
-                <button type="button" data-realization-fill-close class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Tutup"><x-icon name="x-mark" /></button>
-            </div>
-            <form data-realization-fill-form class="grid gap-4"><input type="hidden" name="_method" value="PUT">
-                <label class="grid gap-2 text-sm font-semibold"><span>Total (<span data-realization-fill-unit>Pcs</span>)</span><input type="number" step="0.001" min="0" name="total_output" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <label class="grid gap-2 text-sm font-semibold"><span>Waktu mulai</span><input type="time" name="start_time" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
-                    <label class="grid gap-2 text-sm font-semibold"><span>Waktu selesai</span><input type="time" name="end_time" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
-                </div>
-                <label class="grid gap-2 text-sm font-semibold"><span>Report</span><textarea name="report" rows="3" placeholder="Tambahkan catatan hasil pekerjaan jika diperlukan" class="rounded-lg border border-line px-3 py-2 font-normal"></textarea></label>
-                <div class="flex justify-end gap-3"><button type="button" data-realization-fill-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button><button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"><x-icon name="check-circle" size="size-4" /> Kirim realisasi</button></div>
-            </form>
-        </div>
-    </div>
 </x-layouts.app>

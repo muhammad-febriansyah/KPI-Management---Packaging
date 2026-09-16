@@ -5,6 +5,13 @@ paths:
 
 # Tenancy
 
+## What each role does
+A client inputs its own products and the product masters beneath them — satuan, group, shift, cost center — and follows the work through Hasil Pekerjaan. Assigning employees to a realization, potongan gaji and laporan gaji belong to PT SIM, not the client. The `client` role is therefore granted `dashboard`, `products` and `work-reports` only; the product masters ride on the `products` key rather than keys of their own.
+
+Menu grants are enforced, not decorative: `User::allowedMenuKeys()` hides the sidebar entry and `User::canAccessMenu()` gates the controller with a 403. Both were paused at one point and are now live — do not reintroduce an early return. Super admins bypass both.
+
+`AuthorizationSeeder` skips any role that already has menus configured, so changing the default there does not move an existing database. Adjust a live role through Settings > User & Hak Akses.
+
 ## Tenant models carry the BelongsToClient trait
 `App\Models\Concerns\BelongsToClient` registers `ClientScope` and a `creating` hook on every model owned by a client. Add it to any new model whose table has a `client_id`; `ClientScopeTest` fails when one is missing.
 

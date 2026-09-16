@@ -25,8 +25,18 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
     public function collection(SupportCollection $rows): void
     {
         DB::transaction(function () use ($rows): void {
-            /** @var array<string, int> $periodCache */
+            /** @var array<string, DeductionPeriod> $periodCache */
             $periodCache = [];
+            $employeeNos = $rows
+                ->map(fn ($row): string => trim((string) ($row['no_karyawan'] ?? '')))
+                ->filter()
+                ->unique()
+                ->values();
+            $employeeCache = Employee::query()
+                ->where('client_id', $this->clientId)
+                ->whereIn('employee_no', $employeeNos)
+                ->get()
+                ->keyBy('employee_no');
 
             foreach ($rows as $index => $row) {
                 $rowNumber = $index + 2; // Row 1 is the heading row.
@@ -35,7 +45,7 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
 
                 $validator = Validator::make($data, [
                     'bulan' => ['required', 'date_format:Y-m'],
-                    'minggu' => ['nullable', 'integer', 'between:1,5'],
+                    'minggu' => ['nullable', 'integer', 'between:1,2'],
                     'no_karyawan' => ['required', 'string'],
                     'potongan_seragam' => ['nullable', 'numeric', 'min:0'],
                     'potongan_perlengkapan' => ['nullable', 'numeric', 'min:0'],
@@ -61,7 +71,7 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 }
 
                 $employeeNo = trim((string) $data['no_karyawan']);
-                $employee = Employee::query()->where('client_id', $this->clientId)->where('employee_no', $employeeNo)->first();
+                $employee = $employeeCache->get($employeeNo);
                 if (! $employee) {
                     $this->failures[] = ['row' => $rowNumber, 'errors' => ["No Karyawan \"{$employeeNo}\" tidak ditemukan."]];
 
@@ -81,10 +91,10 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                     $periodCache[$cacheKey] = DeductionPeriod::query()->firstOrCreate(
                         ['client_id' => $this->clientId, 'month' => $data['bulan'].'-01', 'week_no' => $weekNo],
                         ['status' => 'draft', 'created_by' => $this->userId],
-                    )->id;
+                    );
                 }
 
-                DeductionPeriod::query()->find($periodCache[$cacheKey])->deductions()->updateOrCreate(
+                $periodCache[$cacheKey]->deductions()->updateOrCreate(
                     ['employee_id' => $employee->id],
                     [
                         'client_id' => $this->clientId,

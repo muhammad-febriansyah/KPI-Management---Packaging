@@ -39,7 +39,7 @@
                     <span>Minggu</span>
                     <select name="week_no" class="h-11 rounded-lg border border-line bg-white px-3 font-normal">
                         <option value="">Semua minggu</option>
-                        @foreach ([1, 2, 3, 4, 5] as $week)
+                        @foreach ([1, 2] as $week)
                             <option value="{{ $week }}" @selected((string) old('week_no') === (string) $week)>Minggu {{ $week }}</option>
                         @endforeach
                     </select>
@@ -60,18 +60,23 @@
                     <span>BPJS Ketenagakerjaan (%)</span>
                     <input type="number" name="bpjs_employment_percent" min="0" max="100" step="0.001" value="{{ old('bpjs_employment_percent') }}" placeholder="Contoh: 2.000" class="h-11 rounded-lg border border-line px-3 font-normal">
                 </label>
-                <label class="grid gap-2 text-sm font-semibold">
-                    <span>Potongan DP Gaji</span>
-                    <select name="salary_advance_type" class="h-11 rounded-lg border border-line bg-white px-3 font-normal">
-                        <option value="">Tidak ada</option>
-                        <option value="fixed" @selected(old('salary_advance_type') === 'fixed')>Fixed (Rupiah)</option>
-                        <option value="percentage" @selected(old('salary_advance_type') === 'percentage')>Persentase gaji borongan</option>
-                    </select>
-                </label>
-                <label class="grid gap-2 text-sm font-semibold">
-                    <span>Nilai DP Gaji</span>
-                    <x-rupiah-input name="salary_advance_value" :value="old('salary_advance_value')" :decimals="3" placeholder="Masukkan nilai DP" />
-                </label>
+                <div data-salary-advance-fields class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                    <label class="grid gap-2 text-sm font-semibold">
+                        <span>Potongan DP Gaji</span>
+                        <select name="salary_advance_type" class="h-11 rounded-lg border border-line bg-white px-3 font-normal">
+                            <option value="">Tidak ada</option>
+                            <option value="fixed" @selected(old('salary_advance_type') === 'fixed')>Fixed (Rupiah)</option>
+                            <option value="percentage" @selected(old('salary_advance_type') === 'percentage')>Persentase gaji borongan</option>
+                        </select>
+                    </label>
+                    <label data-salary-advance-value class="hidden grid gap-2 text-sm font-semibold">
+                        <span data-salary-advance-value-label>Nilai DP Gaji</span>
+                        <div class="relative">
+                            <x-rupiah-input name="salary_advance_value" :value="old('salary_advance_value')" :decimals="3" placeholder="Masukkan nilai DP" data-salary-advance-value-input />
+                            <span data-salary-advance-suffix class="pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 text-sm font-medium text-slate-500">%</span>
+                        </div>
+                    </label>
+                </div>
             </div>
         </x-card>
 

@@ -6,7 +6,7 @@
         <meta name="theme-color" content="#2547F9">
 
         <title>Masuk — KPI Management Co-Packing</title>
-        <link rel="icon" href="{{ asset('images/favicon.svg') }}" type="image/svg+xml">
+        <link rel="icon" href="{{ asset('favicon.ico') }}" type="image/png">
 
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -17,7 +17,7 @@
                 <div class="absolute -left-64 top-28 size-96 rotate-45 rounded-[4rem] bg-primary-50" aria-hidden="true"></div>
                 <div class="absolute -bottom-72 -right-52 size-[34rem] rounded-full bg-[#F8FAFF]" aria-hidden="true"></div>
 
-                <img class="relative z-10 w-48" src="{{ asset('images/logo.svg') }}" alt="KPI Management Co-Packing">
+                <img class="relative z-10 w-48" src="{{ asset('images/logo-white.png') }}" alt="SIMGROUP">
 
                 <div class="relative z-10 mt-[clamp(1.5rem,5vh,4rem)] max-w-xl">
                     <h1 class="max-w-lg text-[clamp(1.75rem,3.2vh,3.45rem)] font-semibold leading-[1.08] tracking-[-0.04em] text-slate-950">
@@ -71,7 +71,7 @@
 
                 <div class="relative z-10 w-full max-w-[35rem]">
                     <div class="rounded-2xl border border-[#E5EAF2] bg-white px-5 py-[clamp(1rem,3vh,1.75rem)] shadow-[0_1px_2px_rgb(15_23_42/0.04),0_8px_22px_rgb(15_23_42/0.035)] sm:p-[clamp(1.25rem,3.5vh,2.5rem)] lg:p-[clamp(1.5rem,4vh,2.75rem)]">
-                        <img class="mb-[clamp(0.75rem,3vh,2rem)] w-44 lg:hidden" src="{{ asset('images/logo.svg') }}" alt="KPI Management Co-Packing">
+                        <img class="mb-[clamp(0.75rem,3vh,2rem)] w-44 lg:hidden" src="{{ asset('images/logo-white.png') }}" alt="SIMGROUP">
 
                         <span class="inline-flex rounded-full bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-600">Selamat datang</span>
                         <h2 class="mt-[clamp(0.5rem,1.5vh,1rem)] text-3xl font-semibold tracking-[-0.03em] text-slate-950">Masuk ke akun Anda</h2>

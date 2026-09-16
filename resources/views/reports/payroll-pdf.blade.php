@@ -49,19 +49,20 @@
         <table>
             <thead>
                 <tr>
-                    <th>No. Karyawan</th>
+                    <th>No</th>
+                    <th>NIK</th>
                     <th>Nama Lengkap</th>
-                    <th class="center">Gender</th>
-                    <th class="number">Hari Masuk</th>
+                    <th class="center">Jenis Kelamin</th>
+                    <th class="number">Total Hari Masuk</th>
+                    <th class="number">Gaji Bersih</th>
                     <th class="number">Gaji Kotor</th>
-                    <th class="number">BPJS TK</th>
-                    <th class="number">Seragam</th>
-                    <th class="number">Perlengkapan</th>
+                    <th class="number">BPJS Ketenagakerjaan</th>
+                    <th class="number">Seragam (Kaos/Celana)</th>
+                    <th class="number">Perlengkapan Kerja</th>
                     <th class="number">Uang Makan</th>
                     <th class="number">DP Gaji</th>
-                    <th class="number">Koreksi -</th>
-                    <th class="number">Koreksi +</th>
-                    <th class="number">Gaji Bersih</th>
+                    <th class="number">Koreksi Pengurangan</th>
+                    <th class="number">Koreksi Penambahan</th>
                 </tr>
             </thead>
             <tbody>
@@ -72,10 +73,12 @@
                         $net = \App\Services\PayrollReportBuilder::netSalary($row);
                     @endphp
                     <tr>
+                        <td class="center">{{ $loop->iteration }}</td>
                         <td class="employee">{{ $row->employee_no }}</td>
                         <td class="employee">{{ $row->full_name }}</td>
                         <td class="center">{{ $row->gender === 'male' ? 'Laki-laki' : 'Perempuan' }}</td>
                         <td class="number">{{ $row->attendance_days }}</td>
+                        <td class="number net">{{ $rupiah($net) }}</td>
                         <td class="number">{{ $rupiah($row->gross_salary) }}</td>
                         <td class="number">{{ $rupiah($bpjs) }}</td>
                         <td class="number">{{ $rupiah($row->uniform_amount) }}</td>
@@ -84,7 +87,6 @@
                         <td class="number">{{ $rupiah($advance) }}</td>
                         <td class="number">{{ $rupiah($row->correction_minus) }}</td>
                         <td class="number">{{ $rupiah($row->correction_plus) }}</td>
-                        <td class="number net">{{ $rupiah($net) }}</td>
                     </tr>
                 @endforeach
             </tbody>

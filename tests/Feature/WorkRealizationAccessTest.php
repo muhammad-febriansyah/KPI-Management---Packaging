@@ -7,8 +7,11 @@ use App\Models\Role;
 use App\Models\Shift;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\WorkRealization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
@@ -82,6 +85,9 @@ it('scopes the realization list to only the employee\'s own entries', function (
 
     $response->assertOk();
     $response->assertJsonCount(1, 'data');
+    expect($response->json('data.0.action'))
+        ->not->toContain('data-realization-fill-open')
+        ->not->toContain('Edit hasil');
 });
 
 it('lets a super admin see every employee\'s realizations', function () {
@@ -125,12 +131,48 @@ it('lets an employee view their own realization detail', function () {
     attachEmployeeRole($employeeA, $client);
 
     $realizationId = createRealization($client, $employeeA, '2026-08-01');
+    DB::table('realization_employees')
+        ->where('work_realization_id', $realizationId)
+        ->update(['rate_per_unit_snapshot' => 25]);
 
     $response = $this->actingAs($employeeA)
         ->withSession(['current_client_id' => $client->getKey()])
         ->get(route('realizations.show', $realizationId));
 
-    $response->assertOk();
+    $response->assertOk()
+        ->assertDontSee('data-realization-submit-form', false)
+        ->assertDontSee('Isi hasil pekerjaan')
+        ->assertSee('Data realisasi pekerjaan')
+        ->assertSee('Tanggal borongan')
+        ->assertSee('Nomor batch')
+        ->assertSee('SKU')
+        ->assertSee('Nama produk')
+        ->assertSee('Total (Karton/Kg)')
+        ->assertSee('Total harga')
+        ->assertSee('Rp 250')
+        ->assertSee('Waktu pengerjaan (1)')
+        ->assertSee('Waktu pengerjaan (2)')
+        ->assertSee('Report')
+        ->assertSee('data-realization-image-placeholder', false)
+        ->assertSee('No image')
+        ->assertSee('heroicons.svg#photo', false);
+});
+
+it('hides the assignment controls on the realization detail page', function () {
+    $client = Client::factory()->create();
+    $superAdmin = User::factory()->superAdmin()->create();
+    $employee = User::factory()->create();
+    attachEmployeeRole($employee, $client);
+    $realizationId = createRealization($client, $employee, '2026-08-01');
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.show', $realizationId));
+
+    $response->assertOk()
+        ->assertDontSee('Assign ke karyawan')
+        ->assertDontSee('data-realization-assign-form', false)
+        ->assertSee('Karyawan yang ditugaskan');
 });
 
 it('lets an assigned employee submit the realization result', function () {
@@ -151,6 +193,51 @@ it('lets an assigned employee submit the realization result', function () {
     $response->assertOk();
     $this->assertDatabaseHas('work_realizations', ['id' => $realizationId, 'status' => 'submitted', 'total_output' => 25]);
     $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realizationId, 'allocation_output' => 25]);
+});
+
+it('stores an employee result image', function () {
+    Storage::fake('public');
+    $client = Client::factory()->create();
+    $employeeUser = User::factory()->create();
+    attachEmployeeRole($employeeUser, $client);
+    $realizationId = createRealization($client, $employeeUser, '2026-08-01');
+
+    $response = $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->put(route('realizations.update', $realizationId), [
+            'total_output' => 25,
+            'result_image' => UploadedFile::fake()->image('hasil.jpg')->size(1024),
+        ]);
+
+    $response->assertOk();
+    $path = WorkRealization::query()->findOrFail($realizationId)->result_image_path;
+    expect($path)->not->toBeNull();
+    Storage::disk('public')->assertExists($path);
+
+    $detailResponse = $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.show', $realizationId));
+
+    $detailResponse->assertOk()
+        ->assertSee('Foto hasil pekerjaan')
+        ->assertDontSee('data-realization-image-placeholder', false);
+});
+
+it('rejects an employee result image larger than 3 MB', function () {
+    Storage::fake('public');
+    $client = Client::factory()->create();
+    $employeeUser = User::factory()->create();
+    attachEmployeeRole($employeeUser, $client);
+    $realizationId = createRealization($client, $employeeUser, '2026-08-01');
+
+    $response = $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->put(route('realizations.update', $realizationId), [
+            'result_image' => UploadedFile::fake()->image('hasil.jpg')->size(3073),
+        ]);
+
+    $response->assertSessionHasErrors('result_image');
+    expect(WorkRealization::query()->findOrFail($realizationId)->result_image_path)->toBeNull();
 });
 
 it('forbids an employee from submitting another employee\'s assignment', function () {
@@ -240,4 +327,4 @@ it('blocks a role without the realizations menu granted from viewing the list', 
         ->get(route('realizations.index'));
 
     $response->assertForbidden();
-})->skip('Menu access enforcement is paused — see User::canAccessMenu().');
+});

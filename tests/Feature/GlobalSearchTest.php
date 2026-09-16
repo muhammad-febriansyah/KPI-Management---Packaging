@@ -3,6 +3,7 @@
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -68,4 +69,22 @@ it('matches static report shortcuts by title', function () {
 
     $response->assertOk();
     $response->assertJsonPath('reports.0.title', 'Laporan Payroll');
+});
+
+it('does not expose employee or product search results without their menus', function () {
+    $user = User::factory()->create();
+    $role = Role::factory()->create(['code' => 'search-bare']);
+    $client = Client::factory()->create();
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'full_name' => 'Budi Tersembunyi']);
+    Product::create(['client_id' => $client->getKey(), 'sku' => 'HIDDEN-001', 'name' => 'Produk Tersembunyi', 'unit_id' => $unit->getKey()]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('search', ['q' => 'tersembunyi']));
+
+    $response->assertOk()
+        ->assertJsonCount(0, 'employees')
+        ->assertJsonCount(0, 'products');
 });

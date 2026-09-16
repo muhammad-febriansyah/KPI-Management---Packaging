@@ -47,9 +47,58 @@ it('marks a pending realization as belum dikerjakan and a submitted one as sudah
         ->getJson(route('reports.work').'?draw=1&start=0&length=10');
 
     $response->assertOk();
-    $statuses = collect($response->json('data'))->pluck('work_status');
-    expect($statuses->filter(fn (string $html): bool => str_contains($html, 'Belum dikerjakan')))->toHaveCount(1);
-    expect($statuses->filter(fn (string $html): bool => str_contains($html, 'Sudah dikerjakan')))->toHaveCount(1);
+    $statuses = collect($response->json('data'))->pluck('status');
+    expect($statuses->filter(fn (string $status): bool => $status === 'assigned'))->toHaveCount(1);
+    expect($statuses->filter(fn (string $status): bool => $status === 'submitted'))->toHaveCount(1);
+});
+
+it('reads the report row fields from the assigned realization', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'sim_id' => 'SIM-REAL-001',
+        'full_name' => 'Karyawan Realisasi',
+    ]);
+    $realizationId = makeAssignedRealization($client, $admin, $employee, 'submitted');
+
+    DB::table('work_realizations')->where('id', $realizationId)->update([
+        'work_date' => '2026-09-08',
+        'product_name_snapshot' => 'Produk dari Realisasi',
+        'total_output' => 380,
+        'report' => 'Catatan dari realisasi',
+    ]);
+    DB::table('products')->where('id', DB::table('work_realizations')->where('id', $realizationId)->value('product_id'))->update([
+        'estimated_output_per_hour' => 50,
+        'po_price' => 4000,
+    ]);
+
+    $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.work').'?draw=1&start=0&length=10');
+
+    $response->assertOk()
+        ->assertJsonPath('data.0.work_date', '08/09/2026')
+        ->assertJsonPath('data.0.sim_id', 'SIM-REAL-001')
+        ->assertJsonPath('data.0.full_name', 'Karyawan Realisasi')
+        ->assertJsonPath('data.0.product_name', 'Produk dari Realisasi')
+        ->assertJsonPath('data.0.target', '400')
+        ->assertJsonPath('data.0.target_price', 'Rp 1.600.000')
+        ->assertJsonPath('data.0.actual', '380')
+        ->assertJsonPath('data.0.actual_price', 'Rp 1.520.000')
+        ->assertJsonPath('data.0.description', 'Catatan dari realisasi');
+});
+
+it('hides the status filter from the work report page', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('reports.work'));
+
+    $response->assertOk()
+        ->assertDontSee('data-work-status', false)
+        ->assertDontSee('Semua status');
 });
 
 it('only lists realizations assigned to an employee, not unassigned ones', function () {
@@ -84,4 +133,34 @@ it('filters the report by status instead of shift', function () {
     $done = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=submitted');
     $done->assertOk()->assertJsonCount(1, 'data');
+});
+
+it('does not treat an undefined hidden status filter as a real status', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+    makeAssignedRealization($client, $admin, $employee, 'submitted');
+
+    $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=undefined');
+
+    $response->assertOk()->assertJsonCount(1, 'data');
+});
+
+it('only reports products and work results from the active client', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $activeClient = Client::factory()->create(['name' => 'PT Client Aktif']);
+    $otherClient = Client::factory()->create(['name' => 'PT Client Lain']);
+    $activeEmployee = Employee::factory()->create(['client_id' => $activeClient->getKey()]);
+    $otherEmployee = Employee::factory()->create(['client_id' => $otherClient->getKey()]);
+
+    makeAssignedRealization($activeClient, $admin, $activeEmployee, 'submitted');
+    makeAssignedRealization($otherClient, $admin, $otherEmployee, 'submitted');
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $activeClient->getKey()])
+        ->getJson(route('reports.work').'?draw=1&start=0&length=10');
+
+    $response->assertOk()->assertJsonCount(1, 'data');
+    expect($response->json('data.0.full_name'))->toBe($activeEmployee->full_name);
 });

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Employee;
@@ -18,6 +19,8 @@ use Yajra\DataTables\Facades\DataTables;
 
 class EmployeeController extends Controller
 {
+    use DeletesRestrictedRecords;
+
     /**
      * Display a listing of the resource.
      */
@@ -71,6 +74,7 @@ class EmployeeController extends Controller
      */
     public function store(StoreEmployeeRequest $request, CurrentClientService $client): JsonResponse
     {
+        abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         $data = $request->validated();
         $password = filled($data['password'] ?? null) ? $data['password'] : 'password';
         unset($data['password']);
@@ -112,6 +116,7 @@ class EmployeeController extends Controller
     public function update(UpdateEmployeeRequest $request, Employee $employee, CurrentClientService $client): JsonResponse
     {
         abort_unless($employee->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('update', $employee);
         $data = $request->validated();
         $password = $data['password'] ?? null;
@@ -127,9 +132,10 @@ class EmployeeController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Employee $employee, CurrentClientService $client): JsonResponse
+    public function destroy(Request $request, Employee $employee, CurrentClientService $client): JsonResponse
     {
         abort_unless($employee->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('delete', $employee);
         DB::transaction(function () use ($employee): void {
             if ($employee->user) {
@@ -137,7 +143,7 @@ class EmployeeController extends Controller
                 $employee->user->clients()->updateExistingPivot($employee->client_id, ['status' => 'inactive']);
             }
 
-            $employee->delete();
+            $this->deleteRestricted($employee, 'Karyawan tidak dapat dihapus karena masih dipakai pada realisasi kerja atau potongan gaji.');
         });
 
         return response()->json(['message' => 'Karyawan berhasil dihapus.']);

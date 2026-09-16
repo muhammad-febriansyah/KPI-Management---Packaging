@@ -84,6 +84,24 @@ it('imports deduction rows and creates the period and employee deduction', funct
     ]);
 });
 
+it('rejects deduction import rows beyond week two', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP001', 'full_name' => 'Ananda Julian']);
+
+    $file = buildDeductionImportFile([
+        ['2026-08', 3, 'EMP001', 'Ananda Julian', 0, 0, 0, 0, 0, '', 0, 0, 0, ''],
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->post(route('deductions.import'), ['file' => $file]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('failures.0.row', 2);
+    expect(DeductionPeriod::query()->where('client_id', $client->getKey())->exists())->toBeFalse();
+});
+
 it('reports per-row failures for unknown employees without failing the whole import', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();

@@ -3,12 +3,16 @@
     'label',
     'accept' => 'image/png,image/jpeg,image/webp',
     'help' => 'PNG, JPG, atau WEBP. Maksimal 2 MB.',
+    'maxSizeMb' => null,
+    'compress' => false,
 ])
 
 <div>
     <span class="mb-1.5 block text-sm font-medium text-slate-700">{{ $label }}</span>
     <label
         data-file-upload
+        @if($maxSizeMb) data-file-max-size="{{ $maxSizeMb * 1024 * 1024 }}" @endif
+        @if($compress) data-file-compress="true" @endif
         for="{{ $attributes->get('id', $name) }}"
         class="flex min-h-36 cursor-pointer items-center gap-4 rounded-lg border border-dashed border-slate-300 bg-white p-4 transition-colors hover:border-primary-600 hover:bg-primary-50 focus-within:border-primary-600 focus-within:ring-3 focus-within:ring-primary-100"
     >

@@ -17,7 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AuthorizationSeeder::class);
         $this->call(SuperAdminSeeder::class);
         if (! app()->environment('production')) {
-            $this->call(DemoDataSeeder::class);
+            $this->call(RealisticDemoDataSeeder::class);
         }
     }
 }

@@ -75,6 +75,7 @@ class DeductionController extends Controller
 
     public function store(StoreDeductionPeriodRequest $request, CurrentClientService $client): RedirectResponse|JsonResponse
     {
+        abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $data = $request->validated();
         $employeeIds = $data['employee_ids'] ?? [];
         unset($data['employee_ids']);
@@ -96,17 +97,19 @@ class DeductionController extends Controller
         return to_route('deductions.index')->with('status', 'Potongan gaji berhasil disimpan.');
     }
 
-    public function update(UpdateEmployeeDeductionRequest $request, EmployeeDeduction $deduction): JsonResponse
+    public function update(UpdateEmployeeDeductionRequest $request, EmployeeDeduction $deduction, CurrentClientService $client): JsonResponse
     {
-        abort_unless($deduction->client_id === app(CurrentClientService::class)->id(), 404);
+        abort_unless($deduction->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $deduction->update($request->validated());
 
         return response()->json(['message' => 'Potongan gaji berhasil diperbarui.']);
     }
 
-    public function destroy(EmployeeDeduction $deduction): JsonResponse
+    public function destroy(Request $request, EmployeeDeduction $deduction, CurrentClientService $client): JsonResponse
     {
-        abort_unless($deduction->client_id === app(CurrentClientService::class)->id(), 404);
+        abort_unless($deduction->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $deduction->delete();
 
         return response()->json(['message' => 'Potongan gaji berhasil dihapus.']);

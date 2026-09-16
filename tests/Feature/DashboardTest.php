@@ -28,6 +28,8 @@ it('renders the dashboard with the active client context', function () {
     $response
         ->assertOk()
         ->assertSee('Ringkasan performa')
+        ->assertDontSee('data-filter-toggle')
+        ->assertDontSee('Unduh laporan')
         ->assertViewHas('currentClient', fn (Client $currentClient): bool => $currentClient->is($client));
     expect(session('current_client_id'))->toBe($client->getKey());
 });
@@ -52,5 +54,7 @@ it('gives an employee-role user their own scoped dashboard', function () {
         ->assertOk()
         ->assertViewIs('dashboard-employee')
         ->assertSee('Ringkasan performa saya')
-        ->assertDontSee('Karyawan aktif');
+        ->assertDontSee('Karyawan aktif')
+        ->assertDontSee('data-realization-fill-modal', false)
+        ->assertDontSee('Isi sekarang');
 });

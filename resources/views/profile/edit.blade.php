@@ -145,10 +145,6 @@
                         <input value="{{ $currentClient->name }}" readonly class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-500">
                     </label>
                     <label class="grid gap-2 text-sm font-semibold text-slate-700">
-                        <span>Timezone</span>
-                        <input value="{{ $currentClient->timezone }}" readonly class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-500">
-                    </label>
-                    <label class="grid gap-2 text-sm font-semibold text-slate-700">
                         <span>Status client</span>
                         <input value="{{ $currentClient->status === 'active' ? 'Aktif' : 'Nonaktif' }}" readonly class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-500">
                     </label>

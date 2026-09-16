@@ -3,8 +3,8 @@
 namespace App\Exports;
 
 use App\Models\EmployeeDeduction;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -12,18 +12,23 @@ use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class DeductionExport implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
+class DeductionExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
 {
     public function __construct(private readonly int $clientId) {}
 
-    public function collection(): Collection
+    public function query(): Builder
     {
         return EmployeeDeduction::query()
-            ->where('client_id', $this->clientId)
+            ->select('employee_deductions.*')
+            ->join('deduction_periods', function ($join): void {
+                $join->on('deduction_periods.id', '=', 'employee_deductions.deduction_period_id')
+                    ->on('deduction_periods.client_id', '=', 'employee_deductions.client_id');
+            })
+            ->where('employee_deductions.client_id', $this->clientId)
             ->with(['employee', 'deductionPeriod'])
-            ->get()
-            ->sortByDesc(fn (EmployeeDeduction $deduction): string => $deduction->deductionPeriod?->month?->format('Y-m').($deduction->deductionPeriod?->week_no ?? 0))
-            ->values();
+            ->orderByDesc('deduction_periods.month')
+            ->orderByDesc('deduction_periods.week_no')
+            ->orderBy('employee_deductions.id');
     }
 
     /** @return array<int, string> */

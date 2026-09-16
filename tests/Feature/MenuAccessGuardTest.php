@@ -2,6 +2,7 @@
 
 use App\Models\Client;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,7 +40,7 @@ it('blocks a role with no menus granted from every menu-gated page', function (s
     '/deductions' => '/deductions',
     '/reports/payroll' => '/reports/payroll',
     '/reports/work' => '/reports/work',
-])->skip('Menu access enforcement is paused — see User::canAccessMenu().');
+]);
 
 it('lets a role in once its matching menu is granted', function (string $menuKey, string $path) {
     $client = Client::factory()->create();
@@ -104,4 +105,72 @@ it('gates the product form quick-manage endpoints behind the products menu', fun
     '/units' => '/units',
     '/groups' => '/groups',
     '/cost-centers' => '/cost-centers',
-])->skip('Menu access enforcement is paused — see User::canAccessMenu().');
+]);
+
+it('blocks direct mutation endpoints when the matching menu is not granted', function () {
+    $client = Client::factory()->create();
+    $role = guardTestRole('bare-mutations', 'Bare Mutations Role');
+    $user = guardTestUser($client, $role);
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('products.store'), [
+        'client_id' => $client->getKey(),
+        'sku' => 'NO-MENU-PRODUCT',
+        'name' => 'Tidak boleh',
+        'status' => 'active',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('employees.store'), [
+        'full_name' => 'Tidak boleh',
+        'email' => 'blocked@example.com',
+        'phone' => '081234567890',
+        'join_date' => '2026-01-01',
+        'gender' => 'male',
+        'employee_status' => 'permanent',
+        'marital_status' => 'single',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('groups.store'), [
+        'name' => 'Tidak boleh',
+        'status' => 'active',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('units.store'), [
+        'code' => 'NO-MENU',
+        'name' => 'Tidak boleh',
+        'status' => 'active',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('cost-centers.store'), [
+        'code' => 'NO-MENU',
+        'name' => 'Tidak boleh',
+        'status' => 'active',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('shifts.store'), [
+        'code' => 'NO-MENU',
+        'name' => 'Tidak boleh',
+        'start_time' => '08:00',
+        'end_time' => '17:00',
+        'status' => 'active',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->post(route('deductions.store'), [
+        'month' => '2026-09',
+    ])->assertForbidden();
+});
+
+it('blocks product updates and deletes when the products menu is not granted', function () {
+    $client = Client::factory()->create();
+    $role = guardTestRole('bare-product-mutations', 'Bare Product Mutations Role');
+    $user = guardTestUser($client, $role);
+    $product = Product::factory()->create(['client_id' => $client->getKey()]);
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->putJson(route('products.update', $product), [
+        'client_id' => $client->getKey(),
+        'sku' => $product->sku,
+        'name' => 'Tidak boleh diubah',
+        'status' => 'active',
+    ])->assertForbidden();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->deleteJson(route('products.destroy', $product))->assertForbidden();
+});

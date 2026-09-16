@@ -13,7 +13,7 @@ class SuperAdminSeeder extends Seeder
      */
     public function run(): void
     {
-        $password = env('SUPER_ADMIN_PASSWORD', app()->environment('production') ? null : 'password:password');
+        $password = env('SUPER_ADMIN_PASSWORD', app()->environment('production') ? null : 'password');
 
         if ($password === null || $password === '') {
             throw new \RuntimeException('SUPER_ADMIN_PASSWORD harus diisi sebelum menjalankan seeder.');
@@ -33,7 +33,7 @@ class SuperAdminSeeder extends Seeder
         if (! app()->environment('production') && Client::query()->doesntExist()) {
             Client::query()->create([
                 'code' => env('INITIAL_CLIENT_CODE', 'CLIENT001'),
-                'name' => env('INITIAL_CLIENT_NAME', 'PT SIM Group'),
+                'name' => env('INITIAL_CLIENT_NAME', 'PT SIMGROUP Co-Packing'),
                 'timezone' => env('INITIAL_CLIENT_TIMEZONE', 'Asia/Jakarta'),
                 'status' => 'active',
             ]);

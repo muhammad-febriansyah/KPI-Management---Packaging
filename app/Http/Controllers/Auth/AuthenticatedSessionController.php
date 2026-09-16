@@ -21,16 +21,17 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request, CurrentClientService $currentClients): RedirectResponse
     {
         $user = $request->authenticate();
+        $selectedClient = $currentClients->availableFor($user)->first();
+
+        if ($selectedClient === null) {
+            Auth::logout();
+
+            return redirect()->route('login')->withErrors(['login' => 'Client aktif untuk akun ini tidak tersedia.']);
+        }
 
         $request->session()->regenerate();
 
-        $defaultClient = $currentClients->availableFor($user)->first();
-
-        if ($defaultClient !== null) {
-            $request->session()->put('current_client_id', $defaultClient->getKey());
-        } else {
-            $request->session()->forget('current_client_id');
-        }
+        $request->session()->put('current_client_id', $selectedClient->getKey());
 
         $user->forceFill(['last_login_at' => now()])->save();
         AuditLog::query()->create(['user_id' => $user->id, 'action' => 'login', 'auditable_type' => get_class($user), 'auditable_id' => $user->id, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]);

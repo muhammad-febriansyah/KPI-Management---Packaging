@@ -3,8 +3,8 @@
 namespace App\Exports;
 
 use App\Services\PayrollReportBuilder;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -13,38 +13,39 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class PayrollReportExport implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
+class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
 {
+    private int $rowNumber = 0;
+
     public function __construct(
         private readonly int $clientId,
         private readonly string $dateFrom,
         private readonly string $dateTo,
     ) {}
 
-    public function collection(): Collection
+    public function query(): Builder
     {
-        return (new PayrollReportBuilder)
-            ->forClient($this->clientId, $this->dateFrom, $this->dateTo)
-            ->get();
+        return (new PayrollReportBuilder)->forClient($this->clientId, $this->dateFrom, $this->dateTo);
     }
 
     /** @return array<int, string> */
     public function headings(): array
     {
         return [
-            'No. Karyawan',
+            'No',
+            'NIK',
             'Nama Lengkap',
             'Jenis Kelamin',
             'Total Hari Masuk',
+            'Gaji Bersih',
             'Gaji Kotor',
             'BPJS Ketenagakerjaan',
-            'Seragam',
+            'Seragam (Kaos/Celana)',
             'Perlengkapan Kerja',
             'Uang Makan',
             'DP Gaji',
             'Koreksi Pengurangan',
             'Koreksi Penambahan',
-            'Gaji Bersih',
         ];
     }
 
@@ -52,10 +53,12 @@ class PayrollReportExport implements FromCollection, ShouldAutoSize, WithHeading
     public function map($row): array
     {
         return [
+            ++$this->rowNumber,
             $row->employee_no,
             $row->full_name,
             $row->gender === 'male' ? 'Laki-laki' : 'Perempuan',
             (int) $row->attendance_days,
+            PayrollReportBuilder::netSalary($row),
             (int) $row->gross_salary,
             PayrollReportBuilder::bpjsEmployment($row),
             (float) $row->uniform_amount,
@@ -64,7 +67,6 @@ class PayrollReportExport implements FromCollection, ShouldAutoSize, WithHeading
             PayrollReportBuilder::salaryAdvanceAmount($row),
             (float) $row->correction_minus,
             (float) $row->correction_plus,
-            PayrollReportBuilder::netSalary($row),
         ];
     }
 
@@ -72,8 +74,8 @@ class PayrollReportExport implements FromCollection, ShouldAutoSize, WithHeading
     public function styles(Worksheet $sheet): array
     {
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:M1');
-        $sheet->getStyle('A1:M1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->setAutoFilter('A1:N1');
+        $sheet->getStyle('A1:N1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         return [
             1 => [

@@ -19,6 +19,12 @@
         default => 'Administrator',
     };
     $allowedNavigation = $user?->allowedMenuKeys($currentClient);
+    // Only the dashboard passes the list in, but the switcher belongs in the header on every
+    // page, so fall back to resolving it here rather than threading a prop through every view.
+    $switchableClients = collect($clients);
+    if ($switchableClients->isEmpty() && $user) {
+        $switchableClients = app(\App\Services\CurrentClientService::class)->availableFor($user);
+    }
     // Client has no notification triggers yet (see WorkRealizationController), so the bell
     // stays hidden for them — skip the queries too, not just the UI.
     $recentNotifications = $user && $roleCode !== 'client' ? $user->notifications()->latest()->limit(8)->get() : collect();
@@ -31,13 +37,12 @@
     $navigation = [
         ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'home', 'route' => 'dashboard'],
         ['key' => 'master-data', 'label' => 'Master Data', 'icon' => 'building-office-2', 'children' => [
+            ['key' => 'units', 'label' => 'Satuan', 'route' => 'units.index'],
+            ['key' => 'groups', 'label' => 'Group', 'route' => 'groups.index'],
+            ['key' => 'cost-centers', 'label' => 'Cost Center', 'icon' => 'building-office-2', 'route' => 'cost-centers.index'],
             ['key' => 'products', 'label' => 'Produk', 'icon' => 'cube', 'route' => 'products.index'],
             ['key' => 'employees', 'label' => 'Karyawan', 'icon' => 'users', 'route' => 'employees.index'],
-            ['key' => 'clients', 'label' => 'Master Client', 'route' => 'clients.index', 'hidden' => true],
-            ['key' => 'units', 'label' => 'Master Satuan', 'route' => 'units.index', 'hidden' => true],
-            ['key' => 'groups', 'label' => 'Master Group', 'route' => 'groups.index', 'hidden' => true],
             ['key' => 'shifts', 'label' => 'Master Shift', 'icon' => 'clock', 'route' => 'shifts.index', 'hidden' => true],
-            ['key' => 'cost-centers', 'label' => 'Cost Center', 'icon' => 'building-office-2', 'route' => 'cost-centers.index', 'hidden' => true],
         ]],
         ['key' => 'pemborongan', 'label' => 'Pemborongan', 'icon' => 'clipboard-document-list', 'children' => [
             ['key' => 'target', 'label' => 'Target', 'hidden' => true],
@@ -50,6 +55,7 @@
         ]],
         ['key' => 'settings-group', 'label' => 'Setting', 'icon' => 'shield-check', 'children' => [
             ['key' => 'settings', 'label' => 'User', 'route' => 'settings.access'],
+            ['key' => 'clients', 'label' => 'Master Client', 'route' => 'clients.index'],
             ['key' => 'audit', 'label' => 'Audit Log', 'route' => 'audit.index', 'hidden' => true],
         ]],
     ];
@@ -63,7 +69,7 @@
         <meta name="theme-color" content="#2547F9">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ $title ? $title.' — ' : '' }}{{ config('app.name') === 'Laravel' ? 'KPI Co-Packing' : config('app.name') }}</title>
-        <link rel="icon" href="{{ asset('images/favicon.svg') }}" type="image/svg+xml">
+        <link rel="icon" href="{{ asset('favicon.ico') }}" type="image/png">
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @stack('head')
@@ -74,7 +80,7 @@
         <aside data-sidebar class="fixed inset-y-0 left-0 z-50 flex w-[250px] -translate-x-full flex-col border-r border-line bg-white shadow-[16px_0_40px_rgb(15_23_42/0.08)] transition-transform duration-200 ease-out lg:translate-x-0 lg:shadow-none" aria-label="Navigasi utama">
             <div class="flex min-h-[72px] items-center justify-between overflow-hidden border-b border-line px-[18px]">
                 <a href="{{ auth()->check() ? route('dashboard') : route('login') }}" class="flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary-600">
-                    <img src="{{ asset('images/logo.svg') }}" alt="KPI Management Co-Packing" class="w-[165px] shrink-0">
+                    <img src="{{ asset('images/logo-white.png') }}" alt="SIMGROUP" class="w-[150px] shrink-0">
                 </a>
                 <button type="button" data-sidebar-toggle class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-ink focus-visible:outline-2 focus-visible:outline-primary-600 lg:hidden" aria-label="Tutup navigasi" aria-expanded="false">
                     <x-icon name="x-mark" />
@@ -177,6 +183,22 @@
                 </div>
 
                 <div class="flex-1"></div>
+
+                @if ($currentClient && $switchableClients->count() > 1)
+                    <form method="POST" action="{{ route('current-client.update') }}" class="shrink-0">
+                        @csrf
+                        @method('PUT')
+                        <label class="relative block">
+                            <span class="sr-only">Client aktif</span>
+                            <select name="client_id" data-client-switcher class="h-[42px] max-w-[220px] cursor-pointer truncate rounded-lg border border-line bg-white px-3 text-[13px] font-medium text-ink outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                                @foreach ($switchableClients as $switchableClient)
+                                    <option value="{{ $switchableClient->id }}" @selected($switchableClient->id === $currentClient->id)>{{ $switchableClient->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </form>
+                @endif
+
                 @unless ($roleCode === 'client')
                 <div class="relative shrink-0">
                     <button type="button" data-dropdown-button="notifications-dropdown" class="relative grid size-[42px] shrink-0 cursor-pointer place-items-center rounded-lg text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-primary-600" aria-label="Notifikasi" aria-haspopup="true">

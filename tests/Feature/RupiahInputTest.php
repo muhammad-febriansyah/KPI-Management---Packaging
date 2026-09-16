@@ -31,3 +31,18 @@ it('renders the rupiah input component on the deductions page', function () {
     $response->assertSee('data-rupiah-field', false);
     $response->assertSee('name="salary_advance_value"', false);
 });
+
+it('renders the dynamic salary advance value field on the deduction create page', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('deductions.create'));
+
+    $response->assertOk()
+        ->assertSee('data-salary-advance-fields', false)
+        ->assertSee('data-salary-advance-value-label', false)
+        ->assertSee('data-rupiah-prefix', false)
+        ->assertSee('data-salary-advance-suffix', false);
+});
