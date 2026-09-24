@@ -19,12 +19,6 @@
         default => 'Administrator',
     };
     $allowedNavigation = $user?->allowedMenuKeys($currentClient);
-    // Only the dashboard passes the list in, but the switcher belongs in the header on every
-    // page, so fall back to resolving it here rather than threading a prop through every view.
-    $switchableClients = collect($clients);
-    if ($switchableClients->isEmpty() && $user) {
-        $switchableClients = app(\App\Services\CurrentClientService::class)->availableFor($user);
-    }
     // Client has no notification triggers yet (see WorkRealizationController), so the bell
     // stays hidden for them — skip the queries too, not just the UI.
     $recentNotifications = $user && $roleCode !== 'client' ? $user->notifications()->latest()->limit(8)->get() : collect();
@@ -185,21 +179,6 @@
                 @endif
 
                 <div class="flex-1"></div>
-
-                @if ($currentClient && $switchableClients->count() > 1)
-                    <form method="POST" action="{{ route('current-client.update') }}" class="shrink-0">
-                        @csrf
-                        @method('PUT')
-                        <label class="relative block">
-                            <span class="sr-only">Client aktif</span>
-                            <select name="client_id" data-client-switcher class="h-[42px] max-w-[220px] cursor-pointer truncate rounded-lg border border-line bg-white px-3 text-[13px] font-medium text-ink outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
-                                @foreach ($switchableClients as $switchableClient)
-                                    <option value="{{ $switchableClient->id }}" @selected($switchableClient->id === $currentClient->id)>{{ $switchableClient->name }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                    </form>
-                @endif
 
                 @unless ($roleCode === 'client')
                 <div class="relative shrink-0">

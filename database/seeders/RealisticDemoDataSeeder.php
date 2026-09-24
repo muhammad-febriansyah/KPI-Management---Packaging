@@ -41,6 +41,7 @@ class RealisticDemoDataSeeder extends Seeder
             'status' => 'active',
         ]);
         $clientRoleId = (int) Role::query()->where('code', 'client')->value('id');
+        $employeeRoleId = (int) Role::query()->where('code', 'employee')->value('id');
         $demoClients = collect([$client]);
 
         foreach ([
@@ -120,16 +121,28 @@ class RealisticDemoDataSeeder extends Seeder
             ['Doni Kurniawan', 'male', 'permanent', 'married', 9, 'lama', '081211110010'],
         ];
 
-        $employees = collect($employeeDefinitions)->map(function (array $definition, int $index) use ($client, $groups): Employee {
-            return Employee::query()->create([
-                'client_id' => $client->id, 'user_id' => null,
-                'employee_no' => 'EMP'.str_pad((string) ($index + 1), 6, '0', STR_PAD_LEFT),
+        $employees = collect($employeeDefinitions)->map(function (array $definition, int $index) use ($client, $employeeRoleId, $groups): Employee {
+            $employeeNumber = 'EMP'.str_pad((string) ($index + 1), 6, '0', STR_PAD_LEFT);
+            $email = strtolower(str_replace(' ', '.', $definition[0])).'@example.com';
+            $employee = Employee::query()->create([
+                'client_id' => $client->id, 'user_id' => null, 'employee_no' => $employeeNumber,
                 'sim_id' => 'SIM-EMP-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
-                'full_name' => $definition[0], 'email' => strtolower(str_replace(' ', '.', $definition[0])).'@example.com',
+                'full_name' => $definition[0], 'email' => $email,
                 'phone' => $definition[6], 'join_date' => now()->subYears(3)->subMonths($index * 2)->toDateString(),
                 'gender' => $definition[1], 'employee_status' => $definition[2], 'marital_status' => $definition[3],
                 'group_id' => $groups->get($definition[4])->id, 'rate_category' => $definition[5], 'status' => 'active',
             ]);
+
+            $user = User::query()->create([
+                'name' => $employee->full_name, 'username' => $employeeNumber, 'email' => $email,
+                'password' => 'password', 'status' => 'active',
+            ]);
+            $user->clients()->attach($client->id, [
+                'role_id' => $employeeRoleId, 'is_default' => true, 'status' => 'active',
+            ]);
+            $employee->update(['user_id' => $user->getKey()]);
+
+            return $employee;
         });
 
         $productDefinitions = [

@@ -79,6 +79,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/reports/payroll/payslip/{employee}', [PayslipController::class, 'show'])->name('reports.payroll.payslip')->middleware('client');
     Route::get('/reports/work', WorkReportController::class)->name('reports.work')->middleware('client');
     Route::get('/settings/access', [AccessController::class, 'index'])->name('settings.access')->middleware('client');
+    Route::get('/settings/access/employee-options', [AccessController::class, 'employeeOptions'])->name('settings.access.employee-options')->middleware('client');
+    Route::post('/settings/access/employee-accounts', [AccessController::class, 'storeEmployeeAccount'])->name('settings.access.employee-accounts.store')->middleware('client');
+    Route::get('/settings/access/client-options', [AccessController::class, 'clientOptions'])->name('settings.access.client-options')->middleware('client');
+    Route::post('/settings/access/client-accounts', [AccessController::class, 'storeClientAccount'])->name('settings.access.client-accounts.store')->middleware('client');
     Route::put('/settings/access/roles/{role}', [AccessController::class, 'updateRolePermissions'])->name('settings.access.roles.update');
     Route::post('/settings/access/super-admins', [AccessController::class, 'storeSuperAdmin'])->name('settings.access.super-admins.store');
     Route::put('/settings/access/super-admins/{user}', [AccessController::class, 'updateSuperAdmin'])->name('settings.access.super-admins.update');

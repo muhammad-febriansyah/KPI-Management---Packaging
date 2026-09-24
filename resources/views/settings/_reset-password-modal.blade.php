@@ -10,8 +10,8 @@
         </div>
         <form data-user-reset-form class="grid gap-4">
             <input type="hidden" name="_method" value="PUT">
-            <label class="grid gap-2 text-sm font-semibold"><span>Password baru <span class="text-danger">*</span></span><input type="password" name="password" required minlength="8" autocomplete="new-password" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="Minimal 8 karakter"></label>
-            <label class="grid gap-2 text-sm font-semibold"><span>Konfirmasi password <span class="text-danger">*</span></span><input type="password" name="password_confirmation" required minlength="8" autocomplete="new-password" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="Ulangi password baru"></label>
+            <label class="grid gap-2 text-sm font-semibold"><span>Password baru <span class="text-danger">*</span></span><x-form.password-input name="password" required /></label>
+            <label class="grid gap-2 text-sm font-semibold"><span>Konfirmasi password <span class="text-danger">*</span></span><x-form.password-input name="password_confirmation" placeholder="Ulangi password baru" required /></label>
             <div class="flex justify-end gap-3"><button type="button" data-user-reset-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold">Batal</button><button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white"><x-icon name="key" size="size-4" /> Simpan password</button></div>
         </form>
     </div>

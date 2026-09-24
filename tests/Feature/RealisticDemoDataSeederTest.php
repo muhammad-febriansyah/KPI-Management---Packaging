@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Client;
+use App\Models\Employee;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,11 +17,13 @@ it('seeds a payroll-ready co-packing workspace with realistic records', function
         'name' => 'PT SIMGROUP Co-Packing',
     ]);
     expect(Hash::check('password', User::query()->where('username', 'superadmin')->value('password')))->toBeTrue();
-    expect(User::query()->count())->toBe(11);
+    expect(User::query()->count())->toBe(21);
     expect(User::query()->where('is_super_admin', true)->value('username'))->toBe('superadmin');
     $this->assertDatabaseHas('users', ['username' => 'client.demo.01', 'status' => 'active']);
+    $this->assertDatabaseHas('users', ['username' => 'EMP000001', 'email' => 'budi.santoso@example.com', 'status' => 'active']);
+    expect(Employee::query()->whereNotNull('user_id')->count())->toBe(10);
     $this->assertDatabaseCount('clients', 10);
-    $this->assertDatabaseCount('client_user', 19);
+    $this->assertDatabaseCount('client_user', 29);
     $this->assertDatabaseHas('products', ['sku' => 'KOP-3IN1-20G', 'name' => 'Kopi Sachet 3in1 20g']);
     $this->assertDatabaseHas('products', ['sku' => 'DET-BUB-1KG', 'employee_rate' => 260]);
     $this->assertDatabaseHas('work_realizations', ['is_complaint' => true]);
@@ -44,7 +47,7 @@ it('rebuilds the seeded workspace without duplicating operational data', functio
     $this->seed(DatabaseSeeder::class);
 
     expect(Client::query()->count())->toBe(10);
-    expect(User::query()->count())->toBe(11);
+    expect(User::query()->count())->toBe(21);
     $this->assertDatabaseCount('employees', 10);
     $this->assertDatabaseCount('products', 10);
     $this->assertDatabaseCount('work_realizations', 10);

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Client;
+use App\Models\Employee;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -42,14 +43,16 @@ it('lets a super admin view the settings/access page', function () {
         ->assertSee('data-access-tab="users"', false)
         ->assertSee('data-access-tab="permissions"', false)
         ->assertSee('data-access-panel="users"', false)
-        ->assertSee('data-access-panel="permissions"', false);
+        ->assertSee('data-access-panel="permissions"', false)
+        ->assertSee('>Username<', false)
+        ->assertSee('data-server-table', false);
 });
 
 it('renders unified role form and reset password modal on settings/access', function () {
     $client = Client::factory()->create();
     $admin = User::factory()->superAdmin()->create();
 
-    $this->actingAs($admin)
+    $response = $this->actingAs($admin)
         ->withSession(['current_client_id' => $client->getKey()])
         ->get(route('settings.access'))
         ->assertOk()
@@ -61,9 +64,176 @@ it('renders unified role form and reset password modal on settings/access', func
         ->assertSee('value="super-admin"', false)
         ->assertSee('value="employee"', false)
         ->assertSee('value="client"', false)
-        ->assertSee('value="active" selected', false)
+        ->assertSee('name="employee_id"', false)
+        ->assertSee('data-tom-select-remote="'.route('settings.access.employee-options').'"', false)
+        ->assertSee('Jika karyawan sudah memiliki akun, pilihannya akan memunculkan peringatan dan tidak dapat dibuat ulang.')
+        ->assertSee('name="client_id"', false)
+        ->assertSee('data-tom-select-remote="'.route('settings.access.client-options').'"', false)
         ->assertSee('data-super-admin-form', false)
         ->assertSee('data-user-reset-form', false);
+
+    expect(substr_count($response->getContent(), 'data-password-toggle'))->toBe(12);
+});
+
+it('searches active master employees for employee account creation', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => null,
+        'full_name' => 'Karyawan Belum Login',
+        'status' => 'active',
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access.employee-options', ['q' => 'Belum Login']));
+
+    $response->assertOk()->assertJsonPath('results.0.id', $employee->getKey())->assertJsonPath('results.0.name', 'Karyawan Belum Login');
+});
+
+it('returns employees with existing accounts so the form can warn before duplicate creation', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employeeUser = User::factory()->create(['name' => 'Agus Setiawan', 'username' => 'EMP000006']);
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => $employeeUser->getKey(),
+        'full_name' => 'Agus Setiawan',
+        'status' => 'active',
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access.employee-options', ['q' => 'Agu']));
+
+    $response->assertOk()
+        ->assertJsonPath('results.0.id', $employee->getKey())
+        ->assertJsonPath('results.0.has_account', true);
+});
+
+it('creates an account for an existing master employee', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => null]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('settings.access.employee-accounts.store'), [
+            'employee_id' => $employee->getKey(),
+            'email' => 'employee.account@example.com',
+            'password' => 'password-baru',
+            'password_confirmation' => 'password-baru',
+        ])
+        ->assertCreated();
+
+    $employee->refresh();
+    $this->assertDatabaseHas('users', [
+        'id' => $employee->user_id,
+        'name' => $employee->full_name,
+        'username' => $employee->employee_no,
+        'email' => 'employee.account@example.com',
+    ]);
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $client->getKey(),
+        'user_id' => $employee->user_id,
+        'status' => 'active',
+    ]);
+    expect(Hash::check('password-baru', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
+});
+
+it('rejects creating a second account for an employee', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employeeUser = User::factory()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => $employeeUser->getKey(),
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('settings.access.employee-accounts.store'), [
+            'employee_id' => $employee->getKey(),
+            'email' => 'duplicate.employee@example.com',
+            'password' => 'password-baru',
+            'password_confirmation' => 'password-baru',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['employee_id']);
+});
+
+it('searches active master clients for client account creation', function () {
+    $currentClient = Client::factory()->create();
+    $targetClient = Client::factory()->create(['code' => 'TARGET-001', 'name' => 'PT Target Account']);
+    $admin = User::factory()->superAdmin()->create();
+    $existingAccount = User::factory()->create();
+    attachRole($existingAccount, $targetClient, 'client');
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('settings.access.client-options', ['q' => 'Target']));
+
+    $response->assertOk()->assertJsonPath('results.0.id', $targetClient->getKey())->assertJsonPath('results.0.code', 'TARGET-001');
+});
+
+it('creates a client account for an existing master client', function () {
+    $currentClient = Client::factory()->create();
+    $targetClient = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->postJson(route('settings.access.client-accounts.store'), [
+            'client_id' => $targetClient->getKey(),
+            'account_name' => 'PIC Target',
+            'login_username' => 'pic.target',
+            'login_email' => 'pic.target@example.com',
+            'password' => 'password-baru',
+            'password_confirmation' => 'password-baru',
+        ])
+        ->assertCreated();
+
+    $account = User::query()->where('username', 'pic.target')->firstOrFail();
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $targetClient->getKey(),
+        'user_id' => $account->getKey(),
+        'status' => 'active',
+    ]);
+    expect(Hash::check('password-baru', $account->password))->toBeTrue();
+});
+
+it('renders distinct user actions with icons', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $user = User::factory()->create(['name' => 'Akun Karyawan']);
+    attachRole($user, $client, 'employee');
+    Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => $user->getKey(),
+        'full_name' => 'Akun Karyawan',
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access', ['draw' => 1, 'start' => 0, 'length' => 10]));
+
+    $action = collect($response->json('data'))->firstWhere('name', 'Akun Karyawan')['action'];
+    $row = collect($response->json('data'))->firstWhere('name', 'Akun Karyawan');
+    expect($row['role_name'])
+        ->toContain('border-sky-200')
+        ->toContain('bg-sky-50')
+        ->toContain('Karyawan');
+    expect($action)
+        ->toContain('bg-sky-50')
+        ->toContain('bg-amber-50')
+        ->toContain('bg-red-50')
+        ->toContain('bg-rose-50')
+        ->toContain('heroicons.svg#pencil')
+        ->toContain('heroicons.svg#lock-closed')
+        ->toContain('heroicons.svg#x-mark')
+        ->toContain('heroicons.svg#trash');
 });
 
 it('allows a super admin to create and update another super admin', function () {
@@ -73,14 +243,13 @@ it('allows a super admin to create and update another super admin', function () 
         'name' => 'Admin Presentasi',
         'username' => 'admin.presentasi',
         'email' => 'admin.presentasi@example.com',
-        'status' => 'active',
         'password' => 'password-baru',
         'password_confirmation' => 'password-baru',
     ]);
 
     $response->assertCreated();
     $created = User::query()->where('username', 'admin.presentasi')->firstOrFail();
-    expect($created->is_super_admin)->toBeTrue();
+    expect($created->is_super_admin)->toBeTrue()->and($created->status)->toBe('active');
 
     $this->actingAs($admin)->putJson(route('settings.access.super-admins.update', $created), [
         'name' => 'Admin Presentasi Updated',

@@ -65,7 +65,7 @@ const initializeNavGroups = () => {
 
 const initializePasswordToggle = () => {
     document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
-        const input = toggle.closest('form')?.querySelector('input[name="password"]') ?? document.querySelector('#password');
+        const input = toggle.parentElement?.querySelector('input[name="password"], input[name="password_confirmation"], input[type="password"], input[type="text"]') ?? document.querySelector('#password');
         const show = toggle.querySelector('[data-password-show]');
         const hide = toggle.querySelector('[data-password-hide]');
 
@@ -518,7 +518,7 @@ const initializeServerTables = () => {
             ] : resource === 'audit-logs' ? [
                 { data: 'created_at' }, { data: 'description' }, { data: 'ip_address' }, { data: 'user_name' },
             ] : resource === 'settings/access' ? [
-                { data: 'name' }, { data: 'email' }, { data: 'role_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'name' }, { data: 'username' }, { data: 'email' }, { data: 'role_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'clients' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : [
@@ -666,8 +666,8 @@ const initializeUserCreateModal = () => {
         const role = form.querySelector('input[name="create_role"]:checked')?.value;
         const config = {
             'super-admin': { url: '/settings/access/super-admins', label: 'Super Admin' },
-            employee: { url: '/employees', label: 'Karyawan' },
-            client: { url: '/clients', label: 'Client' },
+            employee: { url: '/settings/access/employee-accounts', label: 'Akun Karyawan' },
+            client: { url: '/settings/access/client-accounts', label: 'Akun Client' },
         }[role];
         if (!config) return;
 
@@ -1064,7 +1064,7 @@ const initializeTomSelect = () => {
         const dependsOnParam = select.dataset.tomSelectDependsOn;
         const dependsOnSelector = select.dataset.tomSelectDependsOnSelector;
 
-        new TomSelect(select, {
+        const tomSelect = new TomSelect(select, {
             placeholder: select.dataset.tomSelectPlaceholder ?? 'Pilih...',
             create: false,
             ...(remoteUrl ? {
@@ -1089,6 +1089,23 @@ const initializeTomSelect = () => {
                 },
             } : {}),
         });
+
+        if (select.dataset.tomSelectAccountWarning !== undefined) {
+            tomSelect.on('item_add', (value) => {
+                const option = tomSelect.options[value];
+
+                if (!option?.has_account) {
+                    return;
+                }
+
+                tomSelect.clear(true);
+                Swal.fire({
+                    title: 'Akun sudah ada',
+                    text: `${option.text} sudah memiliki akun login. Kelola akun melalui tabel Data User.`,
+                    icon: 'info',
+                });
+            });
+        }
     });
 };
 
@@ -1234,7 +1251,7 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
             input.value = item ? '' : input.dataset.defaultOnCreate;
         });
         form.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
-            const input = toggle.closest('form')?.querySelector('input[name="password"]');
+            const input = toggle.parentElement?.querySelector('input[name="password"], input[name="password_confirmation"], input[type="password"], input[type="text"]');
             const show = toggle.querySelector('[data-password-show]');
             const hide = toggle.querySelector('[data-password-hide]');
 

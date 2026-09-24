@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\Employee;
 use App\Models\Group;
 use App\Models\Permission;
 use App\Models\Role;
@@ -44,7 +45,10 @@ class AccessController extends Controller
                         'variant' => $status === 'active' ? 'success' : 'neutral',
                         'slot' => $status === 'active' ? 'Aktif' : 'Nonaktif',
                     ])->render();
-                })->addColumn('role_name', fn (User $user): string => $this->roleName($user))
+                })->addColumn('role_name', fn (User $user): string => view('components.badge', [
+                    'variant' => $this->roleVariant($user),
+                    'slot' => $this->roleName($user),
+                ])->render())
                 ->addColumn('action', function (User $user) use ($client): string {
                     $status = $user->is_super_admin ? $user->status : ($user->client_user_status ?? $user->status);
                     $isActive = $status === 'active';
@@ -61,7 +65,7 @@ class AccessController extends Controller
                         $buttons[] = '<button type="button" data-client-edit data-url="'.route('clients.update', $client->get()).'?account_user_id='.$user->getKey().'" data-client="'.e(json_encode($this->clientPayload($user, $client->get()))).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
                     }
 
-                    $buttons[] = '<button type="button" data-user-reset data-url="'.route('settings.access.users.password', $user).'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#key"></use></svg>Reset password</button>';
+                    $buttons[] = '<button type="button" data-user-reset data-url="'.route('settings.access.users.password', $user).'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#lock-closed"></use></svg>Reset password</button>';
 
                     if ($user->getKey() !== request()->user()?->getKey()) {
                         $buttons[] = '<button type="button" data-user-status-toggle data-url="'.route('settings.access.users.status', $user).'" data-status="'.$status.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold '.$classes.'"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#'.$icon.'"></use></svg>'.$label.'</button>';
@@ -69,7 +73,7 @@ class AccessController extends Controller
                     }
 
                     return '<div class="flex flex-wrap justify-end gap-2">'.implode('', $buttons).'</div>';
-                })->rawColumns(['status', 'action'])->toJson();
+                })->rawColumns(['status', 'role_name', 'action'])->toJson();
         }
 
         $roles = Role::query()->where('code', '!=', 'super-admin')->with(['permissions' => fn ($query) => $query->where('code', 'like', 'menu.%')])->orderBy('name')->get()
@@ -87,6 +91,130 @@ class AccessController extends Controller
             'menuOptions' => config('menu_permissions'),
             'groups' => Group::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('name')->get(),
         ]);
+    }
+
+    public function employeeOptions(Request $request, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+
+        $search = trim($request->string('q')->toString());
+        $page = max(1, $request->integer('page', 1));
+        $paginator = Employee::query()
+            ->where('client_id', $client->id())
+            ->where('status', 'active')
+            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                $query->where('full_name', 'like', "%{$search}%")
+                    ->orWhere('employee_no', 'like', "%{$search}%")
+                    ->orWhere('sim_id', 'like', "%{$search}%");
+            }))
+            ->orderBy('full_name')
+            ->paginate(20, ['id', 'employee_no', 'sim_id', 'full_name', 'user_id'], 'page', $page);
+
+        return response()->json([
+            'results' => $paginator->getCollection()->map(fn (Employee $employee): array => [
+                'id' => $employee->getKey(),
+                'text' => $employee->full_name.' — '.$employee->employee_no,
+                'name' => $employee->full_name,
+                'employee_no' => $employee->employee_no,
+                'sim_id' => $employee->sim_id,
+                'has_account' => $employee->user_id !== null,
+            ]),
+            'pagination' => ['more' => $paginator->hasMorePages()],
+        ]);
+    }
+
+    public function storeEmployeeAccount(Request $request, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        $data = $request->validate([
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')->where(fn ($query) => $query
+                ->where('client_id', $client->id())
+                ->where('status', 'active')
+                ->whereNull('user_id'))],
+            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+
+        DB::transaction(function () use ($client, $data): void {
+            $employee = Employee::query()
+                ->where('client_id', $client->id())
+                ->whereNull('user_id')
+                ->findOrFail($data['employee_id']);
+            $role = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan']);
+            $user = User::query()->create([
+                'name' => $employee->full_name,
+                'username' => $employee->employee_no,
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'status' => 'active',
+            ]);
+            $user->clients()->attach($client->id(), [
+                'role_id' => $role->getKey(),
+                'is_default' => true,
+                'status' => 'active',
+            ]);
+            $employee->update(['email' => $data['email'], 'user_id' => $user->getKey()]);
+        });
+
+        return response()->json(['message' => 'Akun Karyawan berhasil ditambahkan.'], 201);
+    }
+
+    public function clientOptions(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        $search = trim($request->string('q')->toString());
+        $page = max(1, $request->integer('page', 1));
+        $paginator = Client::query()
+            ->active()
+            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%");
+            }))
+            ->orderBy('name')
+            ->paginate(20, ['id', 'code', 'name'], 'page', $page);
+
+        return response()->json([
+            'results' => $paginator->getCollection()->map(fn (Client $client): array => [
+                'id' => $client->getKey(),
+                'text' => $client->code.' — '.$client->name,
+                'name' => $client->name,
+                'code' => $client->code,
+            ]),
+            'pagination' => ['more' => $paginator->hasMorePages()],
+        ]);
+    }
+
+    public function storeClientAccount(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        $data = $request->validate([
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where(fn ($query) => $query->where('status', 'active'))],
+            'account_name' => ['required', 'string', 'max:150'],
+            'login_username' => ['required', 'string', 'max:100', Rule::unique('users', 'username')],
+            'login_email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+
+        DB::transaction(function () use ($data): void {
+            $client = Client::query()->active()->lockForUpdate()->findOrFail($data['client_id']);
+            $role = Role::query()->firstOrCreate(['code' => 'client'], ['name' => 'Client']);
+            $user = User::query()->create([
+                'name' => $data['account_name'],
+                'username' => $data['login_username'],
+                'email' => $data['login_email'],
+                'password' => $data['password'],
+                'status' => 'active',
+            ]);
+            $user->clients()->attach($client->getKey(), [
+                'role_id' => $role->getKey(),
+                'is_default' => true,
+                'status' => 'active',
+            ]);
+        });
+
+        return response()->json(['message' => 'Akun Client berhasil ditambahkan.'], 201);
     }
 
     public function toggleUserStatus(User $user, CurrentClientService $client): JsonResponse
@@ -119,6 +247,7 @@ class AccessController extends Controller
     {
         Gate::authorize('viewAny', Role::class);
         $data = $request->validate($this->superAdminRules());
+        $data['status'] ??= 'active';
         $user = new User;
         $user->fill($data);
         $user->is_super_admin = true;
@@ -227,6 +356,16 @@ class AccessController extends Controller
         };
     }
 
+    private function roleVariant(User $user): string
+    {
+        return match ($user->is_super_admin ? 'super-admin' : $user->role_code) {
+            'super-admin' => 'primary',
+            'employee' => 'info',
+            'client' => 'success',
+            default => 'neutral',
+        };
+    }
+
     /** @return array<string, array<int, string|Rule>> */
     private function superAdminRules(?User $user = null): array
     {
@@ -234,7 +373,7 @@ class AccessController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'username' => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($user?->getKey())],
             'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($user?->getKey())],
-            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'status' => [$user ? 'required' : 'sometimes', Rule::in(['active', 'inactive'])],
             'password' => [$user ? 'nullable' : 'required', 'string', 'min:8', 'max:255', 'confirmed'],
             'password_confirmation' => [$user ? 'nullable' : 'required', 'string'],
         ];

@@ -19,7 +19,7 @@ function switcherTestRole(): Role
     return $role;
 }
 
-it('offers every accessible client in the header switcher', function () {
+it('hides the client switcher from the header', function () {
     $user = User::factory()->superAdmin()->create();
     $active = Client::factory()->create(['name' => 'PT Satu']);
     Client::factory()->create(['name' => 'PT Dua']);
@@ -28,10 +28,7 @@ it('offers every accessible client in the header switcher', function () {
         ->withSession(['current_client_id' => $active->getKey()])
         ->get(route('products.index'));
 
-    $response->assertOk()
-        ->assertSee('data-client-switcher', false)
-        ->assertSee('PT Satu')
-        ->assertSee('PT Dua');
+    $response->assertOk()->assertDontSee('data-client-switcher', false);
 });
 
 it('hides the switcher when the user reaches only one client', function () {

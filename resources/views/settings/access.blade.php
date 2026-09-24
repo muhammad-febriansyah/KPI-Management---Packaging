@@ -8,7 +8,7 @@
 </div>
 </div>
 <section id="access-panel-users" data-access-panel="users" role="tabpanel" aria-labelledby="access-tab-users" tabindex="0">
-<x-card :padding="false"><table data-server-table class="w-full text-left text-sm"><thead><tr><th>Nama</th><th>Email</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></x-card>
+<x-card :padding="false"><div class="overflow-x-auto"><table data-server-table class="min-w-[980px] w-full text-left text-sm"><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div></x-card>
 </section>
 <section id="access-panel-permissions" data-access-panel="permissions" role="tabpanel" aria-labelledby="access-tab-permissions" tabindex="0" hidden>
 <div><h2 class="text-lg font-semibold text-slate-950">Hak Akses Menu per Role</h2><p class="mt-1 mb-4 text-sm text-slate-500">Centang menu yang boleh diakses tiap role. Super Admin selalu memiliki akses penuh.</p>
