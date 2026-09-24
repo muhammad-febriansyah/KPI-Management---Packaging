@@ -21,7 +21,9 @@ it('only shows menus granted to the user\'s role in the sidebar', function () {
 
     $response->assertOk()
         ->assertSee(route('dashboard'), false)
-        ->assertDontSee(route('products.index'), false);
+        ->assertDontSee(route('products.index'), false)
+        ->assertDontSee('data-global-search', false)
+        ->assertDontSee('Pencarian global');
 });
 
 it('reflects a menu revoked by the super admin without redeploying', function () {
@@ -52,7 +54,9 @@ it('shows master client under the setting menu for super admins', function () {
         ->assertSee(route('groups.index'), false)
         ->assertSee(route('cost-centers.index'), false)
         ->assertSee(asset('images/logo-white.png'), false)
-        ->assertSee(asset('favicon.ico'), false);
+        ->assertSee(asset('favicon.ico'), false)
+        ->assertSee('data-global-search', false)
+        ->assertSee('Pencarian global');
 
     $content = $response->getContent();
 

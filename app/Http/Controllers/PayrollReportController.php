@@ -25,6 +25,7 @@ class PayrollReportController extends Controller
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
                 ->editColumn('gender', fn (object $row): string => $row->gender === 'male' ? 'Laki-laki' : 'Perempuan')
+                ->addColumn('bpjs_health', fn (object $row): int => PayrollReportBuilder::bpjsHealth($row))
                 ->addColumn('bpjs_employment', fn (object $row): int => PayrollReportBuilder::bpjsEmployment($row))
                 ->addColumn('net_salary', fn (object $row): int => PayrollReportBuilder::netSalary($row))
                 ->toJson();

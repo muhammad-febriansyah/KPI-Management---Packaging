@@ -11,8 +11,7 @@
         <label class="grid gap-2 text-sm font-semibold"><span>Group</span><select name="group_id" data-tom-select data-tom-select-placeholder="Pilih group..." class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="">Tanpa group</option>@foreach($groups as $item)<option value="{{ $item->id }}">{{ $item->name }}</option>@endforeach</select></label>
         <label class="grid gap-2 text-sm font-semibold"><span>Cost center</span><select name="cost_center_id" data-tom-select data-tom-select-placeholder="Pilih cost center..." class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="">Tanpa cost center</option>@foreach($costCenters as $item)<option value="{{ $item->id }}">{{ $item->name }}</option>@endforeach</select></label>
         <label class="grid gap-2 text-sm font-semibold"><span>Harga PO</span><x-rupiah-input name="po_price" :decimals="3" placeholder="15.000" /></label>
-        <label class="grid gap-2 text-sm font-semibold"><span>Harga borongan karyawan lama</span><x-rupiah-input name="old_employee_rate" :decimals="3" placeholder="15.000" /></label>
-        <label class="grid gap-2 text-sm font-semibold"><span>Harga borongan karyawan baru</span><x-rupiah-input name="new_employee_rate" :decimals="3" placeholder="17.500" /></label>
+        <label class="grid gap-2 text-sm font-semibold"><span>Harga borongan karyawan</span><x-rupiah-input name="employee_rate" :decimals="3" placeholder="15.000" /></label>
         <label class="grid gap-2 text-sm font-semibold"><span>Estimasi output/jam</span><input name="estimated_output_per_hour" type="number" min="0" step="1" placeholder="Contoh: 120" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
         <label class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Status produk</span><select name="status" class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
     </div><div class="flex justify-end gap-3"><button type="button" data-product-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold">Batal</button><button type="submit" class="rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white">Simpan</button></div></form></div></div>
@@ -38,8 +37,7 @@
             <div><dt class="text-xs text-slate-500">Status produk</dt><dd data-product-detail-status class="mt-1.5">—</dd></div>
             <div><dt class="text-xs text-slate-500">Harga PO</dt><dd data-product-detail-po-price class="mt-1.5 text-sm font-semibold text-slate-900">—</dd></div>
             <div><dt class="text-xs text-slate-500">Estimasi output/jam</dt><dd data-product-detail-estimate class="mt-1.5 text-sm font-semibold text-slate-900">—</dd></div>
-            <div><dt class="text-xs text-slate-500">Harga borongan karyawan lama</dt><dd data-product-detail-old-rate class="mt-1.5 text-sm font-semibold text-slate-900">—</dd></div>
-            <div><dt class="text-xs text-slate-500">Harga borongan karyawan baru</dt><dd data-product-detail-new-rate class="mt-1.5 text-sm font-semibold text-slate-900">—</dd></div>
+            <div><dt class="text-xs text-slate-500">Harga borongan karyawan</dt><dd data-product-detail-employee-rate class="mt-1.5 text-sm font-semibold text-slate-900">—</dd></div>
         </dl>
         <div class="mt-8 flex justify-end"><button type="button" data-product-detail-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold">Tutup</button></div>
     </div></div>

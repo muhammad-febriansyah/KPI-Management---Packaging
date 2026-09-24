@@ -55,7 +55,10 @@ class DashboardController extends Controller
     private function employeeDashboard(User $user, mixed $currentClient, mixed $availableClients): View
     {
         $own = WorkRealization::where('client_id', $currentClient->id)
-            ->whereHas('employeeAssignments.employee', fn ($query) => $query->where('user_id', $user->id));
+            ->where(function ($query) use ($user): void {
+                $query->where('created_by', $user->id)
+                    ->orWhereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $user->id));
+            });
 
         return view('dashboard-employee', [
             'availableClients' => $availableClients,
@@ -68,7 +71,6 @@ class DashboardController extends Controller
                 'realizationsTotal' => (clone $own)->count(),
             ],
             'recentRealizations' => (clone $own)->with(['shift', 'product'])->latest('work_date')->latest('id')->limit(8)->get(),
-            'pendingRealizations' => (clone $own)->where('status', '!=', 'submitted')->with(['shift', 'product'])->orderBy('work_date')->limit(10)->get(),
             'outputTrend' => $this->outputTrend($own),
             'deduction' => $user->employee ? EmployeeDeduction::query()->where('employee_id', $user->employee->id)
                 ->whereHas('deductionPeriod', fn ($query) => $query->whereBetween('month', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()]))

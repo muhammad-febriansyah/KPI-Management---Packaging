@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['client_id', 'work_date', 'shift_id', 'batch_id', 'product_id', 'sku_snapshot', 'product_name_snapshot', 'unit_name_snapshot', 'total_output', 'start_time', 'end_time', 'report', 'result_image_path', 'is_complaint', 'status', 'created_by', 'finalized_by', 'finalized_at'])]
+#[Fillable(['client_id', 'work_date', 'shift_id', 'batch_id', 'product_id', 'sku_snapshot', 'product_name_snapshot', 'unit_name_snapshot', 'total_output', 'start_time', 'end_time', 'report', 'result_image_path', 'is_complaint', 'created_by', 'finalized_by', 'finalized_at'])]
 class WorkRealization extends Model
 {
     use BelongsToClient;

@@ -14,9 +14,12 @@ class AssignWorkRealizationRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->is_super_admin === true
-            && $this->user()?->status === 'active'
-            && app(CurrentClientService::class)->isResolved();
+        $user = $this->user();
+        $client = app(CurrentClientService::class);
+
+        return $user?->status === 'active'
+            && $client->isResolved()
+            && ($user->is_super_admin || $user->roleCodeFor($client->get()) === 'employee');
     }
 
     /**

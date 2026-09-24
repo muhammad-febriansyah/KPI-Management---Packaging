@@ -19,8 +19,7 @@ it('includes unit name and estimated output per hour so the realization form can
         'sku' => 'SKU-001',
         'name' => 'Kopi Sachet 25g',
         'unit_id' => $unit->id,
-        'old_employee_rate' => 10,
-        'new_employee_rate' => 12,
+        'employee_rate' => 12,
         'estimated_output_per_hour' => 500,
         'status' => 'active',
     ]);
@@ -31,8 +30,7 @@ it('includes unit name and estimated output per hour so the realization form can
 
     $response->assertOk();
     $response->assertJsonPath('results.0.unit_name', 'Karton');
-    $response->assertJsonPath('results.0.old_employee_rate', '10.000');
-    $response->assertJsonPath('results.0.new_employee_rate', '12.000');
+    $response->assertJsonPath('results.0.employee_rate', '12.000');
     $response->assertJsonPath('results.0.estimated_output_per_hour', 500);
 });
 

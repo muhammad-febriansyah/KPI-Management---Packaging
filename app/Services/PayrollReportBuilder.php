@@ -30,6 +30,7 @@ class PayrollReportBuilder
                 DB::raw('SUM(employee_deductions.uniform_amount) AS uniform_amount'),
                 DB::raw('SUM(employee_deductions.equipment_amount) AS equipment_amount'),
                 DB::raw('SUM(employee_deductions.meal_amount) AS meal_amount'),
+                DB::raw('MAX(employee_deductions.bpjs_health_percent) AS bpjs_health_percent'),
                 DB::raw('MAX(employee_deductions.bpjs_employment_percent) AS bpjs_employment_percent'),
                 DB::raw('MAX(employee_deductions.salary_advance_type) AS salary_advance_type'),
                 DB::raw('SUM(employee_deductions.salary_advance_value) AS salary_advance_value'),
@@ -62,6 +63,7 @@ class PayrollReportBuilder
                 'employees.gender',
                 DB::raw('COALESCE(attendance.attendance_days, 0) AS attendance_days'),
                 DB::raw('COALESCE(attendance.gross_salary, 0) AS gross_salary'),
+                DB::raw('COALESCE(deductions.bpjs_health_percent, 0) AS bpjs_health_percent'),
                 DB::raw('COALESCE(deductions.bpjs_employment_percent, 0) AS bpjs_employment_percent'),
                 'deductions.salary_advance_type',
                 DB::raw('COALESCE(deductions.uniform_amount, 0) AS uniform_amount'),
@@ -79,6 +81,11 @@ class PayrollReportBuilder
         return (int) round(((float) $row->gross_salary * (float) $row->bpjs_employment_percent) / 100);
     }
 
+    public static function bpjsHealth(object $row): int
+    {
+        return (int) round(((float) $row->gross_salary * (float) $row->bpjs_health_percent) / 100);
+    }
+
     public static function salaryAdvanceAmount(object $row): float
     {
         return $row->salary_advance_type === 'percentage'
@@ -90,6 +97,6 @@ class PayrollReportBuilder
     {
         $advance = self::salaryAdvanceAmount($row);
 
-        return (int) round((float) $row->gross_salary - self::bpjsEmployment($row) - $row->uniform_amount - $row->equipment_amount - $row->meal_amount - $advance - $row->correction_minus + $row->correction_plus);
+        return (int) round((float) $row->gross_salary - self::bpjsHealth($row) - self::bpjsEmployment($row) - $row->uniform_amount - $row->equipment_amount - $row->meal_amount - $advance - $row->correction_minus + $row->correction_plus);
     }
 }

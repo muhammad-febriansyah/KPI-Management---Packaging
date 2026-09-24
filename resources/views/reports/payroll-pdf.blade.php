@@ -56,6 +56,7 @@
                     <th class="number">Total Hari Masuk</th>
                     <th class="number">Gaji Bersih</th>
                     <th class="number">Gaji Kotor</th>
+                    <th class="number">BPJS Kesehatan</th>
                     <th class="number">BPJS Ketenagakerjaan</th>
                     <th class="number">Seragam (Kaos/Celana)</th>
                     <th class="number">Perlengkapan Kerja</th>
@@ -68,6 +69,7 @@
             <tbody>
                 @foreach ($rows as $row)
                     @php
+                        $bpjsHealth = \App\Services\PayrollReportBuilder::bpjsHealth($row);
                         $bpjs = \App\Services\PayrollReportBuilder::bpjsEmployment($row);
                         $advance = \App\Services\PayrollReportBuilder::salaryAdvanceAmount($row);
                         $net = \App\Services\PayrollReportBuilder::netSalary($row);
@@ -80,6 +82,7 @@
                         <td class="number">{{ $row->attendance_days }}</td>
                         <td class="number net">{{ $rupiah($net) }}</td>
                         <td class="number">{{ $rupiah($row->gross_salary) }}</td>
+                        <td class="number">{{ $rupiah($bpjsHealth) }}</td>
                         <td class="number">{{ $rupiah($bpjs) }}</td>
                         <td class="number">{{ $rupiah($row->uniform_amount) }}</td>
                         <td class="number">{{ $rupiah($row->equipment_amount) }}</td>

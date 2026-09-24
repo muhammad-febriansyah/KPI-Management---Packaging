@@ -26,22 +26,22 @@ class DeductionTemplateExport implements FromArray, ShouldAutoSize, WithColumnFo
         }
 
         return [[
-            now()->format('Y-m'), '', $this->exampleEmployee->employee_no, $this->exampleEmployee->full_name,
-            0, 0, 0, 0, 0, '', 0, 0, 0,
-            'Contoh baris — silakan ubah nilainya atau hapus baris ini sebelum import.',
+            now()->format('d/m/Y'), now()->locale('id')->translatedFormat('F Y'),
+            $this->exampleEmployee->sim_id ?: $this->exampleEmployee->employee_no,
+            $this->exampleEmployee->full_name, 0, 0, 0, 0,
         ]];
     }
 
     /** @return array<int, string> */
     public function headings(): array
     {
-        return ['Bulan', 'Minggu', 'No Karyawan', 'Nama Lengkap', 'Potongan Seragam', 'Potongan Perlengkapan', 'Potongan Uang Makan', 'BPJS Kesehatan Persen', 'BPJS Ketenagakerjaan Persen', 'Tipe DP Gaji', 'Nilai DP Gaji', 'Koreksi Pengurangan', 'Koreksi Penambahan', 'Catatan'];
+        return ['Tanggal Input', 'Periode', 'SIM ID', 'Nama Lengkap', 'BPJS Kesehatan', 'BPJS Ketenagakerjaan', 'Koreksi Pengurangan', 'Koreksi Penambahan'];
     }
 
     /** @return array<string, string> */
     public function columnFormats(): array
     {
-        return ['A' => NumberFormat::FORMAT_TEXT, 'C' => NumberFormat::FORMAT_TEXT];
+        return ['A' => NumberFormat::FORMAT_TEXT, 'B' => NumberFormat::FORMAT_TEXT, 'C' => NumberFormat::FORMAT_TEXT];
     }
 
     /** @return array<int, mixed> */
@@ -57,19 +57,14 @@ class DeductionTemplateExport implements FromArray, ShouldAutoSize, WithColumnFo
     public function registerEvents(): array
     {
         $notes = [
-            'A1' => 'Format: TAHUN-BULAN. Contoh: 2026-08.',
-            'B1' => 'Angka 1-5. Kosongkan jika berlaku untuk semua minggu di bulan itu.',
-            'C1' => 'Wajib diisi, harus sama persis dengan No. karyawan di Master Data > Karyawan.',
-            'D1' => 'Hanya informasi, dicocokkan otomatis lewat No Karyawan saat import.',
-            'E1' => 'Nominal rupiah, bilangan bulat.',
-            'F1' => 'Nominal rupiah, bilangan bulat.',
-            'G1' => 'Nominal rupiah, bilangan bulat.',
-            'H1' => 'Persen. Contoh 1.5 untuk 1,5%. Kosongkan jika 0.',
-            'I1' => 'Persen. Contoh 2 untuk 2%. Kosongkan jika 0.',
-            'J1' => 'Isi salah satu: fixed atau percentage. Kosongkan jika tidak ada DP gaji.',
-            'K1' => 'Nominal DP gaji, isi jika kolom Tipe DP Gaji diisi.',
-            'L1' => 'Nominal rupiah, bilangan bulat.',
-            'M1' => 'Nominal rupiah, bilangan bulat.',
+            'A1' => 'Tanggal input mengikuti format pada tabel. Kolom ini hanya informasi dan tidak dipakai untuk menentukan periode.',
+            'B1' => 'Format: Nama bulan dan tahun, opsional diikuti (Minggu 1) atau (Minggu 2). Contoh: September 2026 (Minggu 1).',
+            'C1' => 'Wajib diisi dengan SIM ID yang sama seperti Master Data > Karyawan.',
+            'D1' => 'Hanya informasi, dicocokkan otomatis lewat SIM ID saat import.',
+            'E1' => 'Persen. Contoh: 1 atau 1%.',
+            'F1' => 'Persen. Contoh: 2 atau 2%.',
+            'G1' => 'Nominal rupiah, dapat ditulis seperti 25000 atau Rp 25.000.',
+            'H1' => 'Nominal rupiah, dapat ditulis seperti 25000 atau Rp 25.000.',
         ];
 
         return [

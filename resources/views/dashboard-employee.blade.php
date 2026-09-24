@@ -37,28 +37,7 @@
         @endforeach
     </section>
 
-    <section class="mt-3 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <x-card class="min-w-0" :padding="false">
-            <div class="flex min-h-[55px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5">
-                <h2 class="text-sm font-semibold text-slate-900">Tugas belum dikerjakan</h2>
-                <x-badge :variant="$pendingRealizations->isEmpty() ? 'success' : 'warning'">{{ $pendingRealizations->count() }} realisasi</x-badge>
-            </div>
-            @if ($pendingRealizations->isEmpty())
-                <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-5">Semua realisasi Anda sudah dikerjakan.</p>
-            @else
-                <div class="divide-y divide-line">
-                    @foreach ($pendingRealizations as $realization)
-                        <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                            <div class="min-w-0">
-                                <p class="truncate text-sm font-semibold text-slate-900">{{ $realization->product_name_snapshot }}</p>
-                                <p class="mt-0.5 text-xs text-slate-500">{{ $realization->work_date?->format('d/m/Y') ?? '—' }} · {{ $realization->shift?->name ?? '—' }}</p>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-        </x-card>
-
+    <section class="mt-3">
         <x-card class="min-w-0" :padding="false">
             <div class="flex min-h-[55px] items-center border-b border-slate-100 px-4 sm:px-5"><h2 class="text-sm font-semibold text-slate-900">Tren output 7 hari</h2></div>
             @php $maxOutput = max(1, collect($outputTrend)->max('value')); @endphp
@@ -124,7 +103,7 @@
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[620px] border-collapse text-left text-xs">
                         <thead class="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
-                            <tr><th class="px-3 py-2.5">Tanggal</th><th class="px-3 py-2.5">Produk</th><th class="px-3 py-2.5">Shift</th><th class="px-3 py-2.5">Output</th><th class="px-3 py-2.5">Status</th><th class="px-3 py-2.5"></th></tr>
+                            <tr><th class="px-3 py-2.5">Tanggal</th><th class="px-3 py-2.5">Produk</th><th class="px-3 py-2.5">Shift</th><th class="px-3 py-2.5">Output</th><th class="px-3 py-2.5"></th></tr>
                         </thead>
                         <tbody class="divide-y divide-line text-slate-600">
                             @foreach ($recentRealizations as $realization)
@@ -133,7 +112,6 @@
                                     <td class="px-3 py-2.5">{{ $realization->product_name_snapshot }}</td>
                                     <td class="px-3 py-2.5">{{ $realization->shift?->name ?? '—' }}</td>
                                     <td class="px-3 py-2.5">{{ number_format($realization->total_output, 3, ',', '.') }}</td>
-                                    <td class="px-3 py-2.5"><x-badge :variant="$realization->is_complaint ? 'danger' : 'success'">{{ $realization->is_complaint ? 'Komplain' : ucfirst($realization->status) }}</x-badge></td>
                                     <td class="whitespace-nowrap px-3 py-2.5"><a href="{{ route('realizations.show', $realization) }}" class="font-semibold text-primary-600">Detail</a></td>
                                 </tr>
                             @endforeach

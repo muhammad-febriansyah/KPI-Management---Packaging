@@ -12,6 +12,28 @@ use Maatwebsite\Excel\Facades\Excel;
 
 uses(RefreshDatabase::class);
 
+function makePayrollReportFixture(Client $client, User $user): Employee
+{
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP001', 'full_name' => 'Ananda Julian']);
+    $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    $productId = DB::table('products')->insertGetId([
+        'client_id' => $client->getKey(), 'sku' => 'SKU1', 'name' => 'Produk 1', 'unit_id' => $unit->getKey(),
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $realizationId = DB::table('work_realizations')->insertGetId([
+        'client_id' => $client->getKey(), 'work_date' => '2026-08-10', 'shift_id' => $shift->getKey(), 'product_id' => $productId,
+        'sku_snapshot' => 'SKU1', 'product_name_snapshot' => 'Produk 1', 'unit_name_snapshot' => 'PCS', 'total_output' => 100,
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $user->getKey(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('realization_employees')->insert([
+        'client_id' => $client->getKey(), 'work_realization_id' => $realizationId, 'employee_id' => $employee->getKey(),
+        'rate_category_snapshot' => 'baru', 'rate_per_unit_snapshot' => 100, 'gross_amount' => 500000, 'created_at' => now(),
+    ]);
+
+    return $employee;
+}
+
 it('renders the payroll report page with a default current-month date range', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
@@ -28,6 +50,7 @@ it('renders the payroll report page with a default current-month date range', fu
     $response->assertSee('<th>NIK</th>', false);
     $response->assertSee('<th>Gaji bersih</th>', false);
     $response->assertSee('<th>Gaji kotor</th>', false);
+    $response->assertSee('<th>BPJS Kesehatan</th>', false);
     $response->assertSee('<th>BPJS Ketenagakerjaan</th>', false);
     $response->assertSee('<th>Seragam (Kaos/Celana)</th>', false);
     $response->assertDontSee('<th>Aksi</th>', false);
@@ -45,6 +68,7 @@ it('uses the requirement order for payroll export columns', function () {
         'Total Hari Masuk',
         'Gaji Bersih',
         'Gaji Kotor',
+        'BPJS Kesehatan',
         'BPJS Ketenagakerjaan',
         'Seragam (Kaos/Celana)',
         'Perlengkapan Kerja',
@@ -53,6 +77,30 @@ it('uses the requirement order for payroll export columns', function () {
         'Koreksi Pengurangan',
         'Koreksi Penambahan',
     ]);
+});
+
+it('subtracts health and employment BPJS from gross salary', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = makePayrollReportFixture($client, $user);
+    $period = DB::table('deduction_periods')->insertGetId([
+        'client_id' => $client->getKey(), 'month' => '2026-08-01', 'status' => 'locked',
+        'created_by' => $user->getKey(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('employee_deductions')->insert([
+        'client_id' => $client->getKey(), 'deduction_period_id' => $period, 'employee_id' => $employee->getKey(),
+        'bpjs_health_percent' => 1, 'bpjs_employment_percent' => 2,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&date_from=2026-08-01&date_to=2026-08-31');
+
+    $response->assertOk();
+    $response->assertJsonPath('data.0.bpjs_health', 5000);
+    $response->assertJsonPath('data.0.bpjs_employment', 10000);
+    $response->assertJsonPath('data.0.net_salary', 485000);
 });
 
 it('downloads the payroll report as an Excel file for the selected period', function () {
@@ -91,20 +139,20 @@ it('filters payroll attendance and gross salary by the selected date range', fun
 
     $productId = DB::table('products')->insertGetId([
         'client_id' => $client->getKey(), 'sku' => 'SKU1', 'name' => 'Produk 1', 'unit_id' => $unit->getKey(),
-        'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active',
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active',
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
     $insideRealizationId = DB::table('work_realizations')->insertGetId([
         'client_id' => $client->getKey(), 'work_date' => '2026-08-10', 'shift_id' => $shift->getKey(), 'product_id' => $productId,
         'sku_snapshot' => 'SKU1', 'product_name_snapshot' => 'Produk 1', 'unit_name_snapshot' => 'PCS', 'total_output' => 100,
-        'start_time' => '08:00', 'end_time' => '16:00', 'status' => 'draft', 'created_by' => $user->getKey(),
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $user->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $outsideRealizationId = DB::table('work_realizations')->insertGetId([
         'client_id' => $client->getKey(), 'work_date' => '2026-09-10', 'shift_id' => $shift->getKey(), 'product_id' => $productId,
         'sku_snapshot' => 'SKU1', 'product_name_snapshot' => 'Produk 1', 'unit_name_snapshot' => 'PCS', 'total_output' => 100,
-        'start_time' => '08:00', 'end_time' => '16:00', 'status' => 'draft', 'created_by' => $user->getKey(),
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $user->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
 

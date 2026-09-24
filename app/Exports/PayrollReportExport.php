@@ -39,6 +39,7 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
             'Total Hari Masuk',
             'Gaji Bersih',
             'Gaji Kotor',
+            'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',
             'Seragam (Kaos/Celana)',
             'Perlengkapan Kerja',
@@ -60,6 +61,7 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
             (int) $row->attendance_days,
             PayrollReportBuilder::netSalary($row),
             (int) $row->gross_salary,
+            PayrollReportBuilder::bpjsHealth($row),
             PayrollReportBuilder::bpjsEmployment($row),
             (float) $row->uniform_amount,
             (float) $row->equipment_amount,
@@ -74,8 +76,8 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
     public function styles(Worksheet $sheet): array
     {
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:N1');
-        $sheet->getStyle('A1:N1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->setAutoFilter('A1:O1');
+        $sheet->getStyle('A1:O1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         return [
             1 => [

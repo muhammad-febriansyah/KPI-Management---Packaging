@@ -27,20 +27,31 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
         DB::transaction(function () use ($rows): void {
             /** @var array<string, DeductionPeriod> $periodCache */
             $periodCache = [];
-            $employeeNos = $rows
-                ->map(fn ($row): string => trim((string) ($row['no_karyawan'] ?? '')))
+            $employeeKeys = $rows
+                ->map(fn ($row): string => trim((string) ($row['no_karyawan'] ?? $row['sim_id'] ?? '')))
                 ->filter()
                 ->unique()
                 ->values();
-            $employeeCache = Employee::query()
+            $employees = Employee::query()
                 ->where('client_id', $this->clientId)
-                ->whereIn('employee_no', $employeeNos)
-                ->get()
-                ->keyBy('employee_no');
+                ->where(function ($query) use ($employeeKeys): void {
+                    $query->whereIn('employee_no', $employeeKeys)->orWhereIn('sim_id', $employeeKeys);
+                })
+                ->get();
+            /** @var array<string, Employee> $employeeCache */
+            $employeeCache = [];
+            foreach ($employees as $employee) {
+                if ($employee->employee_no) {
+                    $employeeCache[$employee->employee_no] = $employee;
+                }
+                if ($employee->sim_id) {
+                    $employeeCache[$employee->sim_id] = $employee;
+                }
+            }
 
             foreach ($rows as $index => $row) {
                 $rowNumber = $index + 2; // Row 1 is the heading row.
-                $data = $row->toArray();
+                $data = $this->normalizeTableRow($row->toArray());
                 $data['bulan'] = $this->normalizeMonth($data['bulan'] ?? null);
 
                 $validator = Validator::make($data, [
@@ -71,7 +82,7 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 }
 
                 $employeeNo = trim((string) $data['no_karyawan']);
-                $employee = $employeeCache->get($employeeNo);
+                $employee = $employeeCache[$employeeNo] ?? null;
                 if (! $employee) {
                     $this->failures[] = ['row' => $rowNumber, 'errors' => ["No Karyawan \"{$employeeNo}\" tidak ditemukan."]];
 
@@ -127,5 +138,75 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
         }
 
         return trim((string) $value);
+    }
+
+    /**
+     * Convert the visible list-table format into the detailed import shape.
+     * The detailed format remains supported for existing files.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeTableRow(array $data): array
+    {
+        if (! array_key_exists('periode', $data) && ! array_key_exists('sim_id', $data)) {
+            return $data;
+        }
+
+        $period = $this->parseTablePeriod($data['periode'] ?? null);
+
+        return [
+            ...$data,
+            'bulan' => $period['month'] ?? '',
+            'minggu' => $period['week'],
+            'no_karyawan' => trim((string) ($data['sim_id'] ?? '')),
+            'bpjs_kesehatan_persen' => $this->normalizePercent($data['bpjs_kesehatan'] ?? null),
+            'bpjs_ketenagakerjaan_persen' => $this->normalizePercent($data['bpjs_ketenagakerjaan'] ?? null),
+            'potongan_seragam' => 0,
+            'potongan_perlengkapan' => 0,
+            'potongan_uang_makan' => 0,
+            'tipe_dp_gaji' => null,
+            'nilai_dp_gaji' => 0,
+            'koreksi_pengurangan' => $this->normalizeAmount($data['koreksi_pengurangan'] ?? null),
+            'koreksi_penambahan' => $this->normalizeAmount($data['koreksi_penambahan'] ?? null),
+        ];
+    }
+
+    /**
+     * @return array{month: ?string, week: ?int}
+     */
+    private function parseTablePeriod(mixed $value): array
+    {
+        $period = trim((string) $value);
+        if ($period === '') {
+            return ['month' => null, 'week' => null];
+        }
+
+        preg_match('/^([[:alpha:]]+)\s+(\d{4})(?:\s*\(Minggu\s*([12])\))?$/iu', $period, $matches);
+        $months = [
+            'januari' => 1, 'februari' => 2, 'maret' => 3, 'april' => 4, 'mei' => 5, 'juni' => 6,
+            'juli' => 7, 'agustus' => 8, 'september' => 9, 'oktober' => 10, 'november' => 11, 'desember' => 12,
+        ];
+        $month = $months[mb_strtolower($matches[1] ?? '')] ?? null;
+
+        return [
+            'month' => $month ? sprintf('%04d-%02d', (int) ($matches[2] ?? 0), $month) : null,
+            'week' => isset($matches[3]) && $matches[3] !== '' ? (int) $matches[3] : null,
+        ];
+    }
+
+    private function normalizePercent(mixed $value): float|int
+    {
+        $value = str_replace('%', '', trim((string) $value));
+        $value = str_replace(',', '.', $value);
+
+        return is_numeric($value) ? (float) $value : 0;
+    }
+
+    private function normalizeAmount(mixed $value): int
+    {
+        $value = preg_replace('/[^\d-]/', '', (string) $value) ?? '';
+
+        return $value === '' || $value === '-' ? 0 : (int) $value;
     }
 }

@@ -52,7 +52,6 @@ it('rejects an assignment that names no employee at all', function () {
     $realization = WorkRealization::query()->create([
         'client_id' => $client->getKey(),
         'work_date' => '2026-09-09',
-        'status' => 'draft',
         'created_by' => $user->getKey(),
     ]);
 

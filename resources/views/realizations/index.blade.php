@@ -1,10 +1,10 @@
 <x-layouts.app title="Realisasi Pekerjaan" active="realizations" :current-client="$currentClient" :user="$user">
     <div class="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p class="text-xs text-slate-500">Transaksi / Realisasi</p><h1 class="mt-2 text-2xl font-semibold text-slate-950">{{ $user->is_super_admin || $user->roleCodeFor($currentClient) === 'employee' ? 'Realisasi Pekerjaan' : 'Tugas Realisasi Saya' }}</h1><p class="mt-1 text-sm text-slate-500">{{ $user->is_super_admin ? 'Catat realisasi pekerjaan; seluruh field dan assignment karyawan bersifat opsional.' : ($user->roleCodeFor($currentClient) === 'employee' ? 'Catat realisasi pekerjaan Anda; data otomatis ditugaskan ke akun Anda.' : 'Lihat pekerjaan yang ditugaskan kepada Anda dan isi hasilnya.') }}</p></div>
+        <div><p class="text-xs text-slate-500">Transaksi / Realisasi</p><h1 class="mt-2 text-2xl font-semibold text-slate-950">{{ $user->is_super_admin || $user->roleCodeFor($currentClient) === 'employee' ? 'Realisasi Pekerjaan' : 'Tugas Realisasi Saya' }}</h1><p class="mt-1 text-sm text-slate-500">{{ $user->is_super_admin ? 'Catat realisasi pekerjaan; seluruh field dan assignment karyawan bersifat opsional.' : ($user->roleCodeFor($currentClient) === 'employee' ? 'Catat realisasi pekerjaan dan assign ke diri sendiri, group, atau karyawan lain.' : 'Lihat pekerjaan yang ditugaskan kepada Anda dan isi hasilnya.') }}</p></div>
         @if($user->is_super_admin || $user->roleCodeFor($currentClient) === 'employee')<a href="{{ route('realizations.create') }}" class="inline-flex h-11 items-center gap-2 rounded-lg bg-primary-600 px-4 text-sm font-semibold text-white hover:bg-primary-700"><x-icon name="plus" size="size-4" /> Tambah realisasi</a>@endif
     </div>
     <x-card :padding="false"><table data-server-table class="w-full text-left text-sm"><thead><tr><th>Tanggal borongan</th><th>Shift</th><th>Nomor batch</th><th>SKU</th><th>Nama produk</th><th>Total (Karton/Kg)</th><th>Total harga</th><th>Jumlah karyawan</th><th>Aksi</th></tr></thead><tbody></tbody></table></x-card>
-    @if($user->is_super_admin)
+    @if($user->is_super_admin || $user->roleCodeFor($currentClient) === 'employee')
         <div data-realization-assign-modal class="fixed inset-0 z-[90] hidden place-items-center overflow-y-auto bg-slate-950/40 p-4">
             <div class="my-4 min-h-[60vh] max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl sm:p-8">
                 <div class="mb-6 flex items-start justify-between gap-4">

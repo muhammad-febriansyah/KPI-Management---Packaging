@@ -19,7 +19,6 @@ class WorkReportController extends Controller
         $request->validate([
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
-            'status' => ['nullable', 'string', 'max:30'],
         ]);
 
         $query = $this->realizationQuery($request, $client);
@@ -55,7 +54,6 @@ class WorkReportController extends Controller
                 'realization.work_date',
                 'shifts.name as shift_name',
                 'realization.sku_snapshot',
-                'realization.status',
                 DB::raw('COALESCE(employees.sim_id, employees.employee_no) AS sim_id'),
                 'employees.full_name',
                 'realization.product_name_snapshot as product_name',
@@ -84,12 +82,6 @@ class WorkReportController extends Controller
 
         if ($request->filled('date_to')) {
             $query->where('realization.work_date', '<=', $request->string('date_to')->toString());
-        }
-
-        $status = $request->string('status')->toString();
-
-        if ($request->filled('status') && ! in_array($status, ['all', 'undefined'], true)) {
-            $query->where('realization.status', $status);
         }
 
         if (! $request->user()->is_super_admin && $request->user()->roleCodeFor($client->get()) === 'employee') {

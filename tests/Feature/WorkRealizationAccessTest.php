@@ -44,14 +44,14 @@ function createRealization(Client $client, User $creator, string $workDate): int
     $sku = 'SKU-'.$workDate.'-'.$creator->getKey().'-'.uniqid();
     $productId = DB::table('products')->insertGetId([
         'client_id' => $client->getKey(), 'sku' => $sku, 'name' => 'Produk', 'unit_id' => $unit->getKey(),
-        'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active',
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active',
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
     $realizationId = DB::table('work_realizations')->insertGetId([
         'client_id' => $client->getKey(), 'work_date' => $workDate, 'shift_id' => $shift->getKey(), 'product_id' => $productId,
         'sku_snapshot' => $sku, 'product_name_snapshot' => 'Produk', 'unit_name_snapshot' => 'PCS', 'total_output' => 10,
-        'start_time' => '08:00', 'end_time' => '16:00', 'status' => 'assigned', 'created_by' => $creator->getKey(),
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $creator->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
@@ -175,7 +175,7 @@ it('hides the assignment controls on the realization detail page', function () {
         ->assertSee('Karyawan yang ditugaskan');
 });
 
-it('lets an assigned employee submit the realization result', function () {
+it('lets an assigned employee update the realization result', function () {
     $client = Client::factory()->create();
     $employeeUser = User::factory()->create();
     attachEmployeeRole($employeeUser, $client);
@@ -191,7 +191,7 @@ it('lets an assigned employee submit the realization result', function () {
         ]);
 
     $response->assertOk();
-    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId, 'status' => 'submitted', 'total_output' => 25]);
+    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId, 'total_output' => 25]);
     $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realizationId, 'allocation_output' => 25]);
 });
 
@@ -277,6 +277,36 @@ it('only counts an employee\'s own realizations on their dashboard', function ()
     $response->assertOk();
     $response->assertViewHas('metrics', fn (array $metrics): bool => $metrics['realizationsTotal'] === 1 && $metrics['realizationsToday'] === 1);
     $response->assertViewHas('recentRealizations', fn ($rows): bool => $rows->count() === 1);
+});
+
+it('counts realizations created by an employee even when assigned to another employee', function () {
+    $client = Client::factory()->create();
+    $employeeUser = User::factory()->create();
+    $otherUser = User::factory()->create();
+    attachEmployeeRole($employeeUser, $client);
+    attachEmployeeRole($otherUser, $client);
+    $otherEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $otherUser->getKey()]);
+
+    WorkRealization::query()->create([
+        'client_id' => $client->getKey(),
+        'work_date' => now()->toDateString(),
+        'total_output' => 12,
+        'created_by' => $employeeUser->getKey(),
+    ])->employeeAssignments()->create([
+        'client_id' => $client->getKey(),
+        'employee_id' => $otherEmployee->getKey(),
+        'rate_category_snapshot' => $otherEmployee->rate_category,
+        'rate_per_unit_snapshot' => 0,
+        'allocation_output' => 12,
+        'gross_amount' => 0,
+    ]);
+
+    $response = $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('dashboard'));
+
+    $response->assertOk();
+    $response->assertViewHas('metrics', fn (array $metrics): bool => $metrics['realizationsTotal'] === 1 && $metrics['realizationsToday'] === 1);
 });
 
 it('lets a client role user see every realization for their client, not just their own', function () {

@@ -30,8 +30,7 @@ class ProductFactory extends Factory
             'group_id' => null,
             'cost_center_id' => null,
             'po_price' => 0,
-            'old_employee_rate' => 0,
-            'new_employee_rate' => 0,
+            'employee_rate' => 0,
             'estimated_output_per_hour' => null,
             'status' => 'active',
         ];

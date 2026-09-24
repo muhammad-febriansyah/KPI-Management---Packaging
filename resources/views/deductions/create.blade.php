@@ -33,7 +33,7 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <label class="grid gap-2 text-sm font-semibold">
                     <span>Bulan <span class="text-danger">*</span></span>
-                    <input type="month" name="month" required value="{{ old('month', now()->format('Y-m')) }}" class="h-11 rounded-lg border border-line px-3 font-normal">
+                    <input type="month" name="month" data-datepicker required value="{{ old('month', now()->format('Y-m')) }}" class="h-11 rounded-lg border border-line px-3 font-normal">
                 </label>
                 <label class="grid gap-2 text-sm font-semibold">
                     <span>Minggu</span>

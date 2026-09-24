@@ -173,14 +173,16 @@
                     <x-icon name="bars-3" />
                 </button>
 
-                <div data-global-search class="relative min-w-0 max-w-[520px] flex-1">
-                    <label class="relative block">
-                        <span class="sr-only">Pencarian global</span>
-                        <x-icon name="magnifying-glass" class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input type="search" data-global-search-input autocomplete="off" placeholder="Cari data karyawan, produk, atau laporan..." class="h-[42px] w-full rounded-lg border border-line bg-white pl-11 pr-4 text-[13px] text-ink outline-none placeholder:text-slate-400 focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
-                    </label>
-                    <div data-global-search-results class="absolute left-0 top-[calc(100%+8px)] z-50 hidden max-h-[70vh] w-full overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-[0_14px_38px_rgb(15_23_42/0.12)]"></div>
-                </div>
+                @if (! in_array($roleCode, ['client', 'employee'], true))
+                    <div data-global-search class="relative min-w-0 max-w-[520px] flex-1">
+                        <label class="relative block">
+                            <span class="sr-only">Pencarian global</span>
+                            <x-icon name="magnifying-glass" class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <input type="search" data-global-search-input autocomplete="off" placeholder="Cari data karyawan, produk, atau laporan..." class="h-[42px] w-full rounded-lg border border-line bg-white pl-11 pr-4 text-[13px] text-ink outline-none placeholder:text-slate-400 focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                        </label>
+                        <div data-global-search-results class="absolute left-0 top-[calc(100%+8px)] z-50 hidden max-h-[70vh] w-full overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-[0_14px_38px_rgb(15_23_42/0.12)]"></div>
+                    </div>
+                @endif
 
                 <div class="flex-1"></div>
 

@@ -42,8 +42,7 @@ class ProductController extends Controller
                     'group_name' => $p->group?->name,
                     'cost_center_name' => $p->costCenter?->name,
                     'po_price' => $p->po_price,
-                    'old_employee_rate' => $p->old_employee_rate,
-                    'new_employee_rate' => $p->new_employee_rate,
+                    'employee_rate' => $p->employee_rate,
                     'estimated_output_per_hour' => $p->estimated_output_per_hour,
                     'status' => $p->status,
                 ]));
@@ -75,7 +74,7 @@ class ProductController extends Controller
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('sku', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%")))
             ->orderBy('name');
 
-        $paginator = $query->paginate($perPage, ['id', 'sku', 'name', 'unit_id', 'old_employee_rate', 'new_employee_rate', 'estimated_output_per_hour'], 'page', $page);
+        $paginator = $query->paginate($perPage, ['id', 'sku', 'name', 'unit_id', 'employee_rate', 'estimated_output_per_hour'], 'page', $page);
 
         return response()->json([
             'results' => $paginator->getCollection()->map(fn (Product $product): array => [
@@ -83,8 +82,7 @@ class ProductController extends Controller
                 'text' => "{$product->sku} — {$product->name}",
                 'name' => $product->name,
                 'unit_name' => $product->unit?->name,
-                'old_employee_rate' => $product->old_employee_rate,
-                'new_employee_rate' => $product->new_employee_rate,
+                'employee_rate' => $product->employee_rate,
                 'estimated_output_per_hour' => $product->estimated_output_per_hour,
             ]),
             'pagination' => ['more' => $paginator->hasMorePages()],

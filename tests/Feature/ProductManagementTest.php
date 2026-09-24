@@ -25,6 +25,9 @@ it('keeps the product index responsive on narrow screens', function () {
         ->assertSee('flex-col', false)
         ->assertSee('w-full', false)
         ->assertSee('data-product-create', false)
+        ->assertSee('name="employee_rate"', false)
+        ->assertDontSee('name="old_employee_rate"', false)
+        ->assertDontSee('name="new_employee_rate"', false)
         ->assertDontSee('data-manage-modal-open="unit"', false)
         ->assertDontSee('data-manage-modal-open="group"', false)
         ->assertDontSee('data-manage-modal-open="cost-center"', false);
@@ -44,8 +47,7 @@ it('includes related names and rates in the detail payload for the datatable', f
         'group_id' => $group->id,
         'cost_center_id' => $costCenter->id,
         'po_price' => 15000.500,
-        'old_employee_rate' => 500.250,
-        'new_employee_rate' => 550.750,
+        'employee_rate' => 550.750,
         'estimated_output_per_hour' => 120,
         'status' => 'active',
     ]);
@@ -66,7 +68,8 @@ it('includes related names and rates in the detail payload for the datatable', f
         ->toContain('&quot;unit_name&quot;:&quot;Karton&quot;')
         ->toContain('&quot;group_name&quot;:&quot;Group A&quot;')
         ->toContain('&quot;cost_center_name&quot;:&quot;CC Produksi&quot;')
-        ->toContain('&quot;po_price&quot;:&quot;15000.500&quot;');
+        ->toContain('&quot;po_price&quot;:&quot;15000.500&quot;')
+        ->toContain('&quot;employee_rate&quot;:&quot;550.750&quot;');
 });
 
 it('shows a searchable client selector in the product form', function () {
@@ -97,8 +100,7 @@ it('creates a product for the selected client', function () {
             'sku' => 'SKU-CREATE-001',
             'name' => 'Produk Baru',
             'po_price' => 12500,
-            'old_employee_rate' => 250,
-            'new_employee_rate' => 300,
+            'employee_rate' => 300,
             'estimated_output_per_hour' => 120,
             'status' => 'active',
         ]);
@@ -108,6 +110,7 @@ it('creates a product for the selected client', function () {
         'client_id' => $otherClient->getKey(),
         'sku' => 'SKU-CREATE-001',
         'name' => 'Produk Baru',
+        'employee_rate' => 300,
     ]);
 });
 

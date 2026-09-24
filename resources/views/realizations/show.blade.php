@@ -9,7 +9,6 @@
             <h2 class="text-base font-semibold text-slate-900">Data realisasi pekerjaan</h2>
             <p class="mt-1 text-sm text-slate-500">Informasi sesuai Form Realisasi Pekerjaan.</p>
         </div>
-        <x-badge :variant="in_array($realization->status, ['submitted', 'finalized'], true) ? 'success' : 'warning'">{{ match($realization->status) { 'assigned' => 'Ditugaskan', 'submitted' => 'Dikirim', 'finalized' => 'Final', default => ucfirst($realization->status) } }}</x-badge>
     </div>
     <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2">
         <div><dt class="text-xs text-slate-500">Tanggal borongan</dt><dd class="mt-1.5 font-semibold text-slate-900">{{ $realization->work_date?->format('d/m/Y') ?? '—' }}</dd></div>

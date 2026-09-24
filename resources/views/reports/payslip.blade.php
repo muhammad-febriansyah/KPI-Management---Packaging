@@ -47,6 +47,7 @@
 @endphp
 @foreach ($rows as $row)
     @php
+        $bpjsHealth = \App\Services\PayrollReportBuilder::bpjsHealth($row);
         $bpjs = \App\Services\PayrollReportBuilder::bpjsEmployment($row);
         $advance = \App\Services\PayrollReportBuilder::salaryAdvanceAmount($row);
         $net = \App\Services\PayrollReportBuilder::netSalary($row);
@@ -80,6 +81,7 @@
                 <table class="amounts">
                     <tr><th colspan="2">Potongan</th></tr>
                     <tr><td>BPJS Ketenagakerjaan ({{ number_format((float) $row->bpjs_employment_percent, 2) }}%)</td><td class="amount">{{ $rupiah($bpjs) }}</td></tr>
+                    <tr><td>BPJS Kesehatan ({{ number_format((float) $row->bpjs_health_percent, 2) }}%)</td><td class="amount">{{ $rupiah($bpjsHealth) }}</td></tr>
                     <tr><td>Seragam (Kaos/Celana)</td><td class="amount">{{ $rupiah($row->uniform_amount) }}</td></tr>
                     <tr><td>Perlengkapan kerja</td><td class="amount">{{ $rupiah($row->equipment_amount) }}</td></tr>
                     <tr><td>Uang makan</td><td class="amount">{{ $rupiah($row->meal_amount) }}</td></tr>

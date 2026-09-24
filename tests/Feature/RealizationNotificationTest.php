@@ -82,13 +82,13 @@ it('notifies super admins when an employee submits their work result', function 
     $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
     $productId = DB::table('products')->insertGetId([
         'client_id' => $client->getKey(), 'sku' => 'SKU-N1', 'name' => 'Produk', 'unit_id' => $unit->getKey(),
-        'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active',
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active',
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $realizationId = DB::table('work_realizations')->insertGetId([
         'client_id' => $client->getKey(), 'work_date' => now()->toDateString(), 'shift_id' => $shift->getKey(), 'product_id' => $productId,
         'sku_snapshot' => 'SKU-N1', 'product_name_snapshot' => 'Produk', 'unit_name_snapshot' => 'PCS', 'total_output' => 10,
-        'start_time' => '08:00', 'end_time' => '16:00', 'status' => 'assigned', 'created_by' => $admin->getKey(),
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $admin->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
     DB::table('realization_employees')->insert([
@@ -110,7 +110,7 @@ it('lets a user mark their own notification as read but not another user\'s', fu
     [$employeeUser, $employee] = notifiableEmployeeUser($client);
     $otherUser = User::factory()->create();
 
-    $realization = WorkRealization::query()->create(['client_id' => $client->getKey(), 'status' => 'draft', 'created_by' => $otherUser->getKey()]);
+    $realization = WorkRealization::query()->create(['client_id' => $client->getKey(), 'created_by' => $otherUser->getKey()]);
     $employeeUser->notify(new RealizationAssigned($realization));
     $notificationId = $employeeUser->notifications()->first()->id;
 

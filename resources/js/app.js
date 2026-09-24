@@ -301,6 +301,16 @@ const initializeFileUploads = () => {
             return;
         }
 
+        const clearPreview = () => {
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+                previewUrl = undefined;
+            }
+
+            preview.removeAttribute('src');
+            preview.classList.add('hidden');
+        };
+
         const displayFile = (file, suffix = '') => {
             if (!file) {
                 return;
@@ -309,17 +319,16 @@ const initializeFileUploads = () => {
             fileName.textContent = file.name;
             fileMeta.textContent = `${formatUploadFileSize(file.size)}${suffix}`;
 
-            if (previewUrl) {
-                URL.revokeObjectURL(previewUrl);
-            }
+            const isImage = file.type
+                ? file.type.startsWith('image/')
+                : /\.(?:jpe?g|png|webp)$/i.test(file.name);
 
-            if (file.type.startsWith('image/')) {
+            clearPreview();
+
+            if (isImage) {
                 previewUrl = URL.createObjectURL(file);
                 preview.src = previewUrl;
                 preview.classList.remove('hidden');
-            } else {
-                preview.removeAttribute('src');
-                preview.classList.add('hidden');
             }
         };
 
@@ -338,6 +347,7 @@ const initializeFileUploads = () => {
 
                 if (!compressedFile) {
                     input.value = '';
+                    clearPreview();
                     fileName.textContent = 'Pilih file atau seret ke area ini';
                     fileMeta.textContent = `Gambar tidak dapat dikompres hingga maksimal ${formatUploadFileSize(maxBytes)}`;
                     await Swal.fire({ title: 'Gambar terlalu besar', text: 'Pilih gambar yang lebih kecil atau kurangi resolusinya.', icon: 'warning' });
@@ -351,6 +361,7 @@ const initializeFileUploads = () => {
 
             if (maxBytes && file.size > maxBytes) {
                 input.value = '';
+                clearPreview();
                 fileName.textContent = 'Pilih file atau seret ke area ini';
                 fileMeta.textContent = `Maksimal ${formatUploadFileSize(maxBytes)}`;
                 await Swal.fire({ title: 'File terlalu besar', text: `Ukuran file maksimal ${formatUploadFileSize(maxBytes)}.`, icon: 'warning' });
@@ -469,7 +480,7 @@ const initializeServerTables = () => {
         const dataTable = new DataTable(table, {
             processing: true,
             serverSide: true,
-            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; const statusFilter = workFilters.querySelector('[data-work-status]'); if (statusFilter) { params.status = statusFilter.value; } } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } } },
+            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } } },
             pageLength: 10,
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
@@ -490,6 +501,7 @@ const initializeServerTables = () => {
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'gender' }, { data: 'attendance_days' },
                 { data: 'net_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'gross_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'bpjs_health', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'bpjs_employment', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'uniform_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'equipment_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
@@ -693,8 +705,7 @@ const initializeProductDetailModal = () => {
         set('group', data.group_name);
         set('cost-center', data.cost_center_name);
         set('po-price', formatRupiah(data.po_price));
-        set('old-rate', formatRupiah(data.old_employee_rate));
-        set('new-rate', formatRupiah(data.new_employee_rate));
+        set('employee-rate', formatRupiah(data.employee_rate));
         set('estimate', data.estimated_output_per_hour ? `${Number(data.estimated_output_per_hour).toLocaleString('id-ID')} / jam` : '');
         modal.querySelector('[data-product-detail-status]').innerHTML = `<span class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold ${data.status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600'}">${data.status === 'active' ? 'Aktif' : 'Nonaktif'}</span>`;
 
@@ -732,6 +743,38 @@ const initializeEmployeeDetailModal = () => {
 
         modal.classList.remove('hidden');
         modal.classList.add('grid');
+    });
+};
+
+const initializeClientDetailModal = () => {
+    const modal = document.querySelector('[data-client-detail-modal]');
+    if (!modal) return;
+
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
+    modal.querySelectorAll('[data-client-detail-close]').forEach((button) => button.addEventListener('click', close));
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+
+    const set = (attribute, value) => { const el = modal.querySelector(`[data-client-detail-${attribute}]`); if (el) el.textContent = value || '—'; };
+
+    document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-client-detail]');
+        if (!trigger) return;
+
+        try {
+            const data = JSON.parse(trigger.dataset.clientDetail);
+            set('name', data.name);
+            set('code', data.code);
+            set('code-repeat', data.code);
+            set('account-name', data.account_name);
+            set('login-username', data.login_username);
+            set('login-email', data.login_email);
+            modal.querySelector('[data-client-detail-status]').innerHTML = `<span class="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${data.status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600'}">${data.status === 'active' ? 'Aktif' : 'Nonaktif'}</span>`;
+            modal.classList.remove('hidden');
+            modal.classList.add('grid');
+        } catch {
+            Swal.fire({ title: 'Gagal', text: 'Detail client tidak dapat dibaca.', icon: 'error' });
+        }
     });
 };
 
@@ -1089,6 +1132,7 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         if (!input) return;
 
         input.value = input.closest('label')?.querySelector('[data-default-password]')?.dataset.defaultPassword ?? 'password';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         input.focus();
     });
     form.addEventListener('submit', async (event) => {
@@ -1183,16 +1227,21 @@ const initializeRealizationProductPreview = () => {
             const estimate = selectedTomOption?.estimated_output_per_hour;
             estimateInput.value = estimate ? `${Number(estimate).toLocaleString('id-ID')} / jam` : '';
         }
-        // The batch select loads its options remotely, filtered by the chosen SKU
-        // (see data-tom-select-depends-on). A batch picked under a different SKU no
-        // longer matches, so drop it and clear the cached option list to force a
-        // fresh, correctly filtered search next time it's opened.
         if (!batchSelect?.tomselect) return;
         const productId = select.value;
         if (batchSelect.dataset.lastProductFilter !== productId) {
+            const selectedBatchId = batchSelect.tomselect.getValue();
+            const selectedBatch = selectedBatchId ? batchSelect.tomselect.options[selectedBatchId] : null;
+            const selectedBatchBelongsToProduct = selectedBatch && String(selectedBatch.product_id ?? '') === String(productId);
+
             batchSelect.dataset.lastProductFilter = productId;
-            batchSelect.tomselect.clear(true);
+            if (!selectedBatchBelongsToProduct) {
+                batchSelect.tomselect.clear(true);
+            }
             batchSelect.tomselect.clearOptions();
+            if (productId) {
+                batchSelect.tomselect.load('');
+            }
         }
     };
 
@@ -1200,6 +1249,25 @@ const initializeRealizationProductPreview = () => {
     $(select).on('select2:select', (_event, payload) => {
         nameInput.value = payload?.params?.data?.name ?? payload?.params?.data?.text?.split(' — ').slice(1).join(' — ') ?? '';
     });
+
+    batchSelect?.addEventListener('change', () => {
+        const batchId = batchSelect.tomselect?.getValue();
+        const batch = batchId ? batchSelect.tomselect?.options?.[batchId] : null;
+        const product = batch?.product;
+
+        if (!product || !select.tomselect) {
+            return;
+        }
+
+        if (!select.tomselect.options[product.id]) {
+            select.tomselect.addOption(product);
+        }
+
+        if (String(select.tomselect.getValue()) !== String(product.id)) {
+            select.tomselect.setValue(String(product.id));
+        }
+    });
+
     update();
 };
 
@@ -1214,14 +1282,12 @@ const initializeRealizationPricePreview = () => {
     const update = () => {
         const selectedTomOption = productSelect?.tomselect?.options?.[productSelect.value];
         const output = Number(input.value || 0);
-        const selectedCategories = [...document.querySelectorAll('[data-assignment-employee]')]
-            .map((select) => select.selectedOptions[0]?.dataset.employeeRateCategory)
-            .filter(Boolean);
-        const categories = selectedCategories.length > 0 ? selectedCategories : [form.dataset.currentRateCategory].filter(Boolean);
-        const rate = categories.reduce((total, category) => total + Number(
-            category === 'lama' ? selectedTomOption?.old_employee_rate : selectedTomOption?.new_employee_rate,
-        ), 0);
-        const totalPrice = Number.isFinite(output) ? Math.round(output * rate) : 0;
+        const selectedEmployeeCount = [...document.querySelectorAll('[data-assignment-employee]')]
+            .filter((select) => select.value)
+            .length;
+        const employeeCount = selectedEmployeeCount || 1;
+        const rate = Number(selectedTomOption?.employee_rate ?? 0);
+        const totalPrice = Number.isFinite(output) ? Math.round(output * rate * employeeCount) : 0;
 
         preview.value = `Rp ${totalPrice.toLocaleString('id-ID')}`;
     };
@@ -1652,11 +1718,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeManageModals();
     initializeProductDetailModal();
     initializeEmployeeDetailModal();
+    initializeClientDetailModal();
     initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
     initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['employee_no', 'sim_id', 'full_name', 'email', 'phone', 'join_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Password awal menggunakan password.', successUpdate: 'Karyawan berhasil diperbarui.' });
-    initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'old_employee_rate', 'new_employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
+    initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
     initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'account_name', 'login_username', 'login_email', 'password', 'password_confirmation', 'status'], confirmTitle: 'client', successCreate: 'Client dan akun login berhasil ditambahkan.', successUpdate: 'Client dan akun login berhasil diperbarui.' });
     initializeRealizationProductPreview();
     initializeRealizationPricePreview();

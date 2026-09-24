@@ -11,19 +11,19 @@ use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
-function makeAssignedRealization(Client $client, User $admin, Employee $employee, string $status): int
+function makeAssignedRealization(Client $client, User $admin, Employee $employee): int
 {
     $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
     $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
     $product = Product::query()->create([
         'client_id' => $client->getKey(), 'sku' => 'SKU-WR-'.uniqid(), 'name' => 'Produk', 'unit_id' => $unit->getKey(),
-        'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active',
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active',
     ]);
 
     $realizationId = DB::table('work_realizations')->insertGetId([
         'client_id' => $client->getKey(), 'work_date' => now()->toDateString(), 'shift_id' => $shift->getKey(), 'product_id' => $product->getKey(),
         'sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name, 'unit_name_snapshot' => 'PCS',
-        'total_output' => 100, 'start_time' => '08:00', 'end_time' => '16:00', 'status' => $status, 'created_by' => $admin->getKey(),
+        'total_output' => 100, 'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $admin->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
@@ -36,20 +36,18 @@ function makeAssignedRealization(Client $client, User $admin, Employee $employee
     return $realizationId;
 }
 
-it('marks a pending realization as belum dikerjakan and a submitted one as sudah dikerjakan', function () {
+it('lists assigned realizations without exposing a status field', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
-    makeAssignedRealization($client, $admin, $employee, 'assigned');
-    makeAssignedRealization($client, $admin, $employee, 'submitted');
+    makeAssignedRealization($client, $admin, $employee);
+    makeAssignedRealization($client, $admin, $employee);
 
     $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?draw=1&start=0&length=10');
 
     $response->assertOk();
-    $statuses = collect($response->json('data'))->pluck('status');
-    expect($statuses->filter(fn (string $status): bool => $status === 'assigned'))->toHaveCount(1);
-    expect($statuses->filter(fn (string $status): bool => $status === 'submitted'))->toHaveCount(1);
+    $response->assertJsonCount(2, 'data')->assertJsonMissingPath('data.0.status');
 });
 
 it('reads the report row fields from the assigned realization', function () {
@@ -60,7 +58,7 @@ it('reads the report row fields from the assigned realization', function () {
         'sim_id' => 'SIM-REAL-001',
         'full_name' => 'Karyawan Realisasi',
     ]);
-    $realizationId = makeAssignedRealization($client, $admin, $employee, 'submitted');
+    $realizationId = makeAssignedRealization($client, $admin, $employee);
 
     DB::table('work_realizations')->where('id', $realizationId)->update([
         'work_date' => '2026-09-08',
@@ -88,7 +86,7 @@ it('reads the report row fields from the assigned realization', function () {
         ->assertJsonPath('data.0.description', 'Catatan dari realisasi');
 });
 
-it('hides the status filter from the work report page', function () {
+it('does not render a status filter on the work report page', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -105,11 +103,11 @@ it('only lists realizations assigned to an employee, not unassigned ones', funct
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
-    makeAssignedRealization($client, $admin, $employee, 'assigned');
+    makeAssignedRealization($client, $admin, $employee);
 
     // An unassigned realization (no row in realization_employees) must not appear.
     DB::table('work_realizations')->insert([
-        'client_id' => $client->getKey(), 'work_date' => now()->toDateString(), 'status' => 'draft', 'created_by' => $admin->getKey(),
+        'client_id' => $client->getKey(), 'work_date' => now()->toDateString(), 'created_by' => $admin->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
@@ -119,32 +117,29 @@ it('only lists realizations assigned to an employee, not unassigned ones', funct
     $response->assertOk()->assertJsonCount(1, 'data');
 });
 
-it('filters the report by status instead of shift', function () {
+it('ignores a legacy status filter parameter', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
-    makeAssignedRealization($client, $admin, $employee, 'assigned');
-    makeAssignedRealization($client, $admin, $employee, 'submitted');
+    makeAssignedRealization($client, $admin, $employee);
+    makeAssignedRealization($client, $admin, $employee);
 
-    $pending = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
+    $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=assigned');
-    $pending->assertOk()->assertJsonCount(1, 'data');
 
-    $done = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
-        ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=submitted');
-    $done->assertOk()->assertJsonCount(1, 'data');
+    $response->assertOk()->assertJsonCount(2, 'data')->assertJsonMissingPath('data.0.status');
 });
 
-it('does not treat an undefined hidden status filter as a real status', function () {
+it('ignores an undefined legacy status filter parameter', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
-    makeAssignedRealization($client, $admin, $employee, 'submitted');
+    makeAssignedRealization($client, $admin, $employee);
 
     $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=undefined');
 
-    $response->assertOk()->assertJsonCount(1, 'data');
+    $response->assertOk()->assertJsonCount(1, 'data')->assertJsonMissingPath('data.0.status');
 });
 
 it('only reports products and work results from the active client', function () {
@@ -154,8 +149,8 @@ it('only reports products and work results from the active client', function () 
     $activeEmployee = Employee::factory()->create(['client_id' => $activeClient->getKey()]);
     $otherEmployee = Employee::factory()->create(['client_id' => $otherClient->getKey()]);
 
-    makeAssignedRealization($activeClient, $admin, $activeEmployee, 'submitted');
-    makeAssignedRealization($otherClient, $admin, $otherEmployee, 'submitted');
+    makeAssignedRealization($activeClient, $admin, $activeEmployee);
+    makeAssignedRealization($otherClient, $admin, $otherEmployee);
 
     $response = $this->actingAs($admin)
         ->withSession(['current_client_id' => $activeClient->getKey()])

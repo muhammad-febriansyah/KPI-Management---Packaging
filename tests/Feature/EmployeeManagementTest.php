@@ -46,6 +46,19 @@ it('stores an employee with sim id, email, and marital status', function () {
     expect(Hash::check('password', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
 });
 
+it('renders the employee password empty until the default button is used', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('employees.index'));
+
+    $response->assertOk()
+        ->assertSee('data-default-password="password"', false)
+        ->assertDontSee('name="password" value="password"', false);
+});
+
 it('requires marital status when storing an employee', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();

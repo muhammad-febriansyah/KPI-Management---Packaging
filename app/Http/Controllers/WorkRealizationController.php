@@ -31,7 +31,7 @@ class WorkRealizationController extends Controller
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('viewAny', WorkRealization::class);
         $query = WorkRealization::query()
-            ->select(['id', 'client_id', 'work_date', 'shift_id', 'batch_id', 'product_id', 'sku_snapshot', 'product_name_snapshot', 'total_output', 'status'])
+            ->select(['id', 'client_id', 'created_by', 'work_date', 'shift_id', 'batch_id', 'product_id', 'sku_snapshot', 'product_name_snapshot', 'total_output'])
             ->where('client_id', $client->id())
             ->with([
                 'shift:id,client_id,name',
@@ -42,13 +42,16 @@ class WorkRealizationController extends Controller
             ->withCount('employeeAssignments')
             ->latest('work_date');
         if ($request->user()->roleCodeFor($client->get()) === 'employee') {
-            $query->whereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $request->user()->id));
+            $query->where(function ($query) use ($request): void {
+                $query->where('created_by', $request->user()->id)
+                    ->orWhereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $request->user()->id));
+            });
         }
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($i->employeeAssignments->sum(fn (RealizationEmployee $assignment): float => (float) ($assignment->allocation_output ?? $i->total_output ?? 0) * (float) $assignment->rate_per_unit_snapshot), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
                 $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
 
-                if (! $request->user()->is_super_admin) {
+                if (! $request->user()->can('assign', $i)) {
                     return $detailAction;
                 }
 
@@ -62,7 +65,7 @@ class WorkRealizationController extends Controller
         return view('realizations.index', [
             'currentClient' => $client->get(),
             'user' => $request->user(),
-            'employees' => $request->user()->is_super_admin
+            'employees' => $request->user()->is_super_admin || $request->user()->roleCodeFor($client->get()) === 'employee'
                 ? Employee::query()->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group:id,client_id,name')->orderBy('full_name')->get()
                 : collect(),
         ]);
@@ -119,12 +122,31 @@ class WorkRealizationController extends Controller
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         $search = trim((string) $request->string('q'));
         $productId = $request->filled('product_id') ? $request->integer('product_id') : null;
-        $batches = Batch::query()->where('client_id', $client->id())->where('status', 'active')
+        $batches = Batch::query()
+            ->with(['product:id,client_id,sku,name,unit_id,employee_rate,estimated_output_per_hour', 'product.unit:id,client_id,name'])
+            ->where('client_id', $client->id())
+            ->where('status', 'active')
             ->when($productId, fn ($query) => $query->where('product_id', $productId))
             ->when($search !== '', fn ($query) => $query->where('batch_no', 'like', "%{$search}%"))
             ->orderBy('batch_no')->limit(30)->get();
 
-        return response()->json(['results' => $batches->map(fn (Batch $batch): array => ['id' => $batch->id, 'text' => $batch->batch_no])]);
+        return response()->json(['results' => $batches->map(function (Batch $batch): array {
+            $product = $batch->product;
+
+            return [
+                'id' => $batch->id,
+                'text' => $batch->batch_no,
+                'product_id' => $batch->product_id,
+                'product' => $product ? [
+                    'id' => $product->id,
+                    'text' => "{$product->sku} — {$product->name}",
+                    'name' => $product->name,
+                    'unit_name' => $product->unit?->name,
+                    'employee_rate' => $product->employee_rate,
+                    'estimated_output_per_hour' => $product->estimated_output_per_hour,
+                ] : null,
+            ];
+        })]);
     }
 
     public function store(StoreWorkRealizationRequest $request, CurrentClientService $client, RichTextSanitizer $sanitizer): JsonResponse
@@ -143,14 +165,15 @@ class WorkRealizationController extends Controller
         $product = filled($data['product_id'] ?? null)
             ? Product::query()->where('client_id', $client->id())->findOrFail($data['product_id'])
             : null;
-        $employeeIds = $request->user()->is_super_admin
-            ? array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)))
-            : [Employee::query()
+        $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
+        if ($employeeIds === [] && ! $request->user()->is_super_admin) {
+            $employeeIds = [Employee::query()
                 ->where('client_id', $client->id())
                 ->where('user_id', $request->user()->id)
                 ->where('status', 'active')
                 ->firstOrFail()
                 ->getKey()];
+        }
         unset($data['employee_ids']);
 
         DB::transaction(function () use ($data, $employeeIds, $client, $product, $request): void {
@@ -160,13 +183,12 @@ class WorkRealizationController extends Controller
                 'product_name_snapshot' => $product?->name,
                 'unit_name_snapshot' => $product?->unit?->name,
                 'created_by' => $request->user()->id,
-                'status' => $employeeIds === [] ? 'draft' : 'assigned',
                 'is_complaint' => false,
             ]);
 
             foreach ($employeeIds as $employeeId) {
                 $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
-                $rate = $product === null ? 0 : ($employee->rate_category === 'lama' ? $product->old_employee_rate : $product->new_employee_rate);
+                $rate = $product?->employee_rate ?? 0;
                 $realization->employeeAssignments()->create([
                     'client_id' => $client->id(),
                     'employee_id' => $employee->id,
@@ -201,7 +223,7 @@ class WorkRealizationController extends Controller
         unset($data['result_image']);
 
         DB::transaction(function () use ($data, $realization): void {
-            $realization->update($data + ['status' => 'submitted']);
+            $realization->update($data);
 
             foreach ($realization->employeeAssignments as $assignment) {
                 $assignment->update([
@@ -225,11 +247,11 @@ class WorkRealizationController extends Controller
     {
         abort_unless($realization->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
-        Gate::authorize('create', WorkRealization::class);
+        Gate::authorize('assign', $realization);
 
         foreach ($request->validated('employee_ids') as $employeeId) {
             $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
-            $rate = $realization->product?->{$employee->rate_category === 'lama' ? 'old_employee_rate' : 'new_employee_rate'} ?? 0;
+            $rate = $realization->product?->employee_rate ?? 0;
 
             $assignment = $realization->employeeAssignments()->firstOrCreate(
                 ['employee_id' => $employee->id],
@@ -246,8 +268,6 @@ class WorkRealizationController extends Controller
                 $employee->user?->notify(new RealizationAssigned($realization));
             }
         }
-
-        $realization->update(['status' => 'assigned']);
 
         return response()->json(['message' => 'Karyawan berhasil di-assign.']);
     }

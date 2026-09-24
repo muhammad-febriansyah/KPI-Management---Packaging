@@ -4,7 +4,6 @@
         ['label' => 'Output hari ini', 'value' => number_format($metrics['output'], 3, ',', '.'), 'helper' => 'Total output aktual', 'icon' => 'cube'],
         ['label' => 'Karyawan aktif', 'value' => number_format($metrics['employees'], 0, ',', '.'), 'helper' => 'Pada client aktif', 'icon' => 'users'],
         ['label' => 'Produk aktif', 'value' => number_format($metrics['products'], 0, ',', '.'), 'helper' => 'Pada client aktif', 'icon' => 'cube'],
-        ['label' => 'Total komplain', 'value' => number_format($metrics['complaints'], 0, ',', '.'), 'helper' => 'Total tercatat', 'icon' => 'shield-check'],
     ];
     $outputRows = [
         ['date' => 'Hari ini 14:32', 'product' => 'Sachet Kopi 25g', 'shift' => 'Pagi', 'output' => '2.400'],
@@ -39,7 +38,7 @@
         </div>
     </section>
 
-    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Ringkasan KPI">
+    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan KPI">
         @foreach ($kpis as $kpi)
             <article class="flex min-h-[118px] items-start gap-3.5 rounded-card border border-line bg-white p-[18px] shadow-card">
                 <span class="grid size-[42px] shrink-0 place-items-center rounded-[10px] bg-primary-50 text-primary-600"><x-icon :name="$kpi['icon']" /></span>

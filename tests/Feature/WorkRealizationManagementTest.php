@@ -43,7 +43,8 @@ it('shows the realization create page instead of a modal', function () {
     $response->assertSee('name="total_output"', false);
     $response->assertSee('data-total-price-preview', false);
     $response->assertSee('data-total-price-preview readonly', false);
-    $response->assertSee('data-current-rate-category', false);
+    $response->assertDontSee('data-current-rate-category', false);
+    $response->assertDontSee('data-employee-rate-category', false);
     $response->assertSee('name="start_time"', false);
     $response->assertSee('name="end_time"', false);
     $response->assertSee('name="report"', false);
@@ -51,9 +52,12 @@ it('shows the realization create page instead of a modal', function () {
     $response->assertSee('Maksimal 3 MB', false);
     $response->assertSee('data-file-max-size="3145728"', false);
     $response->assertSee('data-file-compress="true"', false);
+    $response->assertSee('data-file-preview class="hidden size-16 rounded-lg border border-line bg-slate-800 object-contain p-1"', false);
+    $response->assertSee('data-batch-select data-tom-select data-tom-select-remote=', false);
+    $response->assertSee('data-tom-select-depends-on="product_id"', false);
 });
 
-it('lets an employee open the realization form without assignment controls', function () {
+it('lets an employee open the realization form with assignment controls', function () {
     $user = User::factory()->create();
     $client = Client::factory()->create();
     $role = realizationEmployeeRole();
@@ -65,8 +69,10 @@ it('lets an employee open the realization form without assignment controls', fun
 
     $response->assertOk()
         ->assertViewIs('realizations.create')
-        ->assertSee('Realisasi Anda')
-        ->assertDontSee('data-assignment-section', false);
+        ->assertSee('Assign karyawan (opsional)')
+        ->assertSee('data-assignment-section', false)
+        ->assertSee('data-assignment-group', false)
+        ->assertSee('data-assignment-employee', false);
 });
 
 it('automatically assigns an employee-created realization to its creator', function () {
@@ -82,8 +88,74 @@ it('automatically assigns an employee-created realization to its creator', funct
 
     $response->assertCreated();
     $realization = WorkRealization::query()->where('created_by', $user->getKey())->firstOrFail();
-    $this->assertDatabaseHas('work_realizations', ['id' => $realization->getKey(), 'status' => 'assigned']);
+    $this->assertDatabaseHas('work_realizations', ['id' => $realization->getKey()]);
     $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $employee->getKey()]);
+});
+
+it('lets an employee assign a realization to selected employees', function () {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $client = Client::factory()->create();
+    $role = realizationEmployeeRole();
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $otherUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $user->getKey()]);
+    $otherEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $otherUser->getKey()]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), ['employee_ids' => [$employee->getKey(), $otherEmployee->getKey()]]);
+
+    $response->assertCreated();
+    $realization = WorkRealization::query()->where('created_by', $user->getKey())->firstOrFail();
+    $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $employee->getKey()]);
+    $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $otherEmployee->getKey()]);
+});
+
+it('lets the employee who created a realization assign another employee later', function () {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $client = Client::factory()->create();
+    $role = realizationEmployeeRole();
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $otherUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $user->getKey()]);
+    $otherEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $otherUser->getKey()]);
+
+    $createResponse = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), []);
+    $realization = WorkRealization::query()->where('created_by', $user->getKey())->firstOrFail();
+
+    $assignResponse = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.assign', $realization), ['employee_ids' => [$otherEmployee->getKey()]]);
+
+    $createResponse->assertCreated();
+    $assignResponse->assertOk();
+    $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $otherEmployee->getKey()]);
+});
+
+it('forbids an employee from assigning another employee\'s realization', function () {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $client = Client::factory()->create();
+    $role = realizationEmployeeRole();
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $otherUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $user->getKey()]);
+    $otherEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $otherUser->getKey()]);
+
+    $realization = WorkRealization::query()->create([
+        'client_id' => $client->getKey(),
+        'created_by' => $otherUser->getKey(),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.assign', $realization), ['employee_ids' => [$otherEmployee->getKey()]]);
+
+    $response->assertForbidden();
 });
 
 it('lets a superadmin create an assignment for a linked employee', function () {
@@ -97,7 +169,7 @@ it('lets a superadmin create an assignment for a linked employee', function () {
     $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
     $productId = DB::table('products')->insertGetId([
         'client_id' => $client->getKey(), 'sku' => 'SKU-ASSIGN-001', 'name' => 'Produk Assignment', 'unit_id' => $unit->getKey(),
-        'po_price' => 0, 'old_employee_rate' => 10, 'new_employee_rate' => 12, 'status' => 'active',
+        'po_price' => 0, 'employee_rate' => 12, 'status' => 'active',
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $batchId = DB::table('batches')->insertGetId([
@@ -119,7 +191,7 @@ it('lets a superadmin create an assignment for a linked employee', function () {
     $response->assertCreated();
     $realizationId = DB::table('work_realizations')->where('created_by', $superAdmin->getKey())->value('id');
     expect($realizationId)->not->toBeNull();
-    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId, 'status' => 'assigned']);
+    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId]);
     $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realizationId, 'employee_id' => $employee->getKey()]);
 
     $tableResponse = $this->actingAs($superAdmin)
@@ -130,6 +202,51 @@ it('lets a superadmin create an assignment for a linked employee', function () {
         ->assertJsonPath('data.0.sku_snapshot', 'SKU-ASSIGN-001')
         ->assertJsonPath('data.0.total_output', '10')
         ->assertJsonPath('data.0.total_price', 'Rp 120');
+});
+
+it('uses one product rate for employees from every rate category', function () {
+    $superAdmin = User::factory()->superAdmin()->create();
+    $newEmployeeUser = User::factory()->create();
+    $oldEmployeeUser = User::factory()->create();
+    $client = Client::factory()->create();
+    $role = realizationEmployeeRole();
+    $newEmployeeUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $oldEmployeeUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $newEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $newEmployeeUser->getKey(), 'rate_category' => 'baru']);
+    $oldEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $oldEmployeeUser->getKey(), 'rate_category' => 'lama']);
+    $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    $product = Product::factory()->create(['client_id' => $client->getKey(), 'unit_id' => $unit->getKey(), 'employee_rate' => 12]);
+    $batch = Batch::query()->create(['client_id' => $client->getKey(), 'batch_no' => 'BATCH-UNIFIED-RATE', 'product_id' => $product->getKey(), 'status' => 'active']);
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), [
+            'work_date' => '2026-09-09',
+            'shift_id' => $shift->getKey(),
+            'batch_id' => $batch->getKey(),
+            'product_id' => $product->getKey(),
+            'total_output' => 10,
+            'employee_ids' => [$newEmployee->getKey(), $oldEmployee->getKey()],
+        ]);
+
+    $response->assertCreated();
+    $realizationId = WorkRealization::query()->where('created_by', $superAdmin->getKey())->value('id');
+
+    $this->assertDatabaseHas('realization_employees', [
+        'work_realization_id' => $realizationId,
+        'employee_id' => $newEmployee->getKey(),
+        'rate_category_snapshot' => 'baru',
+        'rate_per_unit_snapshot' => 12,
+        'gross_amount' => 120,
+    ]);
+    $this->assertDatabaseHas('realization_employees', [
+        'work_realization_id' => $realizationId,
+        'employee_id' => $oldEmployee->getKey(),
+        'rate_category_snapshot' => 'lama',
+        'rate_per_unit_snapshot' => 12,
+        'gross_amount' => 120,
+    ]);
 });
 
 it('stores result fields entered on the realization form', function () {
@@ -210,7 +327,7 @@ it('lets a superadmin save a realization without any form values or assignment',
 
     $response->assertCreated();
     $realization = WorkRealization::query()->where('client_id', $client->getKey())->firstOrFail();
-    $this->assertDatabaseHas('work_realizations', ['id' => $realization->getKey(), 'status' => 'draft']);
+    $this->assertDatabaseHas('work_realizations', ['id' => $realization->getKey()]);
     expect($realization->employeeAssignments()->count())->toBe(0);
 });
 
@@ -234,7 +351,7 @@ it('lets a superadmin assign an employee after saving a realization', function (
     $realizationResponse->assertCreated();
     $response->assertOk();
     $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realizationId, 'employee_id' => $employee->getKey()]);
-    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId, 'status' => 'assigned']);
+    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId]);
 });
 
 it('renders the realization assignment modal on the index page', function () {
@@ -300,22 +417,34 @@ it('filters batch options to only those belonging to the selected product', func
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
-    $productA = Product::query()->create(['client_id' => $client->getKey(), 'sku' => 'SKU-A', 'name' => 'Produk A', 'unit_id' => $unit->getKey(), 'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active']);
-    $productB = Product::query()->create(['client_id' => $client->getKey(), 'sku' => 'SKU-B', 'name' => 'Produk B', 'unit_id' => $unit->getKey(), 'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active']);
+    $productA = Product::query()->create(['client_id' => $client->getKey(), 'sku' => 'SKU-A', 'name' => 'Produk A', 'unit_id' => $unit->getKey(), 'po_price' => 0, 'employee_rate' => 0, 'status' => 'active']);
+    $productB = Product::query()->create(['client_id' => $client->getKey(), 'sku' => 'SKU-B', 'name' => 'Produk B', 'unit_id' => $unit->getKey(), 'po_price' => 0, 'employee_rate' => 0, 'status' => 'active']);
     $batchA = Batch::query()->create(['client_id' => $client->getKey(), 'batch_no' => 'BATCH-A', 'product_id' => $productA->getKey(), 'status' => 'active']);
     Batch::query()->create(['client_id' => $client->getKey(), 'batch_no' => 'BATCH-B', 'product_id' => $productB->getKey(), 'status' => 'active']);
 
     $response = $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('batches.options', ['product_id' => $productA->getKey()]));
 
-    $response->assertOk()->assertExactJson(['results' => [['id' => $batchA->getKey(), 'text' => 'BATCH-A']]]);
+    $response->assertOk()->assertExactJson(['results' => [[
+        'id' => $batchA->getKey(),
+        'text' => 'BATCH-A',
+        'product_id' => $productA->getKey(),
+        'product' => [
+            'id' => $productA->getKey(),
+            'text' => 'SKU-A — Produk A',
+            'name' => 'Produk A',
+            'unit_name' => $unit->name,
+            'employee_rate' => '0.000',
+            'estimated_output_per_hour' => null,
+        ],
+    ]]]);
 });
 
 it('returns every active batch when no product is selected', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
-    $product = Product::query()->create(['client_id' => $client->getKey(), 'sku' => 'SKU-A', 'name' => 'Produk A', 'unit_id' => $unit->getKey(), 'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active']);
+    $product = Product::query()->create(['client_id' => $client->getKey(), 'sku' => 'SKU-A', 'name' => 'Produk A', 'unit_id' => $unit->getKey(), 'po_price' => 0, 'employee_rate' => 0, 'status' => 'active']);
     Batch::query()->create(['client_id' => $client->getKey(), 'batch_no' => 'BATCH-A', 'product_id' => $product->getKey(), 'status' => 'active']);
     Batch::query()->create(['client_id' => $client->getKey(), 'batch_no' => 'BATCH-NONE', 'product_id' => null, 'status' => 'active']);
 

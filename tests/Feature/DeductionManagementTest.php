@@ -29,6 +29,7 @@ it('renders the deduction create page for the current client', function () {
     $response->assertOk();
     $response->assertSee('Tambah Potongan Gaji');
     $response->assertSee('data-deduction-create-form', false);
+    $response->assertSee('name="month" data-datepicker', false);
     $response->assertSee(route('deductions.store'), false);
 });
 

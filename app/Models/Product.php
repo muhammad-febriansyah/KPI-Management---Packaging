@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'old_employee_rate', 'new_employee_rate', 'estimated_output_per_hour', 'status'])]
+#[Fillable(['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -19,8 +19,7 @@ class Product extends Model
     {
         return [
             'po_price' => 'decimal:3',
-            'old_employee_rate' => 'decimal:3',
-            'new_employee_rate' => 'decimal:3',
+            'employee_rate' => 'decimal:3',
         ];
     }
 

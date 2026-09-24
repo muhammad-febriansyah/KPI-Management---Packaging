@@ -18,14 +18,14 @@ function makePayrollFixture(Client $client, User $user): Employee
 
     $productId = DB::table('products')->insertGetId([
         'client_id' => $client->getKey(), 'sku' => 'SKU1', 'name' => 'Produk 1', 'unit_id' => $unit->getKey(),
-        'po_price' => 0, 'old_employee_rate' => 0, 'new_employee_rate' => 0, 'status' => 'active',
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active',
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
     $realizationId = DB::table('work_realizations')->insertGetId([
         'client_id' => $client->getKey(), 'work_date' => '2026-08-10', 'shift_id' => $shift->getKey(), 'product_id' => $productId,
         'sku_snapshot' => 'SKU1', 'product_name_snapshot' => 'Produk 1', 'unit_name_snapshot' => 'PCS', 'total_output' => 100,
-        'start_time' => '08:00', 'end_time' => '16:00', 'status' => 'draft', 'created_by' => $user->getKey(),
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $user->getKey(),
         'created_at' => now(), 'updated_at' => now(),
     ]);
 

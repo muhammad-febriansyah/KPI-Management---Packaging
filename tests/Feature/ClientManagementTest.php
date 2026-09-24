@@ -18,7 +18,10 @@ it('lists clients as json for the datatable', function () {
 
     $response = $this->actingAs($admin)->getJson(route('clients.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
 
-    $response->assertOk()->assertJsonFragment(['name' => 'PT Sumber Makmur']);
+    $response->assertOk()
+        ->assertJsonFragment(['name' => 'PT Sumber Makmur'])
+        ->assertSee('data-client-detail', false)
+        ->assertSee('Detail', false);
 });
 
 it('hides timezone from the client management page', function () {
@@ -26,7 +29,11 @@ it('hides timezone from the client management page', function () {
 
     $response = $this->actingAs($admin)->get(route('clients.index'));
 
-    $response->assertOk()->assertDontSee('Timezone');
+    $response->assertOk()
+        ->assertDontSee('Zona waktu')
+        ->assertSee('data-client-detail-modal', false)
+        ->assertSee('Detail client', false)
+        ->assertSee('aria-label="Tampilkan konfirmasi password"', false);
 });
 
 it('lets a super admin create a client via the ajax modal', function () {

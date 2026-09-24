@@ -19,9 +19,8 @@ class WorkRealizationPolicy
 
     /**
      * Determine whether the user can view the model.
-     * An employee only sees their own assignments; any other role that has
-     * been granted the "realizations" menu (checked at the controller level)
-     * sees every realization for their client.
+     * An employee sees realizations assigned to them or created by them; any
+     * other role granted the "realizations" menu sees every client realization.
      */
     public function view(User $user, WorkRealization $workRealization): bool
     {
@@ -36,7 +35,7 @@ class WorkRealizationPolicy
         $client = Client::query()->find($workRealization->client_id);
 
         if ($client && $user->roleCodeFor($client) === 'employee') {
-            return $this->belongsToEmployee($user, $workRealization);
+            return $this->belongsToEmployee($user, $workRealization) || $workRealization->created_by === $user->id;
         }
 
         return true;
@@ -60,8 +59,28 @@ class WorkRealizationPolicy
     {
         return $user->status === 'active'
             && ! $user->is_super_admin
-            && $workRealization->status === 'assigned'
-            && $this->belongsToEmployee($user, $workRealization);
+            && ($this->belongsToEmployee($user, $workRealization) || $workRealization->created_by === $user->id);
+    }
+
+    /**
+     * Determine whether the user can assign employees to the model.
+     */
+    public function assign(User $user, WorkRealization $workRealization): bool
+    {
+        if ($user->status !== 'active') {
+            return false;
+        }
+
+        if ($user->is_super_admin) {
+            return true;
+        }
+
+        $client = app(CurrentClientService::class);
+
+        return $client->isResolved()
+            && $workRealization->client_id === $client->id()
+            && $user->roleCodeFor($client->get()) === 'employee'
+            && $workRealization->created_by === $user->id;
     }
 
     /**

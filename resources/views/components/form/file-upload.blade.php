@@ -27,7 +27,7 @@
             <span data-file-meta class="mt-1 block text-xs text-muted">{{ $help }}</span>
         </span>
 
-        <img data-file-preview class="hidden size-16 rounded-lg border border-line object-cover" alt="Preview file yang dipilih">
+        <img data-file-preview class="hidden size-16 rounded-lg border border-line bg-slate-800 object-contain p-1" alt="Preview file yang dipilih">
         <input id="{{ $attributes->get('id', $name) }}" name="{{ $name }}" type="file" accept="{{ $accept }}" class="sr-only">
     </label>
 

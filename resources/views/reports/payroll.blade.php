@@ -52,6 +52,7 @@
                         <th>Total hari masuk</th>
                         <th>Gaji bersih</th>
                         <th>Gaji kotor</th>
+                        <th>BPJS Kesehatan</th>
                         <th>BPJS Ketenagakerjaan</th>
                         <th>Seragam (Kaos/Celana)</th>
                         <th>Perlengkapan kerja</th>
