@@ -632,6 +632,21 @@ const initializeUserStatusToggle = () => {
     });
 };
 
+const initializeAccessRolePicker = () => {
+    const modal = document.querySelector('[data-access-role-picker]');
+    const trigger = document.querySelector('[data-access-create]');
+    if (!modal || !trigger) return;
+
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
+    trigger.addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('grid');
+    });
+    modal.querySelectorAll('[data-access-role-picker-close]').forEach((button) => button.addEventListener('click', close));
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    modal.querySelectorAll('[data-access-role-option]').forEach((button) => button.addEventListener('click', close));
+};
+
 const initializeSuperAdminModal = () => {
     const modal = document.querySelector('[data-super-admin-modal]');
     const form = document.querySelector('[data-super-admin-form]');
@@ -1786,6 +1801,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAjaxDeletes();
     initializeRoleAccessForms();
     initializeUserStatusToggle();
+    initializeAccessRolePicker();
     initializeSuperAdminModal();
     initializeUserPasswordReset();
     initializeAccessTabs();

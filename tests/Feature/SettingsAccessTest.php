@@ -53,6 +53,8 @@ it('renders separate role forms and reset password modal on settings/access', fu
         ->withSession(['current_client_id' => $client->getKey()])
         ->get(route('settings.access'))
         ->assertOk()
+        ->assertSee('data-access-create', false)
+        ->assertSee('Pilih role user')
         ->assertSee('data-super-admin-create', false)
         ->assertSee('data-employee-create', false)
         ->assertSee('data-client-create', false)
