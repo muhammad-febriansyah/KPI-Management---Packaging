@@ -1,5 +1,5 @@
 <x-layouts.app title="User & Hak Akses" active="settings" :current-client="$currentClient" :user="$user">
-<div class="mb-6"><p class="text-xs text-slate-500">Pengaturan / Akses</p><h1 class="mt-2 text-2xl font-semibold text-slate-950">User & Hak Akses</h1><p class="mt-1 text-sm text-slate-500">Kelola pengguna, role, dan hak akses aplikasi.</p></div>
+<div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p class="text-xs text-slate-500">Pengaturan / Akses</p><h1 class="mt-2 text-2xl font-semibold text-slate-950">User & Hak Akses</h1><p class="mt-1 text-sm text-slate-500">Kelola pengguna, role, dan hak akses aplikasi.</p></div><div class="flex flex-wrap gap-2"><button type="button" data-super-admin-create class="inline-flex h-11 items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 text-sm font-semibold text-primary-700 hover:bg-primary-100"><x-icon name="shield-check" size="size-4" /> Super Admin</button><button type="button" data-employee-create class="inline-flex h-11 items-center gap-2 rounded-lg bg-primary-600 px-4 text-sm font-semibold text-white hover:bg-primary-700"><x-icon name="plus" size="size-4" /> Karyawan</button><button type="button" data-client-create class="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><x-icon name="plus" size="size-4" /> Client</button></div></div>
 <div data-access-tabs>
 <div class="mb-6" role="tablist" aria-label="Pengaturan akses">
 <div class="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
@@ -24,4 +24,8 @@
 </div>
 </section>
 </div>
+@include('employees._modal', ['groups' => $groups])
+@include('clients._modal')
+@include('settings._super-admin-modal')
+@include('settings._reset-password-modal')
 </x-layouts.app>

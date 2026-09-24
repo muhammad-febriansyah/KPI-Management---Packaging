@@ -126,10 +126,11 @@ class ClientController extends Controller
         DB::transaction(function () use ($client, $data): void {
             $client->update(Arr::only($data, ['code', 'name', 'status']));
             $clientRole = Role::query()->firstOrCreate(['code' => 'client'], ['name' => 'Client']);
-            $account = $client->users()
+            $accountQuery = $client->users()
                 ->wherePivot('role_id', $clientRole->getKey())
-                ->orderByPivot('is_default', 'desc')
-                ->first() ?? new User;
+                ->when(filled($data['account_user_id'] ?? null), fn ($query) => $query->whereKey($data['account_user_id']))
+                ->orderByPivot('is_default', 'desc');
+            $account = $accountQuery->first() ?? new User;
             $account->fill([
                 'name' => $data['account_name'],
                 'username' => $data['login_username'],

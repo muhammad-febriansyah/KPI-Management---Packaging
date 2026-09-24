@@ -30,6 +30,7 @@ class UpdateClientRequest extends FormRequest
         $client = $this->route('client');
 
         $accountUser = $this->accountUser($client);
+        $clientRoleId = Role::query()->where('code', 'client')->value('id');
 
         return [
             'code' => ['required', 'string', 'max:50', Rule::unique('clients', 'code')->ignore($client instanceof Client ? $client->getKey() : null)],
@@ -40,6 +41,7 @@ class UpdateClientRequest extends FormRequest
             'password' => ['nullable', 'string', 'min:8', 'max:255', 'confirmed'],
             'password_confirmation' => ['nullable', 'string'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
+            'account_user_id' => ['nullable', 'integer', Rule::exists('client_user', 'user_id')->where(fn ($query) => $query->where('client_id', $client instanceof Client ? $client->getKey() : 0)->where('role_id', $clientRoleId))],
         ];
     }
 
@@ -50,6 +52,12 @@ class UpdateClientRequest extends FormRequest
         }
 
         $clientRoleId = Role::query()->where('code', 'client')->value('id');
+
+        if ($this->filled('account_user_id')) {
+            return $clientRoleId
+                ? $client->users()->whereKey($this->integer('account_user_id'))->wherePivot('role_id', $clientRoleId)->first()
+                : null;
+        }
 
         return $clientRoleId
             ? $client->users()->wherePivot('role_id', $clientRoleId)->orderByPivot('is_default', 'desc')->first()

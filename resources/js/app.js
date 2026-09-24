@@ -632,6 +632,85 @@ const initializeUserStatusToggle = () => {
     });
 };
 
+const initializeSuperAdminModal = () => {
+    const modal = document.querySelector('[data-super-admin-modal]');
+    const form = document.querySelector('[data-super-admin-form]');
+    if (!modal || !form) return;
+
+    const title = modal.querySelector('[data-super-admin-modal-title]');
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
+    const open = (item = null, url = '/settings/access/super-admins') => {
+        form.reset();
+        form.action = url;
+        form.elements._method.value = item ? 'PUT' : 'POST';
+        ['name', 'username', 'email', 'status'].forEach((field) => {
+            if (item?.[field] !== undefined) form.elements[field].value = item[field] ?? '';
+        });
+        form.querySelectorAll('[data-required-on-create]').forEach((input) => { input.required = !item; });
+        modal.querySelectorAll('[data-password-required-mark]').forEach((mark) => mark.classList.toggle('hidden', Boolean(item)));
+        if (title) title.textContent = item ? 'Edit Super Admin' : 'Tambah Super Admin';
+        modal.classList.remove('hidden');
+        modal.classList.add('grid');
+    };
+
+    document.querySelector('[data-super-admin-create]')?.addEventListener('click', () => open());
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest?.('[data-super-admin-edit]');
+        if (!button) return;
+        try { open(JSON.parse(button.dataset.superAdmin), button.dataset.url); } catch { Swal.fire({ title: 'Gagal', text: 'Data Super Admin tidak dapat dibaca.', icon: 'error' }); }
+    });
+    modal.querySelectorAll('[data-super-admin-close]').forEach((button) => button.addEventListener('click', close));
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const isEdit = form.elements._method.value === 'PUT';
+        const result = await Swal.fire({ title: `${isEdit ? 'Perbarui' : 'Simpan'} Super Admin?`, icon: 'question', showCancelButton: true, confirmButtonText: isEdit ? 'Perbarui' : 'Simpan', cancelButtonText: 'Batal' });
+        if (!result.isConfirmed) return;
+        try {
+            await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            close();
+            reloadServerTables();
+            await Swal.fire({ title: 'Berhasil', text: isEdit ? 'Super Admin berhasil diperbarui.' : 'Super Admin berhasil ditambahkan.', icon: 'success', timer: 1500, showConfirmButton: false });
+        } catch (error) {
+            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data Super Admin tidak valid.', icon: 'error' });
+        }
+    });
+};
+
+const initializeUserPasswordReset = () => {
+    const modal = document.querySelector('[data-user-reset-modal]');
+    const form = document.querySelector('[data-user-reset-form]');
+    if (!modal || !form) return;
+
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest?.('[data-user-reset]');
+        if (!button) return;
+        form.reset();
+        form.action = button.dataset.url;
+        modal.querySelector('[data-user-reset-name]').textContent = button.dataset.userName ?? 'user';
+        modal.classList.remove('hidden');
+        modal.classList.add('grid');
+        form.elements.password.focus();
+    });
+    modal.querySelectorAll('[data-user-reset-close]').forEach((button) => button.addEventListener('click', close));
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const result = await Swal.fire({ title: 'Reset password user?', text: 'Password lama tidak dapat digunakan lagi.', icon: 'question', showCancelButton: true, confirmButtonText: 'Reset password', cancelButtonText: 'Batal' });
+        if (!result.isConfirmed) return;
+        try {
+            const response = await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            close();
+            await Swal.fire({ title: 'Berhasil', text: response.message ?? 'Password berhasil direset.', icon: 'success', timer: 1500, showConfirmButton: false });
+        } catch (error) {
+            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Password tidak dapat direset.', icon: 'error' });
+        }
+    });
+};
+
 const initializeAccessTabs = () => {
     const tabsContainer = document.querySelector('[data-access-tabs]');
     if (!tabsContainer) return;
@@ -1707,6 +1786,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAjaxDeletes();
     initializeRoleAccessForms();
     initializeUserStatusToggle();
+    initializeSuperAdminModal();
+    initializeUserPasswordReset();
     initializeAccessTabs();
     initializeDatepickers();
     initializeRupiahInputs();
