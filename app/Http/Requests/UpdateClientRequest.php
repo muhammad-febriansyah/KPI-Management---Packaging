@@ -31,15 +31,21 @@ class UpdateClientRequest extends FormRequest
 
         $accountUser = $this->accountUser($client);
         $clientRoleId = Role::query()->where('code', 'client')->value('id');
+        $requiresAccount = $this->boolean('provision_account')
+            || $this->filled('account_name')
+            || $this->filled('login_username')
+            || $this->filled('login_email')
+            || $this->filled('password');
 
         return [
             'code' => ['required', 'string', 'max:50', Rule::unique('clients', 'code')->ignore($client instanceof Client ? $client->getKey() : null)],
             'name' => ['required', 'string', 'max:150'],
-            'account_name' => ['required', 'string', 'max:150'],
-            'login_username' => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($accountUser?->getKey())],
-            'login_email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($accountUser?->getKey())],
+            'account_name' => [$requiresAccount ? 'required' : 'nullable', 'string', 'max:150'],
+            'login_username' => [$requiresAccount ? 'required' : 'nullable', 'string', 'max:100', Rule::unique('users', 'username')->ignore($accountUser?->getKey())],
+            'login_email' => [$requiresAccount ? 'required' : 'nullable', 'email', 'max:150', Rule::unique('users', 'email')->ignore($accountUser?->getKey())],
             'password' => ['nullable', 'string', 'min:8', 'max:255', 'confirmed'],
             'password_confirmation' => ['nullable', 'string'],
+            'provision_account' => ['nullable', 'boolean'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'account_user_id' => ['nullable', 'integer', Rule::exists('client_user', 'user_id')->where(fn ($query) => $query->where('client_id', $client instanceof Client ? $client->getKey() : 0)->where('role_id', $clientRoleId))],
         ];

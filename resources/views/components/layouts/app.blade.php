@@ -42,6 +42,7 @@
             ['key' => 'cost-centers', 'label' => 'Cost Center', 'icon' => 'building-office-2', 'route' => 'cost-centers.index'],
             ['key' => 'products', 'label' => 'Produk', 'icon' => 'cube', 'route' => 'products.index'],
             ['key' => 'employees', 'label' => 'Karyawan', 'icon' => 'users', 'route' => 'employees.index'],
+            ['key' => 'clients', 'label' => 'Client', 'icon' => 'building-office-2', 'route' => 'clients.index'],
             ['key' => 'shifts', 'label' => 'Master Shift', 'icon' => 'clock', 'route' => 'shifts.index', 'hidden' => true],
         ]],
         ['key' => 'pemborongan', 'label' => 'Pemborongan', 'icon' => 'clipboard-document-list', 'children' => [
@@ -55,7 +56,6 @@
         ]],
         ['key' => 'settings-group', 'label' => 'Setting', 'icon' => 'shield-check', 'children' => [
             ['key' => 'settings', 'label' => 'User', 'route' => 'settings.access'],
-            ['key' => 'clients', 'label' => 'Master Client', 'route' => 'clients.index'],
             ['key' => 'audit', 'label' => 'Audit Log', 'route' => 'audit.index', 'hidden' => true],
         ]],
     ];

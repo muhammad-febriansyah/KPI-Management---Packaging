@@ -520,7 +520,7 @@ const initializeServerTables = () => {
             ] : resource === 'settings/access' ? [
                 { data: 'name' }, { data: 'email' }, { data: 'role_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'clients' ? [
-                { data: 'code' }, { data: 'name' }, { data: 'login_email', defaultContent: '—' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'code' }, { data: 'name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : [
                 { data: 'code', defaultContent: '—', createdCell: (cell) => cell.classList.add('px-5', 'py-4', 'font-medium', 'text-slate-900') },
                 { data: 'name', createdCell: (cell) => cell.classList.add('px-5', 'py-4', 'text-slate-600') },
@@ -1820,6 +1820,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
     initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });
+    initializeMasterModal({ name: 'client-master', plural: 'clients', fields: ['code', 'name', 'status'], confirmTitle: 'client', successCreate: 'Client berhasil ditambahkan.', successUpdate: 'Client berhasil diperbarui.' });
     initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
     initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'account_name', 'login_username', 'login_email', 'password', 'password_confirmation', 'status'], confirmTitle: 'client', successCreate: 'Client dan akun login berhasil ditambahkan.', successUpdate: 'Client dan akun login berhasil diperbarui.' });
     initializeRealizationProductPreview();

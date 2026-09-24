@@ -31,9 +31,23 @@ it('hides timezone from the client management page', function () {
 
     $response->assertOk()
         ->assertDontSee('Zona waktu')
+        ->assertSee('data-client-master-form', false)
+        ->assertDontSee('name="account_name"', false)
+        ->assertDontSee('name="password"', false)
         ->assertSee('data-client-detail-modal', false)
-        ->assertSee('Detail client', false)
-        ->assertSee('aria-label="Tampilkan konfirmasi password"', false);
+        ->assertSee('Detail client', false);
+});
+
+it('creates a client identity without creating a login account from master data', function () {
+    $admin = User::factory()->superAdmin()->create();
+
+    $response = $this->actingAs($admin)->postJson(route('clients.store'), [
+        'code' => 'KP-MASTER', 'name' => 'PT Master Data', 'status' => 'active',
+    ]);
+
+    $response->assertCreated();
+    $client = Client::query()->where('code', 'KP-MASTER')->firstOrFail();
+    expect($client->users)->toBeEmpty();
 });
 
 it('lets a super admin create a client via the ajax modal', function () {

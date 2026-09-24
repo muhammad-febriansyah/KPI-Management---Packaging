@@ -25,14 +25,21 @@ class StoreClientRequest extends FormRequest
      */
     public function rules(): array
     {
+        $requiresAccount = $this->boolean('provision_account')
+            || $this->filled('account_name')
+            || $this->filled('login_username')
+            || $this->filled('login_email')
+            || $this->filled('password');
+
         return [
             'code' => ['required', 'string', 'max:50', 'unique:clients,code'],
             'name' => ['required', 'string', 'max:150'],
-            'account_name' => ['required', 'string', 'max:150'],
-            'login_username' => ['required', 'string', 'max:100', 'unique:users,username'],
-            'login_email' => ['required', 'email', 'max:150', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
-            'password_confirmation' => ['required', 'string'],
+            'account_name' => [$requiresAccount ? 'required' : 'nullable', 'string', 'max:150'],
+            'login_username' => [$requiresAccount ? 'required' : 'nullable', 'string', 'max:100', 'unique:users,username'],
+            'login_email' => [$requiresAccount ? 'required' : 'nullable', 'email', 'max:150', 'unique:users,email'],
+            'password' => [$requiresAccount ? 'required' : 'nullable', 'string', 'min:8', 'max:255', 'confirmed'],
+            'password_confirmation' => [$requiresAccount ? 'required' : 'nullable', 'string'],
+            'provision_account' => ['nullable', 'boolean'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ];
     }

@@ -83,7 +83,7 @@ class ClientController extends Controller
                     $client->setAttribute('login_email', $account?->email);
                     $clientData = e($client->toJson());
 
-                    return '<button type="button" data-client-detail="'.$clientData.'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-client-edit data-url="'.route('clients.update', $client).'" data-client="'.$clientData.'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('clients.destroy', $client).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
+                    return '<button type="button" data-client-detail="'.$clientData.'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-client-master-edit data-url="'.route('clients.update', $client).'" data-client-master="'.$clientData.'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('clients.destroy', $client).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
                 })
                 ->rawColumns(['action', 'status'])
                 ->toJson();
@@ -99,18 +99,20 @@ class ClientController extends Controller
         $client = DB::transaction(function () use ($data): Client {
             $client = Client::create(Arr::only($data, ['code', 'name', 'status']));
             $clientRole = Role::query()->firstOrCreate(['code' => 'client'], ['name' => 'Client']);
-            $account = User::create([
-                'name' => $data['account_name'],
-                'username' => $data['login_username'],
-                'email' => $data['login_email'],
-                'password' => $data['password'],
-                'status' => $data['status'],
-            ]);
-            $account->clients()->attach($client, [
-                'role_id' => $clientRole->getKey(),
-                'is_default' => true,
-                'status' => $data['status'],
-            ]);
+            if (filled($data['account_name'] ?? null)) {
+                $account = User::create([
+                    'name' => $data['account_name'],
+                    'username' => $data['login_username'],
+                    'email' => $data['login_email'],
+                    'password' => $data['password'],
+                    'status' => $data['status'],
+                ]);
+                $account->clients()->attach($client, [
+                    'role_id' => $clientRole->getKey(),
+                    'is_default' => true,
+                    'status' => $data['status'],
+                ]);
+            }
 
             return $client;
         });
@@ -125,6 +127,9 @@ class ClientController extends Controller
 
         DB::transaction(function () use ($client, $data): void {
             $client->update(Arr::only($data, ['code', 'name', 'status']));
+            if (! filled($data['account_name'] ?? null)) {
+                return;
+            }
             $clientRole = Role::query()->firstOrCreate(['code' => 'client'], ['name' => 'Client']);
             $accountQuery = $client->users()
                 ->wherePivot('role_id', $clientRole->getKey())

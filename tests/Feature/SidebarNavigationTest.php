@@ -43,13 +43,14 @@ it('reflects a menu revoked by the super admin without redeploying', function ()
     $this->actingAs($user)->get(route('dashboard'))->assertDontSee(route('products.index'), false);
 });
 
-it('shows master client under the setting menu for super admins', function () {
+it('shows client under master data for super admins', function () {
     $admin = User::factory()->superAdmin()->create();
 
     $response = $this->actingAs($admin)->get(route('dashboard'));
 
     $response->assertOk()
         ->assertSee(route('clients.index'), false)
+        ->assertSee('>Client<', false)
         ->assertSee(route('units.index'), false)
         ->assertSee(route('groups.index'), false)
         ->assertSee(route('cost-centers.index'), false)
@@ -65,5 +66,9 @@ it('shows master client under the setting menu for super admins', function () {
         ->and(strpos($content, route('groups.index')))
         ->toBeLessThan(strpos($content, route('products.index')))
         ->and(strpos($content, route('cost-centers.index')))
-        ->toBeLessThan(strpos($content, route('products.index')));
+        ->toBeLessThan(strpos($content, route('products.index')))
+        ->and(strpos($content, route('clients.index')))
+        ->toBeGreaterThan(strpos($content, route('employees.index')))
+        ->and(strpos($content, route('clients.index')))
+        ->toBeLessThan(strpos($content, route('realizations.index')));
 });
