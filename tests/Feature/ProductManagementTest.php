@@ -88,6 +88,40 @@ it('shows a searchable client selector in the product form', function () {
         ->assertSee($client->name, false);
 });
 
+it('loads only active units remotely for the product form', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $inactiveUnit = Unit::factory()->create(['client_id' => $client->getKey(), 'name' => 'Lusin', 'status' => 'inactive']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('products.index'));
+
+    $response->assertOk()
+        ->assertSee('data-tom-select-remote="'.route('units.options').'"', false)
+        ->assertDontSee('value="'.$inactiveUnit->getKey().'"', false)
+        ->assertDontSee('>'.$inactiveUnit->name.'<', false);
+});
+
+it('rejects an inactive unit when storing a product', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $inactiveUnit = Unit::factory()->create(['client_id' => $client->getKey(), 'status' => 'inactive']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('products.store'), [
+            'client_id' => $client->getKey(),
+            'unit_id' => $inactiveUnit->getKey(),
+            'sku' => 'SKU-INACTIVE-UNIT',
+            'name' => 'Produk Unit Nonaktif',
+            'status' => 'active',
+        ]);
+
+    $response->assertUnprocessable()->assertJsonValidationErrors('unit_id');
+    $this->assertDatabaseMissing('products', ['sku' => 'SKU-INACTIVE-UNIT']);
+});
+
 it('creates a product for the selected client', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();

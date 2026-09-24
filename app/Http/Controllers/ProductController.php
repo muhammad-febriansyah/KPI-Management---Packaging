@@ -9,7 +9,6 @@ use App\Models\Client;
 use App\Models\CostCenter;
 use App\Models\Group;
 use App\Models\Product;
-use App\Models\Unit;
 use App\Services\CurrentClientService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,7 +50,7 @@ class ProductController extends Controller
             })->rawColumns(['action', 'status'])->toJson();
         }
 
-        return view('products.index', ['currentClient' => $currentClient, 'user' => $request->user(), 'units' => Unit::query()->where('client_id', $client->id())->where('status', 'active')->get(), 'groups' => Group::query()->where('client_id', $client->id())->where('status', 'active')->get(), 'costCenters' => CostCenter::query()->where('client_id', $client->id())->where('status', 'active')->get()]);
+        return view('products.index', ['currentClient' => $currentClient, 'user' => $request->user(), 'groups' => Group::query()->where('client_id', $client->id())->where('status', 'active')->get(), 'costCenters' => CostCenter::query()->where('client_id', $client->id())->where('status', 'active')->get()]);
     }
 
     /**
