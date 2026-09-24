@@ -46,7 +46,7 @@ it('stores an employee with sim id, email, and marital status', function () {
     expect(Hash::check('password', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
 });
 
-it('renders the employee password empty until the default button is used', function () {
+it('keeps email and password out of the employee master form', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -55,8 +55,9 @@ it('renders the employee password empty until the default button is used', funct
         ->get(route('employees.index'));
 
     $response->assertOk()
-        ->assertSee('data-default-password="password"', false)
-        ->assertDontSee('name="password" value="password"', false);
+        ->assertDontSee('name="email"', false)
+        ->assertDontSee('name="password"', false)
+        ->assertSee('Password dapat diatur dari menu Akses.');
 });
 
 it('requires marital status when storing an employee', function () {
