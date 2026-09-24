@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Client;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -22,6 +23,22 @@ it('lists clients as json for the datatable', function () {
         ->assertJsonFragment(['name' => 'PT Sumber Makmur'])
         ->assertSee('data-client-detail', false)
         ->assertSee('Detail', false);
+});
+
+it('includes all client accounts for the detail table', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'client'], ['name' => 'Client']);
+    $firstAccount = User::factory()->create(['name' => 'PIC Pertama', 'username' => 'pic.pertama', 'email' => 'pic.pertama@example.com']);
+    $secondAccount = User::factory()->create(['name' => 'PIC Kedua', 'username' => 'pic.kedua', 'email' => 'pic.kedua@example.com']);
+    $client->users()->attach($firstAccount, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $client->users()->attach($secondAccount, ['role_id' => $role->getKey(), 'is_default' => false, 'status' => 'inactive']);
+
+    $this->actingAs($admin)
+        ->getJson(route('clients.index', ['draw' => 1, 'start' => 0, 'length' => 10]))
+        ->assertOk()
+        ->assertSee('PIC Pertama', false)
+        ->assertSee('PIC Kedua', false);
 });
 
 it('hides timezone from the client management page', function () {

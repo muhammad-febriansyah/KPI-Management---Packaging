@@ -888,6 +888,30 @@ const initializeClientDetailModal = () => {
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
 
     const set = (attribute, value) => { const el = modal.querySelector(`[data-client-detail-${attribute}]`); if (el) el.textContent = value || '—'; };
+    const accountsBody = modal.querySelector('[data-client-detail-accounts]');
+    const accountCount = modal.querySelector('[data-client-detail-account-count]');
+    const accountCountBadge = modal.querySelector('[data-client-detail-account-count-badge]');
+
+    const renderAccounts = (accounts) => {
+        const countLabel = `${accounts.length} akun`;
+        if (accountCount) accountCount.textContent = countLabel;
+        if (accountCountBadge) accountCountBadge.textContent = countLabel;
+        if (!accountsBody) return;
+
+        if (!accounts.length) {
+            accountsBody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">Belum ada akun login.</td></tr>';
+            return;
+        }
+
+        accountsBody.innerHTML = accounts.map((account, index) => {
+            const status = account.pivot?.status ?? account.status;
+            const isActive = status === 'active';
+            const statusLabel = isActive ? 'Aktif' : 'Nonaktif';
+            const statusClass = isActive ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600';
+
+            return `<tr class="border-t border-line align-top"><td class="whitespace-nowrap px-4 py-3 text-slate-500">${index + 1}</td><td class="px-4 py-3 font-semibold text-slate-900">${escapeHtml(account.name)}</td><td class="whitespace-nowrap px-4 py-3 text-slate-600">${escapeHtml(account.username)}</td><td class="px-4 py-3 text-slate-600">${escapeHtml(account.email)}</td><td class="whitespace-nowrap px-4 py-3"><span class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold ${statusClass}">${statusLabel}</span></td></tr>`;
+        }).join('');
+    };
 
     document.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-client-detail]');
@@ -898,9 +922,7 @@ const initializeClientDetailModal = () => {
             set('name', data.name);
             set('code', data.code);
             set('code-repeat', data.code);
-            set('account-name', data.account_name);
-            set('login-username', data.login_username);
-            set('login-email', data.login_email);
+            renderAccounts(Array.isArray(data.users) ? data.users : []);
             modal.querySelector('[data-client-detail-status]').innerHTML = `<span class="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${data.status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600'}">${data.status === 'active' ? 'Aktif' : 'Nonaktif'}</span>`;
             modal.classList.remove('hidden');
             modal.classList.add('grid');
