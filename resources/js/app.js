@@ -632,19 +632,57 @@ const initializeUserStatusToggle = () => {
     });
 };
 
-const initializeAccessRolePicker = () => {
-    const modal = document.querySelector('[data-access-role-picker]');
+const initializeUserCreateModal = () => {
+    const modal = document.querySelector('[data-user-create-modal]');
     const trigger = document.querySelector('[data-access-create]');
-    if (!modal || !trigger) return;
+    const form = document.querySelector('[data-user-create-form]');
+    if (!modal || !trigger || !form) return;
 
+    const sections = [...modal.querySelectorAll('[data-user-create-section]')];
     const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
-    trigger.addEventListener('click', () => {
+    const setRole = (role) => {
+        sections.forEach((section) => {
+            const active = section.dataset.userCreateSection === role;
+            section.classList.toggle('hidden', !active);
+            section.querySelectorAll('input, select, textarea').forEach((input) => { input.disabled = !active; });
+        });
+        modal.querySelectorAll('[data-datepicker]').forEach((input) => input._flatpickr?.clear());
+        modal.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.setValue(select.value, true));
+    };
+    const open = () => {
+        form.reset();
+        setRole('super-admin');
         modal.classList.remove('hidden');
         modal.classList.add('grid');
-    });
-    modal.querySelectorAll('[data-access-role-picker-close]').forEach((button) => button.addEventListener('click', close));
+        modal.querySelector('[data-user-create-section="super-admin"] input[name="name"]')?.focus();
+    };
+
+    trigger.addEventListener('click', open);
+    modal.querySelectorAll('[data-user-create-close]').forEach((button) => button.addEventListener('click', close));
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
-    modal.querySelectorAll('[data-access-role-option]').forEach((button) => button.addEventListener('click', close));
+    form.querySelectorAll('input[name="create_role"]').forEach((input) => input.addEventListener('change', () => setRole(input.value)));
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const role = form.querySelector('input[name="create_role"]:checked')?.value;
+        const config = {
+            'super-admin': { url: '/settings/access/super-admins', label: 'Super Admin' },
+            employee: { url: '/employees', label: 'Karyawan' },
+            client: { url: '/clients', label: 'Client' },
+        }[role];
+        if (!config) return;
+
+        const result = await Swal.fire({ title: `Simpan ${config.label}?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
+        if (!result.isConfirmed) return;
+        try {
+            await $.ajax({ url: config.url, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            close();
+            reloadServerTables();
+            await Swal.fire({ title: 'Berhasil', text: `${config.label} berhasil ditambahkan.`, icon: 'success', timer: 1500, showConfirmButton: false });
+        } catch (error) {
+            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || `Data ${config.label} tidak valid.`, icon: 'error' });
+        }
+    });
 };
 
 const initializeSuperAdminModal = () => {
@@ -1801,7 +1839,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAjaxDeletes();
     initializeRoleAccessForms();
     initializeUserStatusToggle();
-    initializeAccessRolePicker();
+    initializeUserCreateModal();
     initializeSuperAdminModal();
     initializeUserPasswordReset();
     initializeAccessTabs();

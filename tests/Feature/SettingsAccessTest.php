@@ -45,7 +45,7 @@ it('lets a super admin view the settings/access page', function () {
         ->assertSee('data-access-panel="permissions"', false);
 });
 
-it('renders separate role forms and reset password modal on settings/access', function () {
+it('renders unified role form and reset password modal on settings/access', function () {
     $client = Client::factory()->create();
     $admin = User::factory()->superAdmin()->create();
 
@@ -54,10 +54,14 @@ it('renders separate role forms and reset password modal on settings/access', fu
         ->get(route('settings.access'))
         ->assertOk()
         ->assertSee('data-access-create', false)
-        ->assertSee('Pilih role user')
-        ->assertSee('data-super-admin-create', false)
-        ->assertSee('data-employee-create', false)
-        ->assertSee('data-client-create', false)
+        ->assertSee('data-user-create-modal', false)
+        ->assertSee('data-user-create-form', false)
+        ->assertSee('Role user')
+        ->assertSee('name="create_role"', false)
+        ->assertSee('value="super-admin"', false)
+        ->assertSee('value="employee"', false)
+        ->assertSee('value="client"', false)
+        ->assertSee('value="active" selected', false)
         ->assertSee('data-super-admin-form', false)
         ->assertSee('data-user-reset-form', false);
 });

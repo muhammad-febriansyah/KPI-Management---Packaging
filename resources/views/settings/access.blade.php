@@ -26,7 +26,7 @@
 </div>
 @include('employees._modal', ['groups' => $groups])
 @include('clients._modal')
-@include('settings._user-role-picker')
+@include('settings._user-create-modal', ['groups' => $groups])
 @include('settings._super-admin-modal')
 @include('settings._reset-password-modal')
 </x-layouts.app>
