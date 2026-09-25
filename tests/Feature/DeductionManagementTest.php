@@ -85,6 +85,26 @@ it('stores deductions from the create page and redirects to the index', function
     $this->assertDatabaseHas('employee_deductions', ['client_id' => $client->getKey(), 'employee_id' => $employee->getKey(), 'uniform_amount' => 50000]);
 });
 
+it('rejects a duplicate deduction period before inserting', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    DeductionPeriod::query()->create([
+        'client_id' => $client->getKey(),
+        'month' => '2026-09-01',
+        'week_no' => null,
+        'status' => 'locked',
+        'created_by' => $user->getKey(),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('deductions.store'), ['month' => '2026-09']);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['month']);
+    expect(DeductionPeriod::query()->where('client_id', $client->getKey())->count())->toBe(1);
+});
+
 it('limits salary advance percentages to 100', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();

@@ -3,10 +3,12 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\NormalizesDeductionAmounts;
+use App\Models\DeductionPeriod;
 use App\Services\CurrentClientService;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreDeductionPeriodRequest extends FormRequest
 {
@@ -37,5 +39,34 @@ class StoreDeductionPeriodRequest extends FormRequest
             'employee_ids' => ['nullable', 'array'],
             'employee_ids.*' => ['integer', Rule::exists('employees', 'id')->where(fn ($q) => $q->where('client_id', $clientId))],
         ];
+    }
+
+    /**
+     * Prevent duplicate periods before the database unique index rejects them.
+     *
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->has('month') || $validator->errors()->has('week_no')) {
+                return;
+            }
+
+            $month = (string) $this->input('month');
+            $weekNo = $this->filled('week_no') ? (int) $this->input('week_no') : null;
+            $periodExists = DeductionPeriod::query()
+                ->where('client_id', app(CurrentClientService::class)->id())
+                ->where('month', $month.'-01')
+                ->where('week_key', $weekNo ?? 0)
+                ->exists();
+
+            if (! $periodExists) {
+                return;
+            }
+
+            $periodLabel = $weekNo === null ? 'Semua minggu' : "Minggu {$weekNo}";
+            $validator->errors()->add('month', "Periode {$month} ({$periodLabel}) sudah tersedia. Pilih periode lain.");
+        }];
     }
 }
