@@ -1068,12 +1068,11 @@ const initializeDatepickers = () => {
     });
 };
 
-// Switching the active client submits the header form straight away, so the page reloads
-// scoped to the newly picked client. CurrentClientController redirects back to the same page.
+// Switching a client submits its form straight away. Use jQuery delegation because Select2
+// emits its change event through jQuery, not only through the native DOM event path.
 const initializeClientSwitcher = () => {
-    document.addEventListener('change', (event) => {
-        const select = event.target.closest?.('[data-client-switcher], [data-client-filter]');
-        select?.form?.submit();
+    $(document).on('change', '[data-client-switcher], [data-client-filter]', function () {
+        this.form?.submit();
     });
 };
 
