@@ -59,6 +59,8 @@ it('shows the active client selector so super admins can find accounts created f
 
     $response->assertOk()
         ->assertSee('data-client-switcher', false)
+        ->assertSee('data-select2-select', false)
+        ->assertSee('data-select2-placeholder="Cari kode atau nama client..."', false)
         ->assertSee('name="client_id"', false)
         ->assertSee($currentClient->name)
         ->assertSee($otherClient->name);
