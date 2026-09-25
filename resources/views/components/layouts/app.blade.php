@@ -12,10 +12,6 @@
     $resolvedUserName = $user?->name ?? $userName ?? 'Admin Operasional';
     $resolvedUserRole = $user?->is_super_admin ? 'Super Admin' : 'Administrator';
     $roleCode = $user?->roleCodeFor($currentClient);
-    $availableClients = collect($clients);
-    if ($availableClients->isEmpty() && $user) {
-        $availableClients = app(\App\Services\CurrentClientService::class)->availableFor($user);
-    }
     $resolvedUserRole = match ($roleCode) {
         'employee' => 'Karyawan',
         'client' => 'Client',
@@ -183,19 +179,6 @@
                 @endif
 
                 <div class="flex-1"></div>
-
-                @if ($currentClient && $availableClients->count() > 1)
-                    <form method="POST" action="{{ route('current-client.update') }}" class="hidden max-w-[34vw] shrink-0 sm:block sm:w-56">
-                        @csrf
-                        @method('PUT')
-                        <label class="sr-only" for="current-client-selector">Client aktif</label>
-                        <select id="current-client-selector" name="client_id" data-client-switcher class="h-[42px] w-full rounded-lg border border-line bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
-                            @foreach ($availableClients as $availableClient)
-                                <option value="{{ $availableClient->getKey() }}" @selected($availableClient->getKey() === $currentClient->getKey())>{{ $availableClient->code }} — {{ $availableClient->name }}</option>
-                            @endforeach
-                        </select>
-                    </form>
-                @endif
 
                 @unless ($roleCode === 'client')
                 <div class="relative shrink-0">
