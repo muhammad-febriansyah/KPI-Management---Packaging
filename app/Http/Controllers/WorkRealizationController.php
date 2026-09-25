@@ -8,7 +8,6 @@ use App\Http\Requests\UpdateWorkRealizationRequest;
 use App\Models\Batch;
 use App\Models\Employee;
 use App\Models\Product;
-use App\Models\RealizationEmployee;
 use App\Models\Shift;
 use App\Models\User;
 use App\Models\WorkRealization;
@@ -36,7 +35,7 @@ class WorkRealizationController extends Controller
             ->with([
                 'shift:id,client_id,name',
                 'batch:id,client_id,batch_no',
-                'product:id,client_id,sku,name',
+                'product:id,client_id,sku,name,employee_rate',
                 'employeeAssignments:id,client_id,work_realization_id,employee_id,rate_per_unit_snapshot,allocation_output',
             ])
             ->withCount('employeeAssignments')
@@ -48,7 +47,7 @@ class WorkRealizationController extends Controller
             });
         }
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($i->employeeAssignments->sum(fn (RealizationEmployee $assignment): float => (float) ($assignment->allocation_output ?? $i->total_output ?? 0) * (float) $assignment->rate_per_unit_snapshot), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
+            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
                 $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
 
                 if (! $request->user()->can('assign', $i)) {
@@ -78,6 +77,15 @@ class WorkRealizationController extends Controller
         }
 
         return rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',');
+    }
+
+    private function totalPrice(WorkRealization $realization): float
+    {
+        $rate = $realization->employeeAssignments->first()?->rate_per_unit_snapshot
+            ?? $realization->product?->employee_rate
+            ?? 0;
+
+        return (float) ($realization->total_output ?? 0) * (float) $rate;
     }
 
     public function create(Request $request, CurrentClientService $client): View

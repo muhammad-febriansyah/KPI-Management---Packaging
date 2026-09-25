@@ -1,7 +1,8 @@
 <x-layouts.app title="Detail Realisasi" active="realizations" :current-client="$currentClient" :user="$user">
 <div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><div class="mb-3 flex items-center gap-2 text-xs font-medium text-slate-500"><span>Transaksi</span><x-icon name="chevron-right" size="size-3.5"/><span>Realisasi</span><x-icon name="chevron-right" size="size-3.5"/><span class="text-primary-600">Detail</span></div><h1 class="text-3xl font-semibold tracking-tight text-slate-950">Detail Realisasi Pekerjaan</h1><p class="mt-2 text-sm text-slate-500">Ringkasan hasil pekerjaan dan informasi pendukung.</p></div><a href="{{ route('realizations.index') }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><x-icon name="chevron-right" class="rotate-180" size="size-4"/> Kembali</a></div>
 @php
-    $totalPrice = $realization->employeeAssignments->sum(fn ($assignment): float => (float) ($assignment->allocation_output ?? $realization->total_output ?? 0) * (float) $assignment->rate_per_unit_snapshot);
+    $rate = $realization->employeeAssignments->first()?->rate_per_unit_snapshot ?? $realization->product?->employee_rate ?? 0;
+    $totalPrice = (float) ($realization->total_output ?? 0) * (float) $rate;
 @endphp
 <x-card>
     <div class="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">

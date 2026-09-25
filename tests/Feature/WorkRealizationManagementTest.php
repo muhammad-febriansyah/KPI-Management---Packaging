@@ -247,6 +247,12 @@ it('uses one product rate for employees from every rate category', function () {
         'rate_per_unit_snapshot' => 12,
         'gross_amount' => 120,
     ]);
+
+    $tableResponse = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('realizations.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
+
+    $tableResponse->assertOk()->assertJsonPath('data.0.total_price', 'Rp 120');
 });
 
 it('stores result fields entered on the realization form', function () {

@@ -1454,12 +1454,8 @@ const initializeRealizationPricePreview = () => {
     const update = () => {
         const selectedTomOption = productSelect?.tomselect?.options?.[productSelect.value];
         const output = Number(input.value || 0);
-        const selectedEmployeeCount = [...document.querySelectorAll('[data-assignment-employee]')]
-            .filter((select) => select.value)
-            .length;
-        const employeeCount = selectedEmployeeCount || 1;
         const rate = Number(selectedTomOption?.employee_rate ?? 0);
-        const totalPrice = Number.isFinite(output) ? Math.round(output * rate * employeeCount) : 0;
+        const totalPrice = Number.isFinite(output) ? Math.round(output * rate) : 0;
 
         preview.value = `Rp ${totalPrice.toLocaleString('id-ID')}`;
     };
