@@ -8,6 +8,12 @@
 </div>
 </div>
 <section id="access-panel-users" data-access-panel="users" role="tabpanel" aria-labelledby="access-tab-users" tabindex="0">
+@if ($availableClients->count() > 1)
+<div class="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+<div><p class="text-sm font-semibold text-slate-900">Client aktif</p><p class="mt-1 text-xs text-slate-500">Pilih client untuk melihat akun dan hak aksesnya.</p></div>
+<form method="POST" action="{{ route('current-client.update') }}" class="shrink-0">@csrf @method('PUT')<label class="sr-only" for="access-client-selector">Pilih client aktif</label><select id="access-client-selector" name="client_id" data-client-switcher class="h-10 min-w-60 rounded-lg border border-line bg-white px-3 text-sm text-slate-700 outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">@foreach ($availableClients as $clientOption)<option value="{{ $clientOption->getKey() }}" @selected($clientOption->is($currentClient))>{{ $clientOption->code }} — {{ $clientOption->name }}</option>@endforeach</select></form>
+</div>
+@endif
 <x-card :padding="false"><div class="overflow-x-auto"><table data-server-table class="min-w-[980px] w-full text-left text-sm"><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div></x-card>
 </section>
 <section id="access-panel-permissions" data-access-panel="permissions" role="tabpanel" aria-labelledby="access-tab-permissions" tabindex="0" hidden>

@@ -48,6 +48,22 @@ it('lets a super admin view the settings/access page', function () {
         ->assertSee('data-server-table', false);
 });
 
+it('shows the active client selector so super admins can find accounts created for another client', function () {
+    $currentClient = Client::factory()->create(['code' => 'CURRENT-001', 'name' => 'PT Current']);
+    $otherClient = Client::factory()->create(['code' => 'OTHER-001', 'name' => 'PT Other']);
+    $admin = User::factory()->superAdmin()->create();
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->get(route('settings.access'));
+
+    $response->assertOk()
+        ->assertSee('data-client-switcher', false)
+        ->assertSee('name="client_id"', false)
+        ->assertSee($currentClient->name)
+        ->assertSee($otherClient->name);
+});
+
 it('renders unified role form and reset password modal on settings/access', function () {
     $client = Client::factory()->create();
     $admin = User::factory()->superAdmin()->create();

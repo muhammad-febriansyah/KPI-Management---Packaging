@@ -86,6 +86,7 @@ class AccessController extends Controller
 
         return view('settings.access', [
             'currentClient' => $client->get(),
+            'availableClients' => $client->availableFor($request->user()),
             'user' => $request->user(),
             'roles' => $roles,
             'menuOptions' => config('menu_permissions'),
