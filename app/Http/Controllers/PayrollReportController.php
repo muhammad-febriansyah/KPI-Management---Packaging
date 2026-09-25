@@ -6,6 +6,7 @@ use App\Exports\PayrollReportExport;
 use App\Services\CurrentClientService;
 use App\Services\PayrollReportBuilder;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,6 +25,38 @@ class PayrollReportController extends Controller
 
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
+                ->filterColumn('attendance_days', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(attendance.attendance_days, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('gross_salary', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(attendance.gross_salary, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('uniform_amount', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(deductions.uniform_amount, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('equipment_amount', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(deductions.equipment_amount, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('meal_amount', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(deductions.meal_amount, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('salary_advance_value', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(deductions.salary_advance_value, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('correction_minus', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(deductions.correction_minus, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('correction_plus', function (Builder $query, string $keyword): void {
+                    $query->whereRaw('COALESCE(deductions.correction_plus, 0) LIKE ?', ["%{$keyword}%"]);
+                })
+                ->orderColumn('attendance_days', 'COALESCE(attendance.attendance_days, 0) $1')
+                ->orderColumn('gross_salary', 'COALESCE(attendance.gross_salary, 0) $1')
+                ->orderColumn('uniform_amount', 'COALESCE(deductions.uniform_amount, 0) $1')
+                ->orderColumn('equipment_amount', 'COALESCE(deductions.equipment_amount, 0) $1')
+                ->orderColumn('meal_amount', 'COALESCE(deductions.meal_amount, 0) $1')
+                ->orderColumn('salary_advance_value', 'COALESCE(deductions.salary_advance_value, 0) $1')
+                ->orderColumn('correction_minus', 'COALESCE(deductions.correction_minus, 0) $1')
+                ->orderColumn('correction_plus', 'COALESCE(deductions.correction_plus, 0) $1')
                 ->editColumn('gender', fn (object $row): string => $row->gender === 'male' ? 'Laki-laki' : 'Perempuan')
                 ->addColumn('bpjs_health', fn (object $row): int => PayrollReportBuilder::bpjsHealth($row))
                 ->addColumn('bpjs_employment', fn (object $row): int => PayrollReportBuilder::bpjsEmployment($row))

@@ -103,6 +103,33 @@ it('subtracts health and employment BPJS from gross salary', function () {
     $response->assertJsonPath('data.0.net_salary', 485000);
 });
 
+it('searches the payroll report by employee name', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    makePayrollReportFixture($client, $user);
+    $columns = array_map(
+        fn (string $column): array => ['data' => $column, 'searchable' => 'true', 'orderable' => 'true', 'search' => ['value' => '', 'regex' => 'false']],
+        ['employee_no', 'full_name', 'gender', 'attendance_days', 'net_salary', 'gross_salary', 'bpjs_health', 'bpjs_employment', 'uniform_amount', 'equipment_amount', 'meal_amount', 'salary_advance_value', 'correction_minus', 'correction_plus'],
+    );
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.payroll').'?'.http_build_query([
+            'draw' => 1,
+            'start' => 0,
+            'length' => 10,
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-31',
+            'search' => ['value' => 'ananda', 'regex' => 'false'],
+            'columns' => $columns,
+            'order' => [['column' => 1, 'dir' => 'asc']],
+        ]));
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.full_name', 'Ananda Julian');
+});
+
 it('downloads the payroll report as an Excel file for the selected period', function () {
     Excel::fake();
     $user = User::factory()->superAdmin()->create();

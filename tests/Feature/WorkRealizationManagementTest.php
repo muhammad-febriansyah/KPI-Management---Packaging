@@ -238,14 +238,14 @@ it('uses one product rate for employees from every rate category', function () {
         'employee_id' => $newEmployee->getKey(),
         'rate_category_snapshot' => 'baru',
         'rate_per_unit_snapshot' => 12,
-        'gross_amount' => 120,
+        'gross_amount' => 60,
     ]);
     $this->assertDatabaseHas('realization_employees', [
         'work_realization_id' => $realizationId,
         'employee_id' => $oldEmployee->getKey(),
         'rate_category_snapshot' => 'lama',
         'rate_per_unit_snapshot' => 12,
-        'gross_amount' => 120,
+        'gross_amount' => 60,
     ]);
 
     $tableResponse = $this->actingAs($superAdmin)
@@ -253,6 +253,38 @@ it('uses one product rate for employees from every rate category', function () {
         ->getJson(route('realizations.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
 
     $tableResponse->assertOk()->assertJsonPath('data.0.total_price', 'Rp 120');
+});
+
+it('splits realization gross amount when employees are assigned later', function () {
+    $superAdmin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => User::factory()->create()->getKey()]);
+    $secondEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => User::factory()->create()->getKey()]);
+    $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    $product = Product::factory()->create(['client_id' => $client->getKey(), 'unit_id' => $unit->getKey(), 'employee_rate' => 1]);
+    $realization = WorkRealization::query()->create([
+        'client_id' => $client->getKey(),
+        'work_date' => '2026-09-09',
+        'shift_id' => $shift->getKey(),
+        'product_id' => $product->getKey(),
+        'sku_snapshot' => $product->sku,
+        'product_name_snapshot' => $product->name,
+        'unit_name_snapshot' => $unit->name,
+        'total_output' => 1000000,
+        'start_time' => '08:00',
+        'end_time' => '16:00',
+        'created_by' => $superAdmin->getKey(),
+    ]);
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.assign', $realization), ['employee_ids' => [$employee->getKey(), $secondEmployee->getKey()]]);
+
+    $response->assertOk();
+    $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $employee->getKey(), 'gross_amount' => 500000]);
+    $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $secondEmployee->getKey(), 'gross_amount' => 500000]);
+    expect((int) DB::table('realization_employees')->where('work_realization_id', $realization->getKey())->sum('gross_amount'))->toBe(1000000);
 });
 
 it('stores result fields entered on the realization form', function () {

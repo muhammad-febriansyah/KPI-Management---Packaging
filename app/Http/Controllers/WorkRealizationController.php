@@ -88,6 +88,33 @@ class WorkRealizationController extends Controller
         return (float) ($realization->total_output ?? 0) * (float) $rate;
     }
 
+    private function rebalanceAssignments(WorkRealization $realization): void
+    {
+        $assignments = $realization->employeeAssignments()->get()->values();
+        $assignmentCount = $assignments->count();
+
+        if ($assignmentCount === 0) {
+            return;
+        }
+
+        $totalOutput = $realization->total_output === null ? null : (float) $realization->total_output;
+        $rate = (float) ($assignments->first()->rate_per_unit_snapshot ?? 0);
+        $totalGrossAmount = $totalOutput === null ? 0 : (int) round($totalOutput * $rate);
+        $sharedOutput = $totalOutput === null ? null : round($totalOutput / $assignmentCount, 3);
+        $sharedGrossAmount = intdiv($totalGrossAmount, $assignmentCount);
+        $grossRemainder = $totalGrossAmount % $assignmentCount;
+
+        foreach ($assignments as $index => $assignment) {
+            $isLastAssignment = $index === $assignmentCount - 1;
+            $assignment->update([
+                'allocation_output' => $sharedOutput === null || ! $isLastAssignment
+                    ? $sharedOutput
+                    : round($totalOutput - ($sharedOutput * ($assignmentCount - 1)), 3),
+                'gross_amount' => $sharedGrossAmount + ($isLastAssignment ? $grossRemainder : 0),
+            ]);
+        }
+    }
+
     public function create(Request $request, CurrentClientService $client): View
     {
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
@@ -207,6 +234,7 @@ class WorkRealizationController extends Controller
                 ]);
                 $employee->user?->notify(new RealizationAssigned($realization));
             }
+            $this->rebalanceAssignments($realization);
         });
 
         return response()->json(['message' => 'Realisasi berhasil disimpan.'], 201);
@@ -232,13 +260,7 @@ class WorkRealizationController extends Controller
 
         DB::transaction(function () use ($data, $realization): void {
             $realization->update($data);
-
-            foreach ($realization->employeeAssignments as $assignment) {
-                $assignment->update([
-                    'allocation_output' => $realization->total_output,
-                    'gross_amount' => (int) round((float) $realization->total_output * (float) $assignment->rate_per_unit_snapshot),
-                ]);
-            }
+            $this->rebalanceAssignments($realization);
         });
 
         if ($newImagePath !== null && $oldImagePath !== null) {
@@ -276,6 +298,7 @@ class WorkRealizationController extends Controller
                 $employee->user?->notify(new RealizationAssigned($realization));
             }
         }
+        $this->rebalanceAssignments($realization);
 
         return response()->json(['message' => 'Karyawan berhasil di-assign.']);
     }

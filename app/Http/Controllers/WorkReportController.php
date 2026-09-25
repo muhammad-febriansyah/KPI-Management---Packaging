@@ -25,6 +25,33 @@ class WorkReportController extends Controller
 
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::query($query)
+                ->filterColumn('sim_id', function (Builder $query, string $keyword): void {
+                    $query->where(function (Builder $query) use ($keyword): void {
+                        $query->where('employees.sim_id', 'like', "%{$keyword}%")
+                            ->orWhere('employees.employee_no', 'like', "%{$keyword}%");
+                    });
+                })
+                ->filterColumn('full_name', function (Builder $query, string $keyword): void {
+                    $query->where('employees.full_name', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('shift_name', function (Builder $query, string $keyword): void {
+                    $query->where('shifts.name', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('product_name', function (Builder $query, string $keyword): void {
+                    $query->where('realization.product_name_snapshot', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('actual', function (Builder $query, string $keyword): void {
+                    $query->where('realization.total_output', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('description', function (Builder $query, string $keyword): void {
+                    $query->where('realization.report', 'like', "%{$keyword}%");
+                })
+                ->orderColumn('sim_id', 'COALESCE(employees.sim_id, employees.employee_no) $1')
+                ->orderColumn('full_name', 'employees.full_name $1')
+                ->orderColumn('shift_name', 'shifts.name $1')
+                ->orderColumn('product_name', 'realization.product_name_snapshot $1')
+                ->orderColumn('actual', 'realization.total_output $1')
+                ->orderColumn('description', 'realization.report $1')
                 ->editColumn('work_date', fn (object $row): string => $row->work_date ? date('d/m/Y', strtotime($row->work_date)) : '—')
                 ->addColumn('target', fn (object $row): string => $this->formatQuantity($this->targetOutput($row)))
                 ->addColumn('target_price', fn (object $row): string => $this->formatCurrency($this->targetOutput($row), $row->po_price))

@@ -86,6 +86,38 @@ it('reads the report row fields from the assigned realization', function () {
         ->assertJsonPath('data.0.description', 'Catatan dari realisasi');
 });
 
+it('searches the work report by employee name', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'sim_id' => 'SIM-AGUS-001',
+        'full_name' => 'Agus Search',
+    ]);
+    makeAssignedRealization($client, $admin, $employee);
+    $columns = array_map(
+        fn (string $column): array => ['data' => $column, 'searchable' => 'true', 'orderable' => 'true', 'search' => ['value' => '', 'regex' => 'false']],
+        ['work_date', 'sim_id', 'full_name', 'shift_name', 'sku_snapshot', 'product_name', 'target', 'target_price', 'actual', 'actual_price', 'description'],
+    );
+    $columns[6]['searchable'] = 'false';
+    $columns[7]['searchable'] = 'false';
+    $columns[9]['searchable'] = 'false';
+
+    $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.work').'?'.http_build_query([
+            'draw' => 1,
+            'start' => 0,
+            'length' => 10,
+            'search' => ['value' => 'agus', 'regex' => 'false'],
+            'columns' => $columns,
+            'order' => [['column' => 1, 'dir' => 'asc']],
+        ]));
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.full_name', 'Agus Search');
+});
+
 it('does not render a status filter on the work report page', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
