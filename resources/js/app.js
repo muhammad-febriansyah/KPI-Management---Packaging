@@ -168,6 +168,7 @@ const initializeGlobalSearch = () => {
     if (!wrapper || !input || !results) return;
 
     const groups = [
+        { key: 'clients', label: 'Client' },
         { key: 'employees', label: 'Karyawan' },
         { key: 'products', label: 'Produk' },
         { key: 'reports', label: 'Laporan' },
@@ -1515,10 +1516,12 @@ const initializeRealizationAssignments = () => {
             refreshButtons();
         }
     });
-    section.querySelector('[data-assignment-add-group]')?.addEventListener('click', () => {
+    const addEmployeesByGroup = (showWarning = true) => {
         const groupId = groupSelect?.value;
         if (!groupId) {
-            Swal.fire({ title: 'Pilih group dulu', text: 'Pilih salah satu group pada dropdown sebelum menekan tombol Group.', icon: 'warning' });
+            if (showWarning) {
+                Swal.fire({ title: 'Pilih group dulu', text: 'Pilih salah satu group pada dropdown sebelum menekan tombol Group.', icon: 'warning' });
+            }
             return;
         }
         const selected = new Set([...rows.querySelectorAll('[data-assignment-employee]')].map((select) => select.value).filter(Boolean));
@@ -1531,7 +1534,10 @@ const initializeRealizationAssignments = () => {
         toAdd.forEach((option) => { addRow(option.value); });
         if (groupSelect?.tomselect) groupSelect.tomselect.clear();
         else if (groupSelect) groupSelect.value = '';
-    });
+    };
+    section.querySelector('[data-assignment-add-group]')?.addEventListener('click', () => addEmployeesByGroup());
+    if (groupSelect?.tomselect) groupSelect.tomselect.on('change', () => addEmployeesByGroup(false));
+    else groupSelect?.addEventListener('change', () => addEmployeesByGroup(false));
     refreshButtons();
 };
 
@@ -1676,10 +1682,12 @@ const initializeRealizationAssignModal = () => {
         }
     });
 
-    modal.querySelector('[data-realization-assign-add-group]')?.addEventListener('click', () => {
+    const addEmployeesByGroup = (showWarning = true) => {
         const groupId = groupSelect?.value;
         if (!groupId) {
-            Swal.fire({ title: 'Pilih group dulu', text: 'Pilih salah satu group pada dropdown sebelum menekan tombol Group.', icon: 'warning' });
+            if (showWarning) {
+                Swal.fire({ title: 'Pilih group dulu', text: 'Pilih salah satu group pada dropdown sebelum menekan tombol Group.', icon: 'warning' });
+            }
             return;
         }
         const selected = new Set([...rows.querySelectorAll('[data-realization-assign-employee]')].map((select) => select.value).filter(Boolean));
@@ -1691,7 +1699,10 @@ const initializeRealizationAssignModal = () => {
         toAdd.forEach((option) => addRow(option.value));
         if (groupSelect.tomselect) groupSelect.tomselect.clear();
         else groupSelect.value = '';
-    });
+    };
+    modal.querySelector('[data-realization-assign-add-group]')?.addEventListener('click', () => addEmployeesByGroup());
+    if (groupSelect?.tomselect) groupSelect.tomselect.on('change', () => addEmployeesByGroup(false));
+    else groupSelect?.addEventListener('change', () => addEmployeesByGroup(false));
 
     document.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-realization-assign-open]');

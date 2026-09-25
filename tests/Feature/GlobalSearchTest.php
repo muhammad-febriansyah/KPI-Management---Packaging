@@ -71,6 +71,23 @@ it('matches static report shortcuts by title', function () {
     $response->assertJsonPath('reports.0.title', 'Laporan Payroll');
 });
 
+it('finds clients by client or account name for super admins', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create();
+    $targetClient = Client::factory()->create(['code' => 'TAYLOR-001', 'name' => 'PT Taylor Group']);
+    $role = Role::factory()->create(['code' => 'client']);
+    $account = User::factory()->create(['name' => 'Taylor PIC', 'username' => 'taylor.pic']);
+    $account->clients()->attach($targetClient, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('search', ['q' => 'taylor']));
+
+    $response->assertOk()
+        ->assertJsonPath('clients.0.title', 'PT Taylor Group')
+        ->assertJsonPath('clients.0.subtitle', 'TAYLOR-001');
+});
+
 it('does not expose employee or product search results without their menus', function () {
     $user = User::factory()->create();
     $role = Role::factory()->create(['code' => 'search-bare']);

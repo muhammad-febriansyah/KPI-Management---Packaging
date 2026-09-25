@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Product;
 use App\Services\CurrentClientService;
@@ -13,7 +14,7 @@ use Illuminate\Support\Str;
 class SearchController extends Controller
 {
     /**
-     * Global appbar search: looks up employees, products, and static report
+     * Global appbar search: looks up clients, employees, products, and static report
      * shortcuts for the current client, capped at a handful of results per
      * group so the dropdown stays scannable.
      */
@@ -22,8 +23,29 @@ class SearchController extends Controller
         $search = trim((string) $request->string('q'));
 
         if (mb_strlen($search) < 2) {
-            return response()->json(['employees' => [], 'products' => [], 'reports' => []]);
+            return response()->json(['clients' => [], 'employees' => [], 'products' => [], 'reports' => []]);
         }
+
+        $clients = $request->user()->is_super_admin && Gate::allows('viewAny', Client::class)
+            ? Client::query()
+                ->active()
+                ->where(fn ($q) => $q
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%")
+                    ->orWhereHas('users', fn ($q) => $q
+                        ->where('users.name', 'like', "%{$search}%")
+                        ->orWhere('users.username', 'like', "%{$search}%")
+                        ->orWhere('users.email', 'like', "%{$search}%")))
+                ->orderBy('name')
+                ->limit(5)
+                ->get(['id', 'code', 'name'])
+                ->map(fn (Client $client): array => [
+                    'id' => $client->id,
+                    'title' => $client->name,
+                    'subtitle' => $client->code,
+                    'url' => route('clients.index', ['q' => $client->name]),
+                ])
+            : collect();
 
         $employees = $request->user()->canAccessMenu('employees', $client->get()) && Gate::allows('viewAny', Employee::class)
             ? Employee::query()
@@ -64,6 +86,6 @@ class SearchController extends Controller
             ->map(fn (array $report): array => collect($report)->except('menu')->all())
             ->values();
 
-        return response()->json(['employees' => $employees, 'products' => $products, 'reports' => $reports]);
+        return response()->json(['clients' => $clients, 'employees' => $employees, 'products' => $products, 'reports' => $reports]);
     }
 }
