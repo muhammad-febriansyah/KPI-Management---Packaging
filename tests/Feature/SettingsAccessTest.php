@@ -58,12 +58,50 @@ it('shows the active client selector so super admins can find accounts created f
         ->get(route('settings.access'));
 
     $response->assertOk()
-        ->assertSee('data-client-switcher', false)
+        ->assertSee('data-client-filter', false)
         ->assertSee('data-select2-select', false)
         ->assertSee('data-select2-placeholder="Cari kode atau nama client..."', false)
-        ->assertSee('name="client_id"', false)
+        ->assertSee('name="client_filter"', false)
+        ->assertSee('>Semua client<', false)
         ->assertSee($currentClient->name)
         ->assertSee($otherClient->name);
+});
+
+it('lists users from every client when the user filter is empty', function () {
+    $currentClient = Client::factory()->create(['name' => 'PT Current']);
+    $otherClient = Client::factory()->create(['name' => 'PT Other']);
+    $admin = User::factory()->superAdmin()->create();
+    $account = User::factory()->create(['name' => 'Taylor PIC', 'username' => 'taylor.pic']);
+    attachRole($account, $otherClient, 'client');
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('settings.access', ['draw' => 1, 'start' => 0, 'length' => 25]));
+
+    $response->assertOk();
+    $row = collect($response->json('data'))->firstWhere('username', 'taylor.pic');
+
+    expect($row)
+        ->not->toBeNull()
+        ->and($row['client_name'])->toBe('PT Other');
+});
+
+it('filters user rows by the selected client without changing the active workspace', function () {
+    $currentClient = Client::factory()->create(['name' => 'PT Current']);
+    $otherClient = Client::factory()->create(['name' => 'PT Other']);
+    $admin = User::factory()->superAdmin()->create();
+    $account = User::factory()->create(['name' => 'Taylor PIC', 'username' => 'taylor.filtered']);
+    attachRole($account, $otherClient, 'client');
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('settings.access', ['draw' => 1, 'start' => 0, 'length' => 25, 'client_filter' => $otherClient->getKey()]));
+
+    $response->assertOk();
+    $rows = collect($response->json('data'));
+
+    expect($rows->firstWhere('username', 'taylor.filtered')['client_name'])->toBe('PT Other')
+        ->and(session('current_client_id'))->toBe($currentClient->getKey());
 });
 
 it('renders unified role form and reset password modal on settings/access', function () {

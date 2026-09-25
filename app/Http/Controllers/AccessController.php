@@ -24,14 +24,20 @@ class AccessController extends Controller
     {
         Gate::authorize('viewAny', Role::class);
 
+        $selectedClientId = $request->filled('client_filter') ? $request->integer('client_filter') : null;
+        if ($selectedClientId !== null) {
+            Client::query()->active()->findOrFail($selectedClientId);
+        }
+
         $query = User::query()
-            ->select('users.*', 'roles.code as role_code', 'client_user.status as client_user_status')
+            ->select('users.*', 'roles.code as role_code', 'client_user.status as client_user_status', 'client_user.client_id as access_client_id', 'clients.code as access_client_code', 'clients.name as access_client_name', 'clients.status as access_client_status')
             ->with(['employee.group'])
-            ->leftJoin('client_user', function ($join) use ($client): void {
+            ->leftJoin('client_user', function ($join) use ($selectedClientId): void {
                 $join->on('client_user.user_id', '=', 'users.id')
-                    ->where('client_user.client_id', $client->id());
+                    ->when($selectedClientId !== null, fn ($join) => $join->where('client_user.client_id', $selectedClientId));
             })
             ->leftJoin('roles', 'roles.id', '=', 'client_user.role_id')
+            ->leftJoin('clients', 'clients.id', '=', 'client_user.client_id')
             ->where(function ($query): void {
                 $query->where('users.is_super_admin', true)->orWhereNotNull('client_user.user_id');
             })
@@ -48,8 +54,16 @@ class AccessController extends Controller
                 })->addColumn('role_name', fn (User $user): string => view('components.badge', [
                     'variant' => $this->roleVariant($user),
                     'slot' => $this->roleName($user),
-                ])->render())
+                ])->render())->addColumn('client_name', fn (User $user): string => $user->access_client_name ?? '—')
                 ->addColumn('action', function (User $user) use ($client): string {
+                    $targetClient = $user->access_client_id
+                        ? (new Client)->forceFill([
+                            'id' => $user->access_client_id,
+                            'code' => $user->access_client_code,
+                            'name' => $user->access_client_name,
+                            'status' => $user->access_client_status,
+                        ])
+                        : $client->get();
                     $status = $user->is_super_admin ? $user->status : ($user->client_user_status ?? $user->status);
                     $isActive = $status === 'active';
                     $label = $isActive ? 'Nonaktifkan' : 'Aktifkan';
@@ -59,17 +73,18 @@ class AccessController extends Controller
 
                     if ($user->is_super_admin) {
                         $buttons[] = '<button type="button" data-super-admin-edit data-url="'.route('settings.access.super-admins.update', $user).'" data-super-admin="'.e(json_encode($this->superAdminPayload($user))).'" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
-                    } elseif ($user->role_code === 'employee' && $user->employee) {
+                    } elseif ($user->role_code === 'employee' && $user->employee && (int) $user->access_client_id === $client->id()) {
                         $buttons[] = '<button type="button" data-employee-edit data-url="'.route('employees.update', $user->employee).'" data-employee="'.e($user->employee->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
                     } elseif ($user->role_code === 'client') {
-                        $buttons[] = '<button type="button" data-client-edit data-url="'.route('clients.update', $client->get()).'?account_user_id='.$user->getKey().'" data-client="'.e(json_encode($this->clientPayload($user, $client->get()))).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
+                        $buttons[] = '<button type="button" data-client-edit data-url="'.route('clients.update', $targetClient).'?account_user_id='.$user->getKey().'" data-client="'.e(json_encode($this->clientPayload($user, $targetClient))).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
                     }
 
-                    $buttons[] = '<button type="button" data-user-reset data-url="'.route('settings.access.users.password', $user).'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#lock-closed"></use></svg>Reset password</button>';
+                    $clientQuery = $user->access_client_id ? '?client_id='.$user->access_client_id : '';
+                    $buttons[] = '<button type="button" data-user-reset data-url="'.route('settings.access.users.password', $user).$clientQuery.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#lock-closed"></use></svg>Reset password</button>';
 
                     if ($user->getKey() !== request()->user()?->getKey()) {
-                        $buttons[] = '<button type="button" data-user-status-toggle data-url="'.route('settings.access.users.status', $user).'" data-status="'.$status.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold '.$classes.'"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#'.$icon.'"></use></svg>'.$label.'</button>';
-                        $buttons[] = '<form method="POST" action="'.route('settings.access.users.destroy', $user).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
+                        $buttons[] = '<button type="button" data-user-status-toggle data-url="'.route('settings.access.users.status', $user).$clientQuery.'" data-status="'.$status.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold '.$classes.'"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#'.$icon.'"></use></svg>'.$label.'</button>';
+                        $buttons[] = '<form method="POST" action="'.route('settings.access.users.destroy', $user).$clientQuery.'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
                     }
 
                     return '<div class="flex flex-wrap justify-end gap-2">'.implode('', $buttons).'</div>';
@@ -87,6 +102,7 @@ class AccessController extends Controller
         return view('settings.access', [
             'currentClient' => $client->get(),
             'availableClients' => $client->availableFor($request->user()),
+            'selectedClientId' => $selectedClientId,
             'user' => $request->user(),
             'roles' => $roles,
             'menuOptions' => config('menu_permissions'),
@@ -218,23 +234,24 @@ class AccessController extends Controller
         return response()->json(['message' => 'Akun Client berhasil ditambahkan.'], 201);
     }
 
-    public function toggleUserStatus(User $user, CurrentClientService $client): JsonResponse
+    public function toggleUserStatus(Request $request, User $user, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
-        $this->assertUserVisible($user, $client);
+        $actionClient = $this->resolveActionClient($request, $user, $client);
+        $this->assertUserVisible($user, $actionClient);
         abort_if($user->getKey() === request()->user()?->getKey(), 422, 'Akun yang sedang digunakan tidak dapat dinonaktifkan.');
 
-        $currentStatus = $user->is_super_admin ? $user->status : ($user->clients()->whereKey($client->id())->first()?->pivot?->status ?? $user->status);
+        $currentStatus = $user->is_super_admin ? $user->status : ($user->clients()->whereKey($actionClient->getKey())->first()?->pivot?->status ?? $user->status);
         $status = $currentStatus === 'active' ? 'inactive' : 'active';
 
         if ($user->is_super_admin && $status === 'inactive' && User::query()->where('is_super_admin', true)->where('status', 'active')->count() <= 1) {
             abort(422, 'Minimal satu Super Admin aktif harus dipertahankan.');
         }
 
-        DB::transaction(function () use ($client, $status, $user): void {
+        DB::transaction(function () use ($actionClient, $status, $user): void {
             $user->update(['status' => $status]);
             if (! $user->is_super_admin) {
-                $user->clients()->updateExistingPivot($client->id(), ['status' => $status]);
+                $user->clients()->updateExistingPivot($actionClient->getKey(), ['status' => $status]);
             }
         });
 
@@ -270,7 +287,7 @@ class AccessController extends Controller
     public function resetPassword(Request $request, User $user, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
-        $this->assertUserVisible($user, $client);
+        $this->assertUserVisible($user, $this->resolveActionClient($request, $user, $client));
         $data = $request->validate([
             'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
             'password_confirmation' => ['required', 'string'],
@@ -280,10 +297,10 @@ class AccessController extends Controller
         return response()->json(['message' => 'Password berhasil direset.']);
     }
 
-    public function destroy(User $user, CurrentClientService $client): JsonResponse
+    public function destroy(Request $request, User $user, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
-        $this->assertUserVisible($user, $client);
+        $this->assertUserVisible($user, $this->resolveActionClient($request, $user, $client));
         abort_if($user->getKey() === request()->user()?->getKey(), 422, 'Akun yang sedang digunakan tidak dapat dihapus.');
         abort_if($user->is_super_admin && User::query()->where('is_super_admin', true)->count() <= 1, 422, 'Minimal satu Super Admin harus dipertahankan.');
 
@@ -317,9 +334,20 @@ class AccessController extends Controller
         return response()->json(['message' => 'Hak akses menu untuk role '.$role->name.' berhasil diperbarui.']);
     }
 
-    private function assertUserVisible(User $user, CurrentClientService $client): void
+    private function assertUserVisible(User $user, Client $client): void
     {
-        abort_unless($user->is_super_admin || $user->clients()->whereKey($client->id())->exists(), 404);
+        abort_unless($user->is_super_admin || $user->clients()->whereKey($client->getKey())->exists(), 404);
+    }
+
+    private function resolveActionClient(Request $request, User $user, CurrentClientService $currentClient): Client
+    {
+        if (! $user->is_super_admin && ! $request->filled('client_id')) {
+            return $currentClient->get();
+        }
+
+        $clientId = $request->integer('client_id');
+
+        return Client::query()->active()->findOrFail($clientId ?: $currentClient->id());
     }
 
     /** @return array<string, mixed> */

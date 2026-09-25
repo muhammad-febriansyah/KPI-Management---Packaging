@@ -10,11 +10,11 @@
 <section id="access-panel-users" data-access-panel="users" role="tabpanel" aria-labelledby="access-tab-users" tabindex="0">
 @if ($availableClients->count() > 1)
 <div class="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-<div><p class="text-sm font-semibold text-slate-900">Client aktif</p><p class="mt-1 text-xs text-slate-500">Pilih client untuk melihat akun dan hak aksesnya.</p></div>
-<form method="POST" action="{{ route('current-client.update') }}" class="w-full shrink-0 sm:w-80">@csrf @method('PUT')<label class="sr-only" for="access-client-selector">Pilih client aktif</label><select id="access-client-selector" name="client_id" data-client-switcher data-select2-select data-select2-placeholder="Cari kode atau nama client...">@foreach ($availableClients as $clientOption)<option value="{{ $clientOption->getKey() }}" @selected($clientOption->is($currentClient))>{{ $clientOption->code }} — {{ $clientOption->name }}</option>@endforeach</select></form>
+<div><p class="text-sm font-semibold text-slate-900">Filter client</p><p class="mt-1 text-xs text-slate-500">Kosongkan untuk menampilkan user dari semua client.</p></div>
+<form method="GET" action="{{ route('settings.access') }}" class="w-full shrink-0 sm:w-80"><label class="sr-only" for="access-client-selector">Filter client</label><select id="access-client-selector" name="client_filter" data-client-filter data-select2-select data-select2-placeholder="Cari kode atau nama client..."><option value="">Semua client</option>@foreach ($availableClients as $clientOption)<option value="{{ $clientOption->getKey() }}" @selected($clientOption->getKey() === $selectedClientId)>{{ $clientOption->code }} — {{ $clientOption->name }}</option>@endforeach</select></form>
 </div>
 @endif
-<x-card :padding="false"><div class="overflow-x-auto"><table data-server-table class="min-w-[980px] w-full text-left text-sm"><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div></x-card>
+<x-card :padding="false"><div class="overflow-x-auto"><table data-server-table class="min-w-[1120px] w-full text-left text-sm"><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Client</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div></x-card>
 </section>
 <section id="access-panel-permissions" data-access-panel="permissions" role="tabpanel" aria-labelledby="access-tab-permissions" tabindex="0" hidden>
 <div><h2 class="text-lg font-semibold text-slate-950">Hak Akses Menu per Role</h2><p class="mt-1 mb-4 text-sm text-slate-500">Centang menu yang boleh diakses tiap role. Super Admin selalu memiliki akses penuh.</p>

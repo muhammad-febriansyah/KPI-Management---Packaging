@@ -481,7 +481,7 @@ const initializeServerTables = () => {
         const dataTable = new DataTable(table, {
             processing: true,
             serverSide: true,
-            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } } },
+            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } } },
             pageLength: 10,
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
@@ -519,7 +519,7 @@ const initializeServerTables = () => {
             ] : resource === 'audit-logs' ? [
                 { data: 'created_at' }, { data: 'description' }, { data: 'ip_address' }, { data: 'user_name' },
             ] : resource === 'settings/access' ? [
-                { data: 'name' }, { data: 'username' }, { data: 'email' }, { data: 'role_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'name' }, { data: 'username' }, { data: 'email' }, { data: 'client_name', searchable: false }, { data: 'role_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'clients' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : [
@@ -1072,7 +1072,7 @@ const initializeDatepickers = () => {
 // scoped to the newly picked client. CurrentClientController redirects back to the same page.
 const initializeClientSwitcher = () => {
     document.addEventListener('change', (event) => {
-        const select = event.target.closest?.('[data-client-switcher]');
+        const select = event.target.closest?.('[data-client-switcher], [data-client-filter]');
         select?.form?.submit();
     });
 };
