@@ -101,6 +101,15 @@ it('accepts a new record stamped with the active client', function () {
     expect($unit->client_id)->toBe($activeClient->getKey());
 });
 
+it('accepts a numeric string client id from browser form submissions', function () {
+    $activeClient = Client::factory()->create();
+    app(CurrentClientService::class)->set($activeClient);
+
+    $unit = Unit::query()->create(['client_id' => (string) $activeClient->getKey(), 'code' => 'UNIT-1', 'name' => 'Karton', 'status' => 'active']);
+
+    expect((int) $unit->client_id)->toBe($activeClient->getKey());
+});
+
 it('keeps an explicit client_id when no client is active', function () {
     $client = Client::factory()->create();
 

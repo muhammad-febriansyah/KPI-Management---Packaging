@@ -36,7 +36,7 @@ trait BelongsToClient
                 return;
             }
 
-            if ($model->client_id !== $currentClient->id()) {
+            if ((int) $model->client_id !== $currentClient->id()) {
                 throw new RuntimeException(sprintf(
                     'Refusing to write a %s for client %d while client %d is active.',
                     $model::class,
