@@ -103,7 +103,7 @@ it('updates a unit via the ajax modal with method spoofing', function () {
     $this->assertDatabaseHas('units', ['id' => $unit->getKey(), 'name' => 'Pieces Updated', 'status' => 'inactive']);
 });
 
-it('lists only active units for the current client as select options', function () {
+it('lists active units from every client as select options', function () {
     [$user, $client] = unitClientContext();
     $active = Unit::factory()->create(['client_id' => $client->getKey(), 'name' => 'Karton', 'status' => 'active']);
     Unit::factory()->create(['client_id' => $client->getKey(), 'name' => 'Nonaktif', 'status' => 'inactive']);
@@ -111,6 +111,9 @@ it('lists only active units for the current client as select options', function 
 
     $response = $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->getJson(route('units.options'));
 
-    $response->assertOk()->assertExactJson(['results' => [['id' => $active->getKey(), 'text' => 'Karton']]]);
-    $response->assertJsonMissing(['text' => 'Nonaktif'])->assertJsonMissing(['text' => $otherClientUnit->name]);
+    $response->assertOk()->assertExactJson(['results' => [
+        ['id' => $active->getKey(), 'text' => 'Karton'],
+        ['id' => $otherClientUnit->getKey(), 'text' => 'Rahasia'],
+    ]]);
+    $response->assertJsonMissing(['text' => 'Nonaktif']);
 });

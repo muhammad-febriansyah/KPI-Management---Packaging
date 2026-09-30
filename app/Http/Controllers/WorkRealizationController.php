@@ -15,16 +15,46 @@ use App\Notifications\RealizationAssigned;
 use App\Notifications\RealizationSubmitted;
 use App\Services\CurrentClientService;
 use App\Services\RichTextSanitizer;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Yajra\DataTables\Facades\DataTables;
 
 class WorkRealizationController extends Controller
 {
+    private function generateNextBatchNumber(int $clientId, ?string $workDate = null, bool $lock = false): string
+    {
+        $date = $workDate === null ? now() : Carbon::createFromFormat('Y-m-d', $workDate);
+        $prefix = 'B-'.$date->format('Ymd').'-';
+        $query = Batch::query()
+            ->where('client_id', $clientId)
+            ->where('batch_no', 'like', $prefix.'%');
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        $lastSequence = $query->get(['batch_no'])
+            ->map(function (Batch $batch) use ($prefix): ?int {
+                $suffix = substr($batch->batch_no, strlen($prefix));
+
+                return preg_match('/^\d{4}$/', $suffix) === 1 ? (int) $suffix : null;
+            })
+            ->filter(fn (?int $sequence): bool => $sequence !== null)
+            ->max();
+
+        if ($lastSequence !== null && $lastSequence >= 9999) {
+            throw ValidationException::withMessages(['batch_no' => 'Nomor batch untuk tanggal tersebut sudah mencapai batas maksimal.']);
+        }
+
+        return $prefix.str_pad((string) (($lastSequence ?? 0) + 1), 4, '0', STR_PAD_LEFT);
+    }
+
     public function index(Request $request, CurrentClientService $client): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
@@ -40,31 +70,24 @@ class WorkRealizationController extends Controller
             ])
             ->withCount('employeeAssignments')
             ->latest('work_date');
-        if ($request->user()->roleCodeFor($client->get()) === 'employee') {
+        if (in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true)) {
             $query->where(function ($query) use ($request): void {
                 $query->where('created_by', $request->user()->id)
                     ->orWhereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $request->user()->id));
             });
         }
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request): string {
+            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i): string {
                 $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
 
-                if (! $request->user()->can('assign', $i)) {
-                    return $detailAction;
-                }
-
-                $assignedEmployeeIds = $i->employeeAssignments->pluck('employee_id')->values()->all();
-                $assignAction = '<button type="button" data-realization-assign-open data-url="'.route('realizations.assign', $i).'" data-assigned-employee-ids="'.e(json_encode($assignedEmployeeIds, JSON_THROW_ON_ERROR)).'" class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#users"></use></svg>Assign</button>';
-
-                return '<div class="flex flex-wrap items-center gap-2">'.$assignAction.$detailAction.'</div>';
+                return $detailAction;
             })->rawColumns(['action'])->toJson();
         }
 
         return view('realizations.index', [
             'currentClient' => $client->get(),
             'user' => $request->user(),
-            'employees' => $request->user()->is_super_admin || $request->user()->roleCodeFor($client->get()) === 'employee'
+            'employees' => in_array($request->user()->roleCodeFor($client->get()), ['admin', 'leader', 'employee'], true)
                 ? Employee::query()->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group:id,client_id,name')->orderBy('full_name')->get()
                 : collect(),
         ]);
@@ -123,6 +146,7 @@ class WorkRealizationController extends Controller
         return view('realizations.create', [
             'currentClient' => $client->get(),
             'user' => $request->user(),
+            'defaultBatchNumber' => $this->generateNextBatchNumber($client->id()),
             'employees' => Employee::query()
                 ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
                 ->where('client_id', $client->id())
@@ -184,6 +208,16 @@ class WorkRealizationController extends Controller
         })]);
     }
 
+    public function nextBatchNumber(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        $request->validate(['work_date' => ['nullable', 'date']]);
+
+        return response()->json([
+            'batch_no' => $this->generateNextBatchNumber($client->id(), $request->input('work_date')),
+        ]);
+    }
+
     public function store(StoreWorkRealizationRequest $request, CurrentClientService $client, RichTextSanitizer $sanitizer): JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
@@ -201,7 +235,7 @@ class WorkRealizationController extends Controller
             ? Product::query()->where('client_id', $client->id())->findOrFail($data['product_id'])
             : null;
         $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
-        if ($employeeIds === [] && ! $request->user()->is_super_admin) {
+        if ($employeeIds === [] && in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true)) {
             $employeeIds = [Employee::query()
                 ->where('client_id', $client->id())
                 ->where('user_id', $request->user()->id)
@@ -211,7 +245,19 @@ class WorkRealizationController extends Controller
         }
         unset($data['employee_ids']);
 
-        DB::transaction(function () use ($data, $employeeIds, $client, $product, $request): void {
+        $hasBatchNumber = filled($data['batch_no'] ?? null);
+        unset($data['batch_no']);
+
+        DB::transaction(function () use ($data, $hasBatchNumber, $employeeIds, $client, $product, $request): void {
+            if ($hasBatchNumber) {
+                $batchNumber = $this->generateNextBatchNumber($client->id(), $data['work_date'] ?? null, true);
+                $batch = Batch::query()->firstOrCreate(
+                    ['client_id' => $client->id(), 'batch_no' => $batchNumber],
+                    ['product_id' => $product?->getKey(), 'status' => 'active'],
+                );
+                $data['batch_id'] = $batch->getKey();
+            }
+
             $realization = WorkRealization::query()->create($data + [
                 'client_id' => $client->id(),
                 'sku_snapshot' => $product?->sku,

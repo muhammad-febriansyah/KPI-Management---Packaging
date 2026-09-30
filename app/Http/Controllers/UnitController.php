@@ -58,8 +58,7 @@ class UnitController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('viewAny', Unit::class);
-
-        $units = Unit::query()->where('client_id', $currentClient->id())->where('status', 'active')->orderBy('name')->get();
+        $units = Unit::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get();
 
         return response()->json(['results' => $units->map(fn (Unit $unit): array => ['id' => $unit->id, 'text' => $unit->name])]);
     }

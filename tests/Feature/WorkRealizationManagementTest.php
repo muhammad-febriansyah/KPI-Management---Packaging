@@ -53,8 +53,50 @@ it('shows the realization create page instead of a modal', function () {
     $response->assertSee('data-file-max-size="3145728"', false);
     $response->assertSee('data-file-compress="true"', false);
     $response->assertSee('data-file-preview class="hidden size-16 rounded-lg border border-line bg-slate-800 object-contain p-1"', false);
-    $response->assertSee('data-batch-select data-tom-select data-tom-select-remote=', false);
-    $response->assertSee('data-tom-select-depends-on="product_id"', false);
+    $response->assertSee('name="batch_no"', false);
+    $response->assertSee('data-batch-number', false);
+    $response->assertSee('Format otomatis dan increment: B-yyyymmdd-0001', false);
+});
+
+it('autofills and persists the realization batch number', function () {
+    test()->travelTo('2026-09-29 08:00:00');
+    $superAdmin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+
+    $page = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.create'));
+
+    $page->assertSee('value="B-20260929-0001"', false);
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), [
+            'work_date' => '2026-09-29',
+            'batch_no' => 'B-20260929-0001',
+        ]);
+
+    $response->assertCreated();
+    $realization = WorkRealization::query()->where('client_id', $client->getKey())->firstOrFail();
+    $batch = Batch::query()->where('client_id', $client->getKey())->where('batch_no', 'B-20260929-0001')->firstOrFail();
+
+    expect($realization->batch_id)->toBe($batch->getKey());
+    $this->assertDatabaseHas('batches', [
+        'id' => $batch->getKey(),
+        'client_id' => $client->getKey(),
+        'batch_no' => 'B-20260929-0001',
+    ]);
+
+    $secondResponse = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), [
+            'work_date' => '2026-09-29',
+            'batch_no' => 'B-20260929-0001',
+        ]);
+
+    $secondResponse->assertCreated();
+    $secondBatch = Batch::query()->where('client_id', $client->getKey())->where('batch_no', 'B-20260929-0002')->firstOrFail();
+    expect($secondBatch->getKey())->not->toBe($batch->getKey());
 });
 
 it('lets an employee open the realization form with assignment controls', function () {
@@ -255,6 +297,38 @@ it('uses one product rate for employees from every rate category', function () {
     $tableResponse->assertOk()->assertJsonPath('data.0.total_price', 'Rp 120');
 });
 
+it('splits a realization total among three assigned employees', function () {
+    $superAdmin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employees = collect(range(1, 3))->map(fn (): Employee => Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+    ]));
+    $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    $product = Product::factory()->create(['client_id' => $client->getKey(), 'unit_id' => $unit->getKey(), 'employee_rate' => 850]);
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), [
+            'work_date' => '2026-09-09',
+            'shift_id' => $shift->getKey(),
+            'product_id' => $product->getKey(),
+            'total_output' => 1000,
+            'employee_ids' => $employees->pluck('id')->all(),
+        ]);
+
+    $response->assertCreated();
+    $amounts = DB::table('realization_employees')
+        ->whereIn('employee_id', $employees->pluck('id'))
+        ->orderBy('id')
+        ->pluck('gross_amount')
+        ->map(fn (mixed $amount): int => (int) $amount)
+        ->all();
+
+    expect($amounts)->toBe([283333, 283333, 283334]);
+});
+
 it('splits realization gross amount when employees are assigned later', function () {
     $superAdmin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
@@ -411,7 +485,7 @@ it('renders the realization assignment modal on the index page', function () {
     $response->assertSee(route('realizations.create'), false);
 });
 
-it('places the realization assignment button inside the action column', function () {
+it('hides the realization assignment button from the action column', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -426,11 +500,11 @@ it('places the realization assignment button inside the action column', function
 
     $response->assertOk();
     $action = $response->json('data.0.action');
-    expect($action)->toContain('data-realization-assign-open')->toContain('bg-orange-50')->toContain('heroicons.svg#users')->toContain('Detail')->toContain('Assign');
+    expect($action)->not->toContain('data-realization-assign-open')->not->toContain('Assign')->toContain('Detail');
     expect($response->json('data.0.assignment_action'))->toBeNull();
 });
 
-it('passes existing employee assignments to the assignment modal', function () {
+it('hides existing employee assignment controls from the action column', function () {
     $superAdmin = User::factory()->superAdmin()->create();
     $employeeUser = User::factory()->create();
     $client = Client::factory()->create();
@@ -448,7 +522,10 @@ it('passes existing employee assignments to the assignment modal', function () {
         ->getJson(route('realizations.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
 
     $response->assertOk();
-    expect($response->json('data.0.action'))->toContain('data-assigned-employee-ids="['.$employee->getKey().']"');
+    expect($response->json('data.0.action'))
+        ->not->toContain('data-realization-assign-open')
+        ->not->toContain('data-assigned-employee-ids')
+        ->toContain('Detail');
 });
 
 it('filters batch options to only those belonging to the selected product', function () {

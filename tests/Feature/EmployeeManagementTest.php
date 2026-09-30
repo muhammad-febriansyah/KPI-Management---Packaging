@@ -3,6 +3,7 @@
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Group;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -17,6 +18,7 @@ function validEmployeePayload(array $overrides = []): array
         'email' => 'ananda@example.com',
         'phone' => '081234567890',
         'join_date' => '2026-01-01',
+        'birth_date' => '1995-01-01',
         'gender' => 'male',
         'employee_status' => 'permanent',
         'marital_status' => 'married',
@@ -43,7 +45,7 @@ it('stores an employee with sim id, email, and marital status', function () {
     ]);
     $this->assertDatabaseHas('users', ['id' => $employee->user_id, 'name' => 'Ananda Julian', 'username' => $employee->employee_no, 'email' => 'ananda@example.com', 'status' => 'active']);
     $this->assertDatabaseHas('client_user', ['client_id' => $client->getKey(), 'user_id' => $employee->user_id, 'status' => 'active']);
-    expect(Hash::check('password', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
+    expect(Hash::check('01011995', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
 });
 
 it('keeps email and password out of the employee master form', function () {
@@ -57,7 +59,50 @@ it('keeps email and password out of the employee master form', function () {
     $response->assertOk()
         ->assertDontSee('name="email"', false)
         ->assertDontSee('name="password"', false)
+        ->assertSee('Password default: tanggal lahir dengan format ddmmyyyy.', false)
+        ->assertSee('name="birth_date"', false)
         ->assertSee('Password dapat diatur dari menu Akses.');
+});
+
+it('shows a searchable client selector for super admins', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create(['name' => 'PT Client Pilihan']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('employees.index'));
+
+    $response->assertOk()
+        ->assertSee('name="client_id"', false)
+        ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
+        ->assertSee($client->name, false);
+});
+
+it('stores an employee under the selected client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create();
+    $selectedClient = Client::factory()->create();
+    $group = Group::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Packing']);
+
+    $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('employees.group-options', ['client_id' => $selectedClient->getKey()]))
+        ->assertOk()
+        ->assertJsonPath('results.0.id', $group->getKey());
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->postJson(route('employees.store'), validEmployeePayload([
+            'client_id' => $selectedClient->getKey(),
+            'group_id' => $group->getKey(),
+        ]));
+
+    $response->assertCreated();
+    $this->assertDatabaseHas('employees', [
+        'client_id' => $selectedClient->getKey(),
+        'group_id' => $group->getKey(),
+        'full_name' => 'Ananda Julian',
+    ]);
 });
 
 it('requires marital status when storing an employee', function () {
@@ -84,7 +129,7 @@ it('creates an employee account that can log in with the generated id', function
     $this->post(route('logout'));
     $response = $this->post(route('login.store'), [
         'login' => $employee->employee_no,
-        'password' => 'password',
+        'password' => '01011995',
     ]);
 
     $response->assertRedirectToRoute('dashboard');
@@ -114,6 +159,36 @@ it('updates an employee with sim id, email, and marital status', function () {
     $response->assertOk();
     $this->assertDatabaseHas('employees', ['id' => $employee->getKey(), 'employee_no' => $employee->employee_no, 'marital_status' => 'divorced', 'sim_id' => 'PEG1234']);
     $this->assertDatabaseHas('users', ['id' => $employee->fresh()->user_id, 'name' => 'Ananda Julian', 'email' => 'ananda@example.com']);
+});
+
+it('preserves a disabled employee account when employee details are updated', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $account = User::factory()->inactive()->create();
+    $role = Role::factory()->create(['code' => 'employee']);
+    $account->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'inactive']);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $account->getKey()]);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload(['full_name' => 'Nama Baru']));
+
+    $response->assertOk();
+    $this->assertDatabaseHas('users', ['id' => $account->getKey(), 'status' => 'inactive']);
+    $this->assertDatabaseHas('client_user', ['client_id' => $client->getKey(), 'user_id' => $account->getKey(), 'status' => 'inactive']);
+});
+
+it('keeps an inactive employee group available while editing employees', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $group = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Nonaktif', 'status' => 'inactive']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'group_id' => $group->getKey()]);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('employees.index'));
+
+    $response->assertOk()->assertSee('Group Nonaktif');
 });
 
 it('includes humanized labels in the detail payload for the datatable', function () {

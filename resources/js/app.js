@@ -444,7 +444,8 @@ const refreshMasterSelectOptions = async () => {
         if (!select?.tomselect) return;
 
         try {
-            const { results } = await $.ajax({ url, headers: { Accept: 'application/json' }, dataType: 'json' });
+            const clientId = document.querySelector('[data-product-form] select[name="client_id"]')?.value;
+            const { results } = await $.ajax({ url, data: clientId ? { client_id: clientId } : {}, headers: { Accept: 'application/json' }, dataType: 'json' });
             const tomSelect = select.tomselect;
             const current = tomSelect.getValue();
             tomSelect.clearOptions();
@@ -468,10 +469,11 @@ const initializeServerTables = () => {
         // A table normally infers its resource from the page URL. A page that embeds more
         // than one table (e.g. the product form's quick-manage modals) must say explicitly
         // which resource each one lists, since they all share that one URL.
-        const resource = table.dataset.serverTableResource || (window.location.pathname.includes('groups') ? 'groups' : window.location.pathname.includes('shifts') ? 'shifts' : window.location.pathname.includes('cost-centers') ? 'cost-centers' : window.location.pathname.includes('employees') ? 'employees' : window.location.pathname.includes('products') ? 'products' : window.location.pathname.includes('realizations') ? 'realizations' : window.location.pathname.includes('deductions') ? 'deductions' : window.location.pathname.includes('reports/payroll') ? 'reports/payroll' : window.location.pathname.includes('reports/work') ? 'reports/work' : window.location.pathname.includes('audit-logs') ? 'audit-logs' : window.location.pathname.includes('settings/access') ? 'settings/access' : window.location.pathname.includes('clients') ? 'clients' : 'units');
+        const resource = table.dataset.serverTableResource || (window.location.pathname.includes('groups') ? 'groups' : window.location.pathname.includes('shifts') ? 'shifts' : window.location.pathname.includes('cost-centers') ? 'cost-centers' : window.location.pathname.includes('employees') ? 'employees' : window.location.pathname.includes('products') ? 'products' : window.location.pathname.includes('realizations') ? 'realizations' : window.location.pathname.includes('invoices') ? 'invoices' : window.location.pathname.includes('deductions') ? 'deductions' : window.location.pathname.includes('reports/payroll') ? 'reports/payroll' : window.location.pathname.includes('reports/work') ? 'reports/work' : window.location.pathname.includes('audit-logs') ? 'audit-logs' : window.location.pathname.includes('settings/access') ? 'settings/access' : window.location.pathname.includes('clients') ? 'clients' : 'units');
         const auditFilters = resource === 'audit-logs' ? document.querySelector('[data-audit-filters]') : null;
         const workFilters = resource === 'reports/work' ? document.querySelector('[data-work-filters]') : null;
         const payrollFilters = resource === 'reports/payroll' ? document.querySelector('[data-payroll-filters]') : null;
+        const invoiceFilters = resource === 'invoices' ? document.querySelector('[data-invoice-filters]') : null;
         const initialSearch = new URLSearchParams(window.location.search).get('q') ?? '';
         const headerRow = table.querySelector('thead tr');
         const numberHeader = document.createElement('th');
@@ -481,7 +483,7 @@ const initializeServerTables = () => {
         const dataTable = new DataTable(table, {
             processing: true,
             serverSide: true,
-            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.date_from = payrollFilters.querySelector('[data-payroll-date-from]')?.value; params.date_to = payrollFilters.querySelector('[data-payroll-date-to]')?.value; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } } },
+            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.period = payrollFilters.querySelector('[data-payroll-period]')?.value; } if (invoiceFilters) { params.period = invoiceFilters.querySelector('[data-invoice-period]')?.value; params.shift_id = invoiceFilters.querySelector('[data-invoice-shift]')?.value; params.cost_center_id = invoiceFilters.querySelector('[data-invoice-cost-center]')?.value; params.sku = invoiceFilters.querySelector('[data-invoice-sku]')?.value; params.batch_no = invoiceFilters.querySelector('[data-invoice-batch]')?.value; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } } },
             pageLength: 10,
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
@@ -489,15 +491,17 @@ const initializeServerTables = () => {
             columns: [{ data: null, orderable: false, searchable: false, className: 'w-14 px-5 py-4 text-slate-500', render: (_data, _type, _row, meta) => Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1 }, ...(resource === 'shifts' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'start_time' }, { data: 'end_time' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'employees' ? [
-                { data: 'employee_no' }, { data: 'full_name' }, { data: 'group_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'employee_no' }, { data: 'full_name' }, { data: 'client_name' }, { data: 'group_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'products' ? [
                 { data: 'client_name' }, { data: 'sku' }, { data: 'name' }, { data: 'unit_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'realizations' ? [
                 { data: 'work_date' }, { data: 'shift_name' }, { data: 'batch_label' }, { data: 'sku_snapshot' }, { data: 'product_label' }, { data: 'total_output' }, { data: 'total_price' }, { data: 'assignment_count' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'reports/work' ? [
-                { data: 'work_date' }, { data: 'sim_id' }, { data: 'full_name' }, { data: 'shift_name' }, { data: 'sku_snapshot' }, { data: 'product_name' },
+                { data: 'work_date' }, { data: 'employee_no' }, { data: 'sim_id' }, { data: 'full_name' }, { data: 'shift_name' }, { data: 'sku_snapshot' }, { data: 'product_name' },
                 { data: 'target', orderable: false, searchable: false }, { data: 'target_price', orderable: false, searchable: false },
                 { data: 'actual' }, { data: 'actual_price', orderable: false, searchable: false }, { data: 'description', defaultContent: '—' },
+            ] : resource === 'invoices' ? [
+                { data: 'invoice' }, { data: 'period' }, { data: 'shift' }, { data: 'sku' }, { data: 'cost_center' }, { data: 'batch' }, { data: 'qty' }, { data: 'unit' }, { data: 'manpower' }, { data: 'po_price' }, { data: 'amount_po' },
             ] : resource === 'reports/payroll' ? [
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'gender' }, { data: 'attendance_days' },
                 { data: 'net_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
@@ -511,11 +515,15 @@ const initializeServerTables = () => {
                 { data: 'correction_minus', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'correction_plus', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
             ] : resource === 'deductions' ? [
-                { data: 'created_at' }, { data: 'periode' }, { data: 'sim_id' }, { data: 'full_name' },
-                { data: 'bpjs_health' }, { data: 'bpjs_employment' },
+                { data: 'client_code' }, { data: 'bulan' }, { data: 'minggu', defaultContent: '—' }, { data: 'no_karyawan' }, { data: 'full_name' },
+                { data: 'uniform_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'equipment_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'meal_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'bpjs_health' }, { data: 'bpjs_employment' }, { data: 'salary_advance_type' },
+                { data: 'salary_advance_value', render: (value, _type, row) => row.salary_advance_type === 'Percentage' ? `${Number(value ?? 0).toLocaleString('id-ID')}%` : row.salary_advance_type === 'Fixed' ? `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` : '—' },
                 { data: 'correction_minus', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'correction_plus', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
-                { data: 'action', orderable: false, searchable: false },
+                { data: 'notes', defaultContent: '—' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'audit-logs' ? [
                 { data: 'created_at' }, { data: 'description' }, { data: 'ip_address' }, { data: 'user_name' },
             ] : resource === 'settings/access' ? [
@@ -543,24 +551,57 @@ const initializeServerTables = () => {
         });
         table._dataTable = dataTable;
         auditFilters?.querySelector('[data-audit-filter-submit]')?.addEventListener('click', () => dataTable.ajax.reload());
-        workFilters?.querySelector('[data-work-filter-submit]')?.addEventListener('click', () => dataTable.ajax.reload());
+        const updateWorkExportLink = () => {
+            const dateFrom = workFilters?.querySelector('[data-work-date-from]')?.value ?? '';
+            const dateTo = workFilters?.querySelector('[data-work-date-to]')?.value ?? '';
+            const link = document.querySelector('[data-work-export-excel]');
+            if (!link) return;
+
+            const url = new URL(link.href, window.location.origin);
+            dateFrom ? url.searchParams.set('date_from', dateFrom) : url.searchParams.delete('date_from');
+            dateTo ? url.searchParams.set('date_to', dateTo) : url.searchParams.delete('date_to');
+            link.href = url.toString();
+        };
+        workFilters?.querySelector('[data-work-filter-submit]')?.addEventListener('click', () => {
+            dataTable.ajax.reload();
+            updateWorkExportLink();
+        });
         const updatePayrollExportLinks = () => {
-            const dateFrom = payrollFilters?.querySelector('[data-payroll-date-from]')?.value ?? '';
-            const dateTo = payrollFilters?.querySelector('[data-payroll-date-to]')?.value ?? '';
+            const period = payrollFilters?.querySelector('[data-payroll-period]')?.value ?? '';
 
             ['[data-payroll-export-excel]', '[data-payroll-export-pdf]'].forEach((selector) => {
                 const link = document.querySelector(selector);
                 if (!link) return;
 
                 const url = new URL(link.href, window.location.origin);
-                url.searchParams.set('date_from', dateFrom);
-                url.searchParams.set('date_to', dateTo);
+                period ? url.searchParams.set('period', period) : url.searchParams.delete('period');
+                url.searchParams.delete('date_from');
+                url.searchParams.delete('date_to');
                 link.href = url.toString();
             });
         };
         payrollFilters?.querySelector('[data-payroll-filter-submit]')?.addEventListener('click', () => {
             dataTable.ajax.reload();
             updatePayrollExportLinks();
+        });
+        const updateInvoiceExportLink = () => {
+            const link = document.querySelector('[data-invoice-export-excel]');
+            if (!link) return;
+
+            const url = new URL(link.href, window.location.origin);
+            const values = {
+                period: invoiceFilters?.querySelector('[data-invoice-period]')?.value ?? '',
+                shift_id: invoiceFilters?.querySelector('[data-invoice-shift]')?.value ?? '',
+                cost_center_id: invoiceFilters?.querySelector('[data-invoice-cost-center]')?.value ?? '',
+                sku: invoiceFilters?.querySelector('[data-invoice-sku]')?.value ?? '',
+                batch_no: invoiceFilters?.querySelector('[data-invoice-batch]')?.value ?? '',
+            };
+            Object.entries(values).forEach(([key, value]) => value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
+            link.href = url.toString();
+        };
+        invoiceFilters?.querySelector('[data-invoice-filter-submit]')?.addEventListener('click', () => {
+            dataTable.ajax.reload();
+            updateInvoiceExportLink();
         });
     });
 };
@@ -640,19 +681,50 @@ const initializeUserCreateModal = () => {
     if (!modal || !trigger || !form) return;
 
     const sections = [...modal.querySelectorAll('[data-user-create-section]')];
+    const employeeSection = modal.querySelector('[data-user-create-section="employee"]');
+    const employeeSelect = employeeSection?.querySelector('[name="employee_id"]');
+    const defaultPasswordToggle = employeeSection?.querySelector('[data-user-default-password-toggle]');
+    const defaultPasswordValue = employeeSection?.querySelector('[name="use_default_password"]');
+    const defaultPasswordStatus = employeeSection?.querySelector('[data-user-default-password-status]');
+    const manualPasswordFields = employeeSection?.querySelector('[data-user-manual-password-fields]');
+    const manualPasswordInputs = manualPasswordFields?.querySelectorAll('input[name="password"], input[name="password_confirmation"]') ?? [];
+    const selectedEmployee = () => employeeSelect?.tomselect?.options?.[employeeSelect.value] ?? null;
+    const setPasswordMode = (useDefault) => {
+        if (!defaultPasswordValue || !manualPasswordFields || !defaultPasswordStatus || !defaultPasswordToggle) return;
+        defaultPasswordValue.value = useDefault ? '1' : '0';
+        manualPasswordFields.classList.toggle('hidden', useDefault);
+        manualPasswordInputs.forEach((input) => {
+            input.disabled = useDefault;
+            input.required = !useDefault;
+            if (useDefault) input.value = '';
+        });
+        defaultPasswordToggle.textContent = useDefault ? 'Gunakan password manual' : 'Gunakan password default';
+        defaultPasswordStatus.textContent = useDefault ? 'Password otomatis memakai tanggal lahir dengan format ddmmyyyy.' : 'Password manual. Bisa diganti ke default tanggal lahir.';
+    };
+    const syncDefaultPasswordToggle = () => {
+        const employee = selectedEmployee();
+        const hasBirthDate = Boolean(employee?.birth_date);
+        if (defaultPasswordToggle) defaultPasswordToggle.disabled = !hasBirthDate;
+        if (!hasBirthDate && defaultPasswordValue?.value === '1') setPasswordMode(false);
+    };
     const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
     const setRole = (role) => {
+        const sectionRole = role === 'leader' ? 'employee' : role;
         sections.forEach((section) => {
-            const active = section.dataset.userCreateSection === role;
+            const active = section.dataset.userCreateSection === sectionRole;
             section.classList.toggle('hidden', !active);
             section.querySelectorAll('input, select, textarea').forEach((input) => { input.disabled = !active; });
         });
+        setPasswordMode(sectionRole === 'employee' && defaultPasswordValue?.value === '1');
+        syncDefaultPasswordToggle();
         modal.querySelectorAll('[data-datepicker]').forEach((input) => input._flatpickr?.clear());
         modal.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.setValue(select.value, true));
     };
     const open = () => {
         form.reset();
         setRole('super-admin');
+        setPasswordMode(false);
+        syncDefaultPasswordToggle();
         modal.classList.remove('hidden');
         modal.classList.add('grid');
         modal.querySelector('[data-user-create-section="super-admin"] input[name="name"]')?.focus();
@@ -662,11 +734,22 @@ const initializeUserCreateModal = () => {
     modal.querySelectorAll('[data-user-create-close]').forEach((button) => button.addEventListener('click', close));
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     form.querySelectorAll('input[name="create_role"]').forEach((input) => input.addEventListener('change', () => setRole(input.value)));
+    employeeSelect?.addEventListener('change', syncDefaultPasswordToggle);
+    defaultPasswordToggle?.addEventListener('click', () => {
+        if (!selectedEmployee()?.birth_date) {
+            Swal.fire({ title: 'Tanggal lahir belum tersedia', text: 'Pilih karyawan yang memiliki tanggal lahir terlebih dahulu.', icon: 'info' });
+            return;
+        }
+
+        setPasswordMode(defaultPasswordValue?.value !== '1');
+    });
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const role = form.querySelector('input[name="create_role"]:checked')?.value;
         const config = {
             'super-admin': { url: '/settings/access/super-admins', label: 'Super Admin' },
+            admin: { url: '/settings/access/admin-accounts', label: 'Admin' },
+            leader: { url: '/settings/access/employee-accounts', label: 'Akun Leader' },
             employee: { url: '/settings/access/employee-accounts', label: 'Akun Karyawan' },
             client: { url: '/settings/access/client-accounts', label: 'Akun Client' },
         }[role];
@@ -862,6 +945,7 @@ const initializeEmployeeDetailModal = () => {
         if (!trigger) return;
 
         const data = JSON.parse(trigger.dataset.employeeDetail);
+        set('client', data.client_name);
         set('employee-no', data.employee_no);
         set('sim-id', data.sim_id);
         set('full-name', data.full_name);
@@ -1083,8 +1167,9 @@ const initializeTomSelect = () => {
         }
 
         const remoteUrl = select.dataset.tomSelectRemote;
-        const dependsOnParam = select.dataset.tomSelectDependsOn;
-        const dependsOnSelector = select.dataset.tomSelectDependsOnSelector;
+        const isGlobalMasterSelect = ['unit_id', 'group_id', 'cost_center_id'].includes(select.name);
+        const dependsOnParam = isGlobalMasterSelect ? null : select.dataset.tomSelectDependsOn;
+        const dependsOnSelector = isGlobalMasterSelect ? null : select.dataset.tomSelectDependsOnSelector;
 
         const tomSelect = new TomSelect(select, {
             placeholder: select.dataset.tomSelectPlaceholder ?? 'Pilih...',
@@ -1182,10 +1267,16 @@ const initializeSelect2 = () => {
         if (select.hasClass('select2-hidden-accessible')) return;
 
         const remoteUrl = select.data('select2-remote');
+        const isClientForm = Boolean(select.closest('[data-product-form], [data-employee-form], [data-deduction-create-form]'));
+        const clientPlaceholder = isClientForm ? 'Pilih client...' : (select.data('select2-placeholder') ?? 'Pilih...');
+
+        if (select.is('[data-deduction-client]')) {
+            select.val('');
+        }
 
         select.select2({
             width: '100%',
-            placeholder: select.data('select2-placeholder') ?? 'Pilih...',
+            placeholder: clientPlaceholder,
             allowClear: true,
             ...(remoteUrl ? { minimumInputLength: 1 } : {}),
             ...(remoteUrl ? {
@@ -1207,6 +1298,26 @@ const initializeSelect2 = () => {
                     cache: true,
                 },
             } : {}),
+        });
+    });
+
+    ['[data-product-form]', '[data-employee-form]'].forEach((formSelector) => {
+        const form = document.querySelector(formSelector);
+        const clientSelect = form?.querySelector('select[name="client_id"]');
+        if (!clientSelect) return;
+
+        $(clientSelect).on('change', (_event, options = {}) => {
+            if (form.matches('[data-product-form]') || form.matches('[data-employee-form]')) {
+                refreshMasterSelectOptions();
+                return;
+            }
+
+            if (!options.preserveMasterSelections) {
+                form.querySelectorAll('select[data-tom-select][data-tom-select-depends-on="client_id"]').forEach((select) => {
+                    select.tomselect?.clear(true);
+                    select.tomselect?.clearOptions();
+                });
+            }
         });
     });
 };
@@ -1251,8 +1362,30 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
     });
     addIcon(form.querySelector('button[type="submit"]'), 'check-circle');
     const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
+    const setTomSelectValue = (select, value, item, field) => {
+        const tomSelect = select.tomselect;
+        const normalizedValue = value === null || value === undefined ? '' : String(value);
+
+        if (!tomSelect) {
+            select.value = normalizedValue;
+            return;
+        }
+
+        if (!normalizedValue) {
+            tomSelect.clear(true);
+            return;
+        }
+
+        if (!tomSelect.options[normalizedValue]) {
+            const labelField = `${field.replace(/_id$/, '')}_name`;
+            tomSelect.addOption({ value: normalizedValue, text: item?.[labelField] ?? normalizedValue });
+        }
+
+        tomSelect.setValue(normalizedValue, true);
+    };
     const open = (item = null, url = `/${plural}`) => {
         form.reset();
+        form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.clear(true));
         form.querySelectorAll('[data-rupiah-field] [data-rupiah-raw]').forEach((input) => input.dispatchEvent(new Event('input', { bubbles: true })));
         form.querySelector('[data-product-name]')?.setAttribute('value', '');
         if (form.querySelector('[data-product-name]')) form.querySelector('[data-product-name]').value = '';
@@ -1263,7 +1396,11 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         fields.forEach((field) => {
             const input = item && form.elements[field];
             if (!input) return;
-            input.value = item[field] ?? '';
+            if (input.tomselect) {
+                setTomSelectValue(input, item[field], item, field);
+            } else {
+                input.value = item[field] ?? '';
+            }
             input.dispatchEvent(new Event('input', { bubbles: true })); // repaint dependents like rupiah-input displays
         });
         form.querySelectorAll('[data-required-on-create]').forEach((input) => {
@@ -1285,8 +1422,16 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
             toggle.setAttribute('aria-label', 'Tampilkan password');
         });
         form.querySelectorAll('[data-datepicker], input[type="date"], input[type="month"]').forEach((input) => { if (input.value) input._flatpickr?.setDate(input.value, false); });
-        form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.setValue(select.value, true));
-        form.querySelectorAll('[data-select2-select]').forEach((select) => $(select).val(select.value).trigger('change'));
+        form.querySelectorAll('[data-tom-select]').forEach((select) => {
+            const field = select.name;
+            setTomSelectValue(select, select.value, item, field);
+        });
+        form.querySelectorAll('[data-select2-select]').forEach((select) => $(select).val(item ? select.value : '').trigger('change', [{ preserveMasterSelections: Boolean(item) }]));
+        form.querySelectorAll('[data-disabled-on-edit]').forEach((input) => {
+            const disabled = Boolean(item);
+            input.disabled = disabled;
+            $(input).prop('disabled', disabled).trigger('change.select2');
+        });
         if (title) title.textContent = item ? `Edit ${confirmTitle}` : `Tambah ${confirmTitle}`;
         modal.classList.remove('hidden');
         modal.classList.add('grid');
@@ -1377,7 +1522,6 @@ const initializeActionButtonStyles = () => {
 
 const initializeRealizationProductPreview = () => {
     const select = document.querySelector('[data-product-select]');
-    const batchSelect = document.querySelector('[data-batch-select]');
     const nameInput = document.querySelector('[data-product-name]');
     const unitInput = document.querySelector('[data-product-unit]');
     const estimateInput = document.querySelector('[data-product-estimate]');
@@ -1398,22 +1542,6 @@ const initializeRealizationProductPreview = () => {
             const estimate = selectedTomOption?.estimated_output_per_hour;
             estimateInput.value = estimate ? `${Number(estimate).toLocaleString('id-ID')} / jam` : '';
         }
-        if (!batchSelect?.tomselect) return;
-        const productId = select.value;
-        if (batchSelect.dataset.lastProductFilter !== productId) {
-            const selectedBatchId = batchSelect.tomselect.getValue();
-            const selectedBatch = selectedBatchId ? batchSelect.tomselect.options[selectedBatchId] : null;
-            const selectedBatchBelongsToProduct = selectedBatch && String(selectedBatch.product_id ?? '') === String(productId);
-
-            batchSelect.dataset.lastProductFilter = productId;
-            if (!selectedBatchBelongsToProduct) {
-                batchSelect.tomselect.clear(true);
-            }
-            batchSelect.tomselect.clearOptions();
-            if (productId) {
-                batchSelect.tomselect.load('');
-            }
-        }
     };
 
     select.addEventListener('change', update);
@@ -1421,24 +1549,32 @@ const initializeRealizationProductPreview = () => {
         nameInput.value = payload?.params?.data?.name ?? payload?.params?.data?.text?.split(' — ').slice(1).join(' — ') ?? '';
     });
 
-    batchSelect?.addEventListener('change', () => {
-        const batchId = batchSelect.tomselect?.getValue();
-        const batch = batchId ? batchSelect.tomselect?.options?.[batchId] : null;
-        const product = batch?.product;
+    update();
+};
 
-        if (!product || !select.tomselect) {
-            return;
+const initializeRealizationBatchNumber = () => {
+    const input = document.querySelector('[data-batch-number]');
+    const workDate = document.querySelector('[data-realization-form] [name="work_date"]');
+
+    if (!input || !workDate) return;
+
+    let requestSequence = 0;
+    const update = async () => {
+        const currentRequest = ++requestSequence;
+        const data = workDate.value ? { work_date: workDate.value } : {};
+
+        try {
+            const response = await $.ajax({ url: input.dataset.batchNumberUrl, data, dataType: 'json' });
+
+            if (currentRequest === requestSequence && response.batch_no) {
+                input.value = response.batch_no;
+            }
+        } catch {
+            // Keep the server-rendered number when preview lookup fails.
         }
+    };
 
-        if (!select.tomselect.options[product.id]) {
-            select.tomselect.addOption(product);
-        }
-
-        if (String(select.tomselect.getValue()) !== String(product.id)) {
-            select.tomselect.setValue(String(product.id));
-        }
-    });
-
+    workDate.addEventListener('change', update);
     update();
 };
 
@@ -1793,9 +1929,42 @@ const initializeDeductionCreatePage = () => {
     const form = document.querySelector('[data-deduction-create-form]');
     if (!form) return;
     const selectAll = form.querySelector('[data-deduction-select-all]');
-    const employees = [...form.querySelectorAll('[data-deduction-employee]')];
-    selectAll?.addEventListener('change', () => employees.forEach((checkbox) => { checkbox.checked = selectAll.checked; }));
-    employees.forEach((checkbox) => checkbox.addEventListener('change', () => { if (!checkbox.checked) selectAll.checked = false; else selectAll.checked = employees.every((item) => item.checked); }));
+    const employeeList = form.querySelector('[data-deduction-employees]');
+    const employeeCount = form.querySelector('[data-deduction-employee-count]');
+    const clientSelect = form.querySelector('[data-deduction-client]');
+    const employees = () => [...form.querySelectorAll('[data-deduction-employee]')];
+    const syncSelectAll = () => {
+        const items = employees();
+        if (selectAll) selectAll.checked = items.length > 0 && items.every((item) => item.checked);
+    };
+
+    selectAll?.addEventListener('change', () => employees().forEach((checkbox) => { checkbox.checked = selectAll.checked; }));
+    employeeList?.addEventListener('change', (event) => {
+        if (event.target.matches('[data-deduction-employee]')) syncSelectAll();
+    });
+
+    const renderEmployees = (items) => {
+        if (!employeeList) return;
+        employeeList.innerHTML = items.length > 0
+            ? items.map((item) => `<label class="flex min-w-0 items-center gap-2 rounded-md border border-transparent px-2 py-1 text-xs hover:border-line hover:bg-slate-50"><input type="checkbox" name="employee_ids[]" value="${escapeHtml(item.id)}" class="size-4 shrink-0 rounded border-line text-primary-600" data-deduction-employee><span class="truncate font-medium text-slate-800">${escapeHtml(item.text)}</span></label>`).join('')
+            : '<p class="col-span-full rounded-lg border border-dashed border-line p-4 text-center text-xs text-slate-500">Tidak ada karyawan aktif pada client ini.</p>';
+        if (employeeCount) employeeCount.textContent = `${items.length} karyawan aktif`;
+        syncSelectAll();
+    };
+
+    $(clientSelect).on('change', async () => {
+        if (!clientSelect?.value || !employeeList) return;
+        employeeList.classList.add('pointer-events-none', 'opacity-60');
+        try {
+            const response = await $.ajax({ url: employeeList.dataset.deductionEmployeeUrl, data: { client_id: clientSelect.value }, dataType: 'json' });
+            renderEmployees(response.results ?? []);
+        } catch (error) {
+            await Swal.fire({ title: 'Gagal', text: error.responseJSON?.message || 'Daftar karyawan tidak dapat dimuat.', icon: 'error' });
+        } finally {
+            employeeList.classList.remove('pointer-events-none', 'opacity-60');
+        }
+    });
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const result = await Swal.fire({ title: 'Simpan potongan gaji?', icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
@@ -1867,6 +2036,101 @@ const initializeDeductionImport = () => {
     });
 };
 
+const initializeProductImport = () => {
+    const modal = document.querySelector('[data-product-import-modal]');
+    const form = modal?.querySelector('[data-product-import-form]');
+    if (!modal || !form) return;
+
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); form.reset(); };
+    document.querySelector('[data-product-import-open]')?.addEventListener('click', () => { modal.classList.remove('hidden'); modal.classList.add('grid'); });
+    modal.querySelectorAll('[data-product-import-close]').forEach((button) => button.addEventListener('click', close));
+
+    const failuresHtml = (failures) => `<div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-line text-left text-xs"><table class="w-full">${failures.map((failure) => `<tr class="border-b border-line last:border-0"><td class="whitespace-nowrap px-2 py-1.5 align-top font-semibold text-slate-500">Baris ${escapeHtml(failure.row)}</td><td class="px-2 py-1.5 text-red-600">${escapeHtml(failure.errors.join(', '))}</td></tr>`).join('')}</table></div>`;
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+            const response = await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            close();
+            document.querySelector('[data-server-table]')?._dataTable?.ajax.reload(null, false);
+            await Swal.fire({ title: response.failures?.length ? 'Sebagian berhasil' : 'Berhasil', html: `<p class="text-sm">${escapeHtml(response.message)}</p>${response.failures?.length ? failuresHtml(response.failures) : ''}`, icon: response.failures?.length ? 'warning' : 'success' });
+        } catch (error) {
+            const failures = error.responseJSON?.failures ?? [];
+            await Swal.fire({ title: 'Gagal', html: `<p class="text-sm">${escapeHtml(error.responseJSON?.message ?? 'File tidak dapat diimpor.')}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
+        }
+    });
+};
+
+const initializeMasterImport = ({ name }) => {
+    const modal = document.querySelector(`[data-${name}-import-modal]`);
+    const form = modal?.querySelector(`[data-${name}-import-form]`);
+    if (!modal || !form) return;
+
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); form.reset(); };
+    document.querySelector(`[data-${name}-import-open]`)?.addEventListener('click', () => { modal.classList.remove('hidden'); modal.classList.add('grid'); });
+    modal.querySelectorAll(`[data-${name}-import-close]`).forEach((button) => button.addEventListener('click', close));
+    const failuresHtml = (failures) => `<div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-line text-left text-xs"><table class="w-full">${failures.map((failure) => `<tr class="border-b border-line last:border-0"><td class="whitespace-nowrap px-2 py-1.5 align-top font-semibold text-slate-500">Baris ${escapeHtml(failure.row)}</td><td class="px-2 py-1.5 text-red-600">${escapeHtml(failure.errors.join(', '))}</td></tr>`).join('')}</table></div>`;
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+            const response = await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            close();
+            document.querySelector('[data-server-table]')?._dataTable?.ajax.reload(null, false);
+            await Swal.fire({ title: response.failures?.length ? 'Sebagian berhasil' : 'Berhasil', html: `<p class="text-sm">${escapeHtml(response.message)}</p>${response.failures?.length ? failuresHtml(response.failures) : ''}`, icon: response.failures?.length ? 'warning' : 'success' });
+        } catch (error) {
+            const failures = error.responseJSON?.failures ?? [];
+            await Swal.fire({ title: 'Gagal', html: `<p class="text-sm">${escapeHtml(error.responseJSON?.message ?? 'File tidak dapat diimpor.')}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
+        }
+    });
+};
+
+const initializeDashboardCharts = async () => {
+    const outputElement = document.querySelector('[data-dashboard-output-chart]');
+    const shiftElement = document.querySelector('[data-dashboard-shift-chart]');
+
+    if (!outputElement && !shiftElement) {
+        return;
+    }
+
+    const { default: ApexCharts } = await import('apexcharts');
+
+    if (outputElement) {
+        const points = JSON.parse(outputElement.dataset.values ?? '[]');
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        new ApexCharts(outputElement, {
+            chart: { type: 'area', height: 230, toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: !reducedMotion } },
+            series: [{ name: 'Output', data: points.map((point) => point.value) }],
+            colors: ['#3155f5'],
+            stroke: { curve: 'smooth', width: 3 },
+            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.28, opacityTo: 0.03, stops: [0, 100] } },
+            dataLabels: { enabled: false },
+            grid: { borderColor: '#e8ebf2', strokeDashArray: 4, padding: { left: 8, right: 8 } },
+            xaxis: { categories: points.map((point) => point.label), labels: { style: { colors: '#94a3b8', fontSize: '11px' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { min: 0, labels: { style: { colors: '#94a3b8', fontSize: '11px' }, formatter: (value) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(value) } },
+            tooltip: { y: { formatter: (value) => `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(value)} output` } },
+        }).render();
+    }
+
+    if (shiftElement) {
+        const shifts = JSON.parse(shiftElement.dataset.values ?? '[]');
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        new ApexCharts(shiftElement, {
+            chart: { type: 'bar', height: 230, toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: !reducedMotion } },
+            series: [{ name: 'Output', data: shifts.map((shift) => shift.value) }],
+            colors: ['#3155f5'],
+            plotOptions: { bar: { borderRadius: 5, columnWidth: '45%' } },
+            dataLabels: { enabled: false },
+            grid: { borderColor: '#e8ebf2', strokeDashArray: 4, padding: { left: 8, right: 8 } },
+            xaxis: { categories: shifts.map((shift) => shift.label), labels: { style: { colors: '#64748b', fontSize: '11px' }, trim: true, hideOverlappingLabels: true }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { min: 0, labels: { style: { colors: '#94a3b8', fontSize: '11px' }, formatter: (value) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(value) } },
+            tooltip: { y: { formatter: (value) => `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(value)} output` } },
+        }).render();
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeSidebar();
     initializeNavGroups();
@@ -1902,11 +2166,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
-    initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });
+    initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });
     initializeMasterModal({ name: 'client-master', plural: 'clients', fields: ['code', 'name', 'status'], confirmTitle: 'client', successCreate: 'Client berhasil ditambahkan.', successUpdate: 'Client berhasil diperbarui.' });
     initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
     initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'account_name', 'login_username', 'login_email', 'password', 'password_confirmation', 'status'], confirmTitle: 'client', successCreate: 'Client dan akun login berhasil ditambahkan.', successUpdate: 'Client dan akun login berhasil diperbarui.' });
     initializeRealizationProductPreview();
+    initializeRealizationBatchNumber();
     initializeRealizationPricePreview();
     initializeRealizationAssignments();
     initializeRealizationCreatePage();
@@ -1918,7 +2183,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSalaryAdvanceFields();
     initializeMasterModal({ name: 'deduction-row', plural: 'deductions', fields: ['uniform_amount', 'equipment_amount', 'meal_amount', 'bpjs_health_percent', 'bpjs_employment_percent', 'salary_advance_type', 'salary_advance_value', 'correction_minus', 'correction_plus', 'notes'], confirmTitle: 'potongan gaji', successCreate: 'Potongan gaji berhasil diperbarui.', successUpdate: 'Potongan gaji berhasil diperbarui.' });
     initializeDeductionImport();
+    initializeProductImport();
+    initializeMasterImport({ name: 'employee' });
+    initializeMasterImport({ name: 'group' });
+    initializeMasterImport({ name: 'client' });
     initializeActionButtonStyles();
+    initializeDashboardCharts();
 });
 import $ from './jquery-global';
 import DataTable from 'datatables.net-dt';

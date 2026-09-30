@@ -68,8 +68,13 @@ it('includes related names and rates in the detail payload for the datatable', f
         ->toContain('&quot;unit_name&quot;:&quot;Karton&quot;')
         ->toContain('&quot;group_name&quot;:&quot;Group A&quot;')
         ->toContain('&quot;cost_center_name&quot;:&quot;CC Produksi&quot;')
+        ->toContain('data-product=')
         ->toContain('&quot;po_price&quot;:&quot;15000.500&quot;')
         ->toContain('&quot;employee_rate&quot;:&quot;550.750&quot;');
+
+    expect(substr_count($html, '&quot;unit_name&quot;:&quot;Karton&quot;'))->toBe(2)
+        ->and(substr_count($html, '&quot;group_name&quot;:&quot;Group A&quot;'))->toBe(2)
+        ->and(substr_count($html, '&quot;cost_center_name&quot;:&quot;CC Produksi&quot;'))->toBe(2);
 });
 
 it('shows a searchable client selector in the product form', function () {
@@ -85,7 +90,7 @@ it('shows a searchable client selector in the product form', function () {
         ->assertSee('name="client_id"', false)
         ->assertSee('data-select2-select', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
-        ->assertSee($client->name, false);
+        ->assertSee('Pilih client...', false);
 });
 
 it('loads only active units remotely for the product form', function () {
@@ -101,6 +106,44 @@ it('loads only active units remotely for the product form', function () {
         ->assertSee('data-tom-select-remote="'.route('units.options').'"', false)
         ->assertDontSee('value="'.$inactiveUnit->getKey().'"', false)
         ->assertDontSee('>'.$inactiveUnit->name.'<', false);
+});
+
+it('renders active product master options in the product form', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $unit = Unit::factory()->create(['client_id' => $client->getKey(), 'name' => 'Box', 'status' => 'active']);
+    $group = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Produksi', 'status' => 'active']);
+    $costCenter = CostCenter::factory()->create(['client_id' => $client->getKey(), 'name' => 'Packing', 'status' => 'active']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('products.index'));
+
+    $response->assertOk()
+        ->assertSee('value="'.$unit->getKey().'">'.$unit->name.'</option>', false)
+        ->assertSee('value="'.$group->getKey().'">'.$group->name.'</option>', false)
+        ->assertSee('value="'.$costCenter->getKey().'">'.$costCenter->name.'</option>', false);
+});
+
+it('loads product master options for the selected client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create();
+    $selectedClient = Client::factory()->create();
+    $unit = Unit::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Box']);
+    $group = Group::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Produksi']);
+    $costCenter = CostCenter::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Packing']);
+
+    $this->actingAs($user)->withSession(['current_client_id' => $currentClient->getKey()]);
+
+    $this->getJson(route('units.options', ['client_id' => $selectedClient->getKey()]))
+        ->assertOk()
+        ->assertJsonPath('results.0.id', $unit->getKey());
+    $this->getJson(route('groups.options', ['client_id' => $selectedClient->getKey()]))
+        ->assertOk()
+        ->assertJsonPath('results.0.id', $group->getKey());
+    $this->getJson(route('cost-centers.options', ['client_id' => $selectedClient->getKey()]))
+        ->assertOk()
+        ->assertJsonPath('results.0.id', $costCenter->getKey());
 });
 
 it('rejects an inactive unit when storing a product', function () {
@@ -145,6 +188,35 @@ it('creates a product for the selected client', function () {
         'sku' => 'SKU-CREATE-001',
         'name' => 'Produk Baru',
         'employee_rate' => 300,
+    ]);
+});
+
+it('uses active master data from any client for a selected product client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create();
+    $selectedClient = Client::factory()->create();
+    $unit = Unit::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Global Box']);
+    $group = Group::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Global Produksi']);
+    $costCenter = CostCenter::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Global Packing']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->postJson(route('products.store'), [
+            'client_id' => $selectedClient->getKey(),
+            'unit_id' => $unit->getKey(),
+            'group_id' => $group->getKey(),
+            'cost_center_id' => $costCenter->getKey(),
+            'sku' => 'SKU-GLOBAL-MASTER',
+            'name' => 'Produk Global Master',
+            'status' => 'active',
+        ]);
+
+    $response->assertCreated();
+    $this->assertDatabaseHas('products', [
+        'client_id' => $selectedClient->getKey(),
+        'unit_id' => $unit->getKey(),
+        'group_id' => $group->getKey(),
+        'cost_center_id' => $costCenter->getKey(),
     ]);
 });
 

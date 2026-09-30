@@ -53,7 +53,7 @@ it('lets an employee read product options for a realization', function () {
     $user = User::factory()->create();
     $client = Client::factory()->create();
     $role = Role::query()->create(['code' => 'employee', 'name' => 'Karyawan']);
-    $permission = Permission::query()->create(['code' => 'menu.realizations', 'name' => 'Menu: Realisasi']);
+    $permission = Permission::query()->firstOrCreate(['code' => 'menu.realizations'], ['name' => 'Menu: Realisasi']);
     $role->permissions()->attach($permission);
     $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
     $unit = Unit::factory()->create(['client_id' => $client->id]);

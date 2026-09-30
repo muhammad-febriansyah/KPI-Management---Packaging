@@ -38,7 +38,7 @@ it('keeps groups isolated by client', function () {
     $response->assertOk()->assertJsonMissing(['name' => $otherGroup->name]);
 });
 
-it('lists only active groups for the current client as select options', function () {
+it('lists active groups from every client as select options', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $active = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Produksi', 'status' => 'active']);
@@ -47,6 +47,9 @@ it('lists only active groups for the current client as select options', function
 
     $response = $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->getJson(route('groups.options'));
 
-    $response->assertOk()->assertExactJson(['results' => [['id' => $active->getKey(), 'text' => 'Produksi']]]);
-    $response->assertJsonMissing(['text' => 'Nonaktif'])->assertJsonMissing(['text' => $otherClientGroup->name]);
+    $response->assertOk()->assertExactJson(['results' => [
+        ['id' => $active->getKey(), 'text' => 'Produksi'],
+        ['id' => $otherClientGroup->getKey(), 'text' => 'Rahasia'],
+    ]]);
+    $response->assertJsonMissing(['text' => 'Nonaktif']);
 });

@@ -2,18 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ProductTemplateExport;
 use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
+use App\Imports\ProductImport;
 use App\Models\Client;
 use App\Models\CostCenter;
 use App\Models\Group;
 use App\Models\Product;
+use App\Models\Unit;
 use App\Services\CurrentClientService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Yajra\DataTables\Facades\DataTables;
 
 class ProductController extends Controller
@@ -45,12 +50,34 @@ class ProductController extends Controller
                     'estimated_output_per_hour' => $p->estimated_output_per_hour,
                     'status' => $p->status,
                 ]));
+                $edit = e(json_encode([
+                    'id' => $p->id,
+                    'client_id' => $p->client_id,
+                    'sku' => $p->sku,
+                    'name' => $p->name,
+                    'unit_id' => $p->unit_id,
+                    'unit_name' => $p->unit?->name,
+                    'group_id' => $p->group_id,
+                    'group_name' => $p->group?->name,
+                    'cost_center_id' => $p->cost_center_id,
+                    'cost_center_name' => $p->costCenter?->name,
+                    'po_price' => $p->po_price,
+                    'employee_rate' => $p->employee_rate,
+                    'estimated_output_per_hour' => $p->estimated_output_per_hour,
+                    'status' => $p->status,
+                ]));
 
-                return '<button type="button" data-product-detail="'.$detail.'" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-product-edit data-url="'.route('products.update', $p).'" data-product="'.e($p->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('products.destroy', $p).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
+                return '<button type="button" data-product-detail="'.$detail.'" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-product-edit data-url="'.route('products.update', $p).'" data-product="'.$edit.'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('products.destroy', $p).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
             })->rawColumns(['action', 'status'])->toJson();
         }
 
-        return view('products.index', ['currentClient' => $currentClient, 'user' => $request->user(), 'groups' => Group::query()->where('client_id', $client->id())->where('status', 'active')->get(), 'costCenters' => CostCenter::query()->where('client_id', $client->id())->where('status', 'active')->get()]);
+        return view('products.index', [
+            'currentClient' => $currentClient,
+            'user' => $request->user(),
+            'units' => Unit::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
+            'groups' => Group::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
+            'costCenters' => CostCenter::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
+        ]);
     }
 
     /**
@@ -86,6 +113,41 @@ class ProductController extends Controller
             ]),
             'pagination' => ['more' => $paginator->hasMorePages()],
         ]);
+    }
+
+    public function template(Request $request, CurrentClientService $client): BinaryFileResponse
+    {
+        abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
+
+        $clientModel = $client->get();
+
+        return Excel::download(new ProductTemplateExport(
+            $clientModel,
+            Unit::query()->where('client_id', $client->id())->active()->orderBy('code')->first(),
+            Group::query()->where('client_id', $client->id())->active()->orderBy('code')->first(),
+            CostCenter::query()->where('client_id', $client->id())->active()->orderBy('code')->first(),
+        ), 'template-master-produk.xlsx');
+    }
+
+    public function import(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
+        Gate::authorize('create', Product::class);
+        $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls']]);
+
+        $import = new ProductImport($client->id(), $client->availableFor($request->user())->modelKeys());
+        Excel::import($import, $request->file('file'));
+
+        if ($import->failures !== []) {
+            return response()->json([
+                'message' => $import->imported > 0
+                    ? "{$import->imported} baris berhasil diimpor, ".count($import->failures).' baris gagal. Perbaiki lalu import ulang baris yang gagal.'
+                    : 'Import gagal, tidak ada baris yang berhasil disimpan.',
+                'failures' => $import->failures,
+            ], $import->imported > 0 ? 207 : 422);
+        }
+
+        return response()->json(['message' => "{$import->imported} baris produk berhasil diimpor."]);
     }
 
     public function store(StoreProductRequest $request, CurrentClientService $client): JsonResponse

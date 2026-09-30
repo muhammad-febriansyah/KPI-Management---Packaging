@@ -49,8 +49,7 @@ class CostCenterController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('viewAny', CostCenter::class);
-
-        $costCenters = CostCenter::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('name')->get();
+        $costCenters = CostCenter::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get();
 
         return response()->json(['results' => $costCenters->map(fn (CostCenter $item): array => ['id' => $item->id, 'text' => $item->name])]);
     }

@@ -23,7 +23,7 @@ it('rejects duplicate cost center codes per client', function () {
     $response->assertInvalid('code');
 });
 
-it('lists only active cost centers for the current client as select options', function () {
+it('lists active cost centers from every client as select options', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $active = CostCenter::factory()->create(['client_id' => $client->getKey(), 'name' => 'Packing', 'status' => 'active']);
@@ -32,6 +32,9 @@ it('lists only active cost centers for the current client as select options', fu
 
     $response = $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->getJson(route('cost-centers.options'));
 
-    $response->assertOk()->assertExactJson(['results' => [['id' => $active->getKey(), 'text' => 'Packing']]]);
-    $response->assertJsonMissing(['text' => 'Nonaktif'])->assertJsonMissing(['text' => $otherClientCostCenter->name]);
+    $response->assertOk()->assertExactJson(['results' => [
+        ['id' => $active->getKey(), 'text' => 'Packing'],
+        ['id' => $otherClientCostCenter->getKey(), 'text' => 'Rahasia'],
+    ]]);
+    $response->assertJsonMissing(['text' => 'Nonaktif']);
 });

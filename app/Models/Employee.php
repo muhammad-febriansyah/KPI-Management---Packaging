@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'email',
     'phone',
     'join_date',
+    'birth_date',
     'gender',
     'employee_status',
     'marital_status',
@@ -35,8 +36,13 @@ class Employee extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
     public function group(): BelongsTo
     {
-        return $this->belongsTo(Group::class);
+        return $this->belongsTo(Group::class)->withoutGlobalScopes();
     }
 }

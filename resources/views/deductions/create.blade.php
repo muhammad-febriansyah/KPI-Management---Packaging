@@ -31,6 +31,17 @@
         @csrf
         <x-card>
             <div class="grid gap-4 sm:grid-cols-2">
+                <label class="grid gap-2 text-sm font-semibold sm:col-span-2">
+                    <span>Client <span class="text-danger">*</span></span>
+                    @if ($user->is_super_admin)
+                    <select name="client_id" data-deduction-client data-select2-select data-select2-remote="{{ route('clients.options') }}" data-select2-placeholder="Pilih client..." required class="w-full">
+                                <option value="">Pilih client...</option>
+                        </select>
+                    @else
+                        <div class="flex h-11 items-center rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600">{{ $currentClient->code }} — {{ $currentClient->name }}</div>
+                        <input type="hidden" name="client_id" data-deduction-client value="{{ $currentClient->getKey() }}">
+                    @endif
+                </label>
                 <label class="grid gap-2 text-sm font-semibold">
                     <span>Bulan <span class="text-danger">*</span></span>
                     <input type="month" name="month" data-datepicker required value="{{ old('month', now()->format('Y-m')) }}" class="h-11 rounded-lg border border-line px-3 font-normal">
@@ -88,13 +99,13 @@
                         <input type="checkbox" data-deduction-select-all class="size-4 rounded border-line text-primary-600">
                         Pilih semua karyawan
                     </label>
-                    <span class="text-xs text-slate-500">{{ $employees->count() }} karyawan aktif</span>
+                    <span data-deduction-employee-count class="text-xs text-slate-500">{{ $employees->count() }} karyawan aktif</span>
                 </div>
-                <div class="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                <div data-deduction-employees data-deduction-employee-url="{{ route('deductions.employee-options') }}" class="mt-3 grid max-h-72 gap-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($employees as $employee)
-                        <label class="flex items-center gap-2 rounded-lg border border-transparent px-2 py-2 text-sm hover:border-line hover:bg-slate-50">
-                            <input type="checkbox" name="employee_ids[]" value="{{ $employee->id }}" @checked(in_array($employee->id, old('employee_ids', []))) class="size-4 rounded border-line text-primary-600" data-deduction-employee>
-                            <span class="font-medium text-slate-800">{{ $employee->full_name }}</span>
+                        <label class="flex min-w-0 items-center gap-2 rounded-md border border-transparent px-2 py-1 text-xs hover:border-line hover:bg-slate-50">
+                            <input type="checkbox" name="employee_ids[]" value="{{ $employee->id }}" @checked(in_array($employee->id, old('employee_ids', []))) class="size-4 shrink-0 rounded border-line text-primary-600" data-deduction-employee>
+                            <span class="truncate font-medium text-slate-800">{{ $employee->employee_no }} — {{ $employee->full_name }}</span>
                         </label>
                     @endforeach
                 </div>

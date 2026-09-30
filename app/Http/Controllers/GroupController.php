@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\GroupTemplateExport;
 use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreGroupRequest;
 use App\Http\Requests\UpdateGroupRequest;
+use App\Imports\GroupImport;
 use App\Models\Group;
 use App\Services\CurrentClientService;
 use Illuminate\Http\JsonResponse;
@@ -12,6 +14,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Yajra\DataTables\Facades\DataTables;
 
 class GroupController extends Controller
@@ -54,10 +58,37 @@ class GroupController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('viewAny', Group::class);
-
-        $groups = Group::query()->where('client_id', $currentClient->id())->where('status', 'active')->orderBy('name')->get();
+        $groups = Group::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get();
 
         return response()->json(['results' => $groups->map(fn (Group $group): array => ['id' => $group->id, 'text' => $group->name])]);
+    }
+
+    public function template(Request $request, CurrentClientService $currentClient): BinaryFileResponse
+    {
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
+
+        return Excel::download(new GroupTemplateExport($currentClient->get()), 'template-master-group.xlsx');
+    }
+
+    public function import(Request $request, CurrentClientService $currentClient): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
+        Gate::authorize('create', Group::class);
+        $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls']]);
+
+        $import = new GroupImport($currentClient->id(), $currentClient->availableFor($request->user())->modelKeys());
+        Excel::import($import, $request->file('file'));
+
+        if ($import->failures !== []) {
+            return response()->json([
+                'message' => $import->imported > 0
+                    ? "{$import->imported} baris berhasil diimpor, ".count($import->failures).' baris gagal. Perbaiki lalu import ulang baris yang gagal.'
+                    : 'Import gagal, tidak ada baris yang berhasil disimpan.',
+                'failures' => $import->failures,
+            ], $import->imported > 0 ? 207 : 422);
+        }
+
+        return response()->json(['message' => "{$import->imported} baris group berhasil diimpor."]);
     }
 
     public function store(StoreGroupRequest $request, CurrentClientService $currentClient): RedirectResponse|JsonResponse
