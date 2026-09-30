@@ -4,11 +4,11 @@
 <div class="mb-6" role="tablist" aria-label="Pengaturan akses">
 <div class="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
 <button type="button" id="access-tab-users" role="tab" data-access-tab="users" aria-controls="access-panel-users" aria-selected="true" class="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-primary-600 shadow-sm ring-1 ring-slate-200/70">Data User</button>
-<button type="button" id="access-tab-permissions" role="tab" data-access-tab="permissions" aria-controls="access-panel-permissions" aria-selected="false" class="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:text-slate-700">Hak Akses</button>
+@if ($canManageRolePermissions)<button type="button" id="access-tab-permissions" role="tab" data-access-tab="permissions" aria-controls="access-panel-permissions" aria-selected="false" class="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:text-slate-700">Hak Akses</button>@endif
 </div>
 </div>
 <section id="access-panel-users" data-access-panel="users" role="tabpanel" aria-labelledby="access-tab-users" tabindex="0">
-@if ($availableClients->count() > 1)
+@if ($user->is_super_admin && $availableClients->count() > 1)
 <div class="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
 <div><p class="text-sm font-semibold text-slate-900">Filter client</p><p class="mt-1 text-xs text-slate-500">Kosongkan untuk menampilkan user dari semua client.</p></div>
 <form method="GET" action="{{ route('settings.access') }}" class="w-full shrink-0 sm:w-80"><label class="sr-only" for="access-client-selector">Filter client</label><select id="access-client-selector" name="client_filter" data-client-filter data-select2-select data-select2-placeholder="Cari kode atau nama client..."><option value="">Semua client</option>@foreach ($availableClients as $clientOption)<option value="{{ $clientOption->getKey() }}" @selected($clientOption->getKey() === $selectedClientId)>{{ $clientOption->code }} — {{ $clientOption->name }}</option>@endforeach</select></form>
@@ -16,7 +16,7 @@
 @endif
 <x-card :padding="false"><div class="overflow-x-auto"><table data-server-table class="min-w-[1120px] w-full text-left text-sm"><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Client</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div></x-card>
 </section>
-<section id="access-panel-permissions" data-access-panel="permissions" role="tabpanel" aria-labelledby="access-tab-permissions" tabindex="0" hidden>
+@if ($canManageRolePermissions)<section id="access-panel-permissions" data-access-panel="permissions" role="tabpanel" aria-labelledby="access-tab-permissions" tabindex="0" hidden>
 <div><h2 class="text-lg font-semibold text-slate-950">Hak Akses Menu per Role</h2><p class="mt-1 mb-4 text-sm text-slate-500">Centang menu yang boleh diakses tiap role. Super Admin selalu memiliki akses penuh.</p>
 <div class="grid gap-4 lg:grid-cols-2">
 @foreach ($roles as $role)
@@ -29,6 +29,7 @@
 </div>
 </div>
 </section>
+@endif
 </div>
 @include('employees._modal', ['groups' => $groups])
 @include('clients._modal')

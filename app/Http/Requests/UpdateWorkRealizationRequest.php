@@ -19,7 +19,7 @@ class UpdateWorkRealizationRequest extends FormRequest
         return $realization instanceof WorkRealization
             && $this->user()?->status === 'active'
             && app(CurrentClientService::class)->isResolved()
-            && $this->user()->roleCodeFor(app(CurrentClientService::class)->get()) === 'employee'
+            && in_array($this->user()->roleCodeFor(app(CurrentClientService::class)->get()), ['leader', 'employee'], true)
             && $this->user()->can('update', $realization);
     }
 

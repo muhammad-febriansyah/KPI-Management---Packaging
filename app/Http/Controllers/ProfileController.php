@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdatePasswordRequest;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Models\Client;
 use App\Models\User;
@@ -52,6 +53,13 @@ class ProfileController extends Controller
         $user->update($data);
 
         return to_route('profile.edit')->with('status', 'Profil berhasil diperbarui.');
+    }
+
+    public function updatePassword(UpdatePasswordRequest $request): RedirectResponse
+    {
+        $request->user()->update(['password' => $request->validated('password')]);
+
+        return to_route('profile.edit')->with('status', 'Password berhasil diubah.');
     }
 
     private function resolveCurrentClient(Request $request, User $user): ?Client

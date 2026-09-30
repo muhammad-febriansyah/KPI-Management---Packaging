@@ -19,7 +19,7 @@ class StoreWorkRealizationRequest extends FormRequest
 
         return $user?->status === 'active'
             && $client->isResolved()
-            && ($user->is_super_admin || $user->roleCodeFor($client->get()) === 'employee');
+            && ($user->is_super_admin || in_array($user->roleCodeFor($client->get()), ['admin', 'leader', 'employee'], true));
     }
 
     /**
@@ -53,6 +53,7 @@ class StoreWorkRealizationRequest extends FormRequest
         return [
             'work_date' => ['nullable', 'date'],
             'shift_id' => ['nullable', Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('client_id', $clientId))],
+            'batch_no' => ['nullable', 'string', 'regex:/^B-\d{8}-\d{4}$/'],
             'batch_id' => ['nullable', Rule::exists('batches', 'id')->where(function ($query) use ($clientId): void {
                 $query->where('client_id', $clientId);
 

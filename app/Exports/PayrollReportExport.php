@@ -21,11 +21,13 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
         private readonly int $clientId,
         private readonly string $dateFrom,
         private readonly string $dateTo,
+        private readonly ?int $employeeUserId = null,
     ) {}
 
     public function query(): Builder
     {
-        return (new PayrollReportBuilder)->forClient($this->clientId, $this->dateFrom, $this->dateTo);
+        return (new PayrollReportBuilder)->forClient($this->clientId, $this->dateFrom, $this->dateTo)
+            ->when($this->employeeUserId !== null, fn (Builder $query): Builder => $query->where('employees.user_id', $this->employeeUserId));
     }
 
     /** @return array<int, string> */

@@ -29,6 +29,9 @@ it('renders the deduction create page for the current client', function () {
     $response->assertOk();
     $response->assertSee('Tambah Potongan Gaji');
     $response->assertSee('data-deduction-create-form', false);
+    $response->assertSee('name="client_id"', false);
+    $response->assertSee('data-deduction-client', false);
+    $response->assertSee('data-deduction-employee-count', false);
     $response->assertSee('name="month" data-datepicker', false);
     $response->assertSee(route('deductions.store'), false);
 });
@@ -88,21 +91,61 @@ it('stores deductions from the create page and redirects to the index', function
 it('rejects a duplicate deduction period before inserting', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
-    DeductionPeriod::query()->create([
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'status' => 'active']);
+    $period = DeductionPeriod::query()->create([
         'client_id' => $client->getKey(),
         'month' => '2026-09-01',
         'week_no' => null,
         'status' => 'locked',
         'created_by' => $user->getKey(),
     ]);
+    $period->deductions()->create(['client_id' => $client->getKey(), 'employee_id' => $employee->getKey()]);
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('deductions.store'), ['month' => '2026-09']);
+        ->postJson(route('deductions.store'), ['month' => '2026-09', 'employee_ids' => [$employee->getKey()]]);
 
     $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['month']);
-    expect(DeductionPeriod::query()->where('client_id', $client->getKey())->count())->toBe(1);
+        ->assertJsonValidationErrors(['employee_ids']);
+    expect(DeductionPeriod::query()->where('client_id', $client->getKey())->count())->toBe(1)
+        ->and(EmployeeDeduction::query()->where('employee_id', $employee->getKey())->count())->toBe(1);
+});
+
+it('allows different employees in the same deduction period', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employees = Employee::factory()->count(2)->create(['client_id' => $client->getKey(), 'status' => 'active']);
+
+    foreach ($employees as $employee) {
+        $response = $this->actingAs($user)
+            ->withSession(['current_client_id' => $client->getKey()])
+            ->postJson(route('deductions.store'), [
+                'client_id' => $client->getKey(),
+                'month' => '2026-09',
+                'week_no' => 1,
+                'employee_ids' => [$employee->getKey()],
+            ]);
+
+        $response->assertCreated();
+    }
+
+    expect(DeductionPeriod::query()->where('client_id', $client->getKey())->count())->toBe(1)
+        ->and(EmployeeDeduction::query()->where('client_id', $client->getKey())->count())->toBe(2);
+});
+
+it('returns employees only for the selected client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMPCUR001', 'status' => 'active']);
+    $otherEmployee = Employee::factory()->create(['client_id' => $otherClient->getKey(), 'employee_no' => 'EMPTAR001', 'status' => 'active']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('deductions.employee-options', ['client_id' => $otherClient->getKey()]));
+
+    $response->assertOk()->assertJsonPath('results.0.id', $otherEmployee->getKey());
+    expect($response->json('results'))->not->toContain(['id' => $employee->getKey(), 'text' => "{$employee->employee_no} — {$employee->full_name}"]);
 });
 
 it('limits salary advance percentages to 100', function () {
@@ -132,8 +175,13 @@ it('lists employee deduction rows per employee for the current client', function
         ->getJson(route('deductions.index').'?draw=1&start=0&length=10');
 
     $response->assertOk();
+    $response->assertJsonPath('data.0.client_code', $client->code);
+    $response->assertJsonPath('data.0.bulan', '2026-08');
+    $response->assertJsonPath('data.0.minggu', 2);
+    $response->assertJsonPath('data.0.no_karyawan', 'EMP001');
     $response->assertJsonPath('data.0.sim_id', 'PEG1234');
     $response->assertJsonPath('data.0.full_name', 'Ananda Julian');
+    $response->assertJsonPath('data.0.uniform_amount', 50000);
     $response->assertJsonPath('data.0.periode', 'Agustus 2026 (Minggu 2)');
     $response->assertJsonPath('data.0.bpjs_health', '1%');
 });

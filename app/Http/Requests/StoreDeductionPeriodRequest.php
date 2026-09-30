@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\NormalizesDeductionAmounts;
+use App\Models\Client;
 use App\Models\DeductionPeriod;
+use App\Models\EmployeeDeduction;
 use App\Services\CurrentClientService;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -12,7 +14,18 @@ use Illuminate\Validation\Validator;
 
 class StoreDeductionPeriodRequest extends FormRequest
 {
-    use NormalizesDeductionAmounts;
+    use NormalizesDeductionAmounts {
+        prepareForValidation as normalizeDeductionAmounts;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalizeDeductionAmounts();
+
+        if (! $this->filled('client_id') && app(CurrentClientService::class)->isResolved()) {
+            $this->merge(['client_id' => app(CurrentClientService::class)->id()]);
+        }
+    }
 
     public function authorize(): bool
     {
@@ -22,9 +35,14 @@ class StoreDeductionPeriodRequest extends FormRequest
     /** @return array<string, ValidationRule|array<mixed>|string> */
     public function rules(): array
     {
-        $clientId = app(CurrentClientService::class)->id();
+        $client = app(CurrentClientService::class);
+        $clientId = $this->integer('client_id') ?: $client->id();
+        $allowedClientIds = $this->user()?->is_super_admin
+            ? $client->availableFor($this->user())->modelKeys()
+            : [$client->id()];
 
         return [
+            'client_id' => ['required', 'integer', Rule::in($allowedClientIds)],
             'month' => ['required', 'date_format:Y-m'],
             'week_no' => ['nullable', 'integer', 'between:1,2'],
             'uniform_amount' => ['nullable', 'numeric', 'min:0'],
@@ -37,7 +55,7 @@ class StoreDeductionPeriodRequest extends FormRequest
             'correction_minus' => ['nullable', 'numeric', 'min:0'],
             'correction_plus' => ['nullable', 'numeric', 'min:0'],
             'employee_ids' => ['nullable', 'array'],
-            'employee_ids.*' => ['integer', Rule::exists('employees', 'id')->where(fn ($q) => $q->where('client_id', $clientId))],
+            'employee_ids.*' => ['integer', 'distinct', Rule::exists('employees', 'id')->where(fn ($q) => $q->where('client_id', $clientId)->where('status', 'active'))],
         ];
     }
 
@@ -49,24 +67,44 @@ class StoreDeductionPeriodRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($validator->errors()->has('month') || $validator->errors()->has('week_no')) {
+            if ($validator->errors()->hasAny(['client_id', 'month', 'week_no', 'employee_ids'])) {
+                return;
+            }
+
+            $clientId = $this->integer('client_id');
+            $targetClient = Client::query()->active()->find($clientId);
+            if (! $targetClient) {
                 return;
             }
 
             $month = (string) $this->input('month');
             $weekNo = $this->filled('week_no') ? (int) $this->input('week_no') : null;
-            $periodExists = DeductionPeriod::query()
-                ->where('client_id', app(CurrentClientService::class)->id())
-                ->where('month', $month.'-01')
-                ->where('week_key', $weekNo ?? 0)
-                ->exists();
-
-            if (! $periodExists) {
+            $employeeIds = array_values(array_filter((array) $this->input('employee_ids')));
+            if ($employeeIds === []) {
                 return;
             }
 
-            $periodLabel = $weekNo === null ? 'Semua minggu' : "Minggu {$weekNo}";
-            $validator->errors()->add('month', "Periode {$month} ({$periodLabel}) sudah tersedia. Pilih periode lain.");
+            $existingEmployeeIds = app(CurrentClientService::class)->runAs($targetClient, function () use ($clientId, $month, $weekNo, $employeeIds): array {
+                $period = DeductionPeriod::query()
+                    ->where('client_id', $clientId)
+                    ->where('month', $month.'-01')
+                    ->where('week_key', $weekNo ?? 0)
+                    ->first();
+
+                if (! $period) {
+                    return [];
+                }
+
+                return EmployeeDeduction::query()
+                    ->where('deduction_period_id', $period->getKey())
+                    ->whereIn('employee_id', $employeeIds)
+                    ->pluck('employee_id')
+                    ->all();
+            });
+
+            if ($existingEmployeeIds !== []) {
+                $validator->errors()->add('employee_ids', 'Karyawan terpilih sudah memiliki potongan pada kombinasi periode bulan, minggu, dan client tersebut.');
+            }
         }];
     }
 }

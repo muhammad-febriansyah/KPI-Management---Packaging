@@ -3,6 +3,7 @@
 use App\Exports\PayrollReportExport;
 use App\Models\Client;
 use App\Models\Employee;
+use App\Models\Role;
 use App\Models\Shift;
 use App\Models\Unit;
 use App\Models\User;
@@ -34,7 +35,7 @@ function makePayrollReportFixture(Client $client, User $user): Employee
     return $employee;
 }
 
-it('renders the payroll report page with a default current-month date range', function () {
+it('renders the payroll report page with a default current-month period', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -43,8 +44,10 @@ it('renders the payroll report page with a default current-month date range', fu
         ->get(route('reports.payroll'));
 
     $response->assertOk();
-    $response->assertViewHas('dateFrom', now()->startOfMonth()->toDateString());
-    $response->assertViewHas('dateTo', now()->endOfMonth()->toDateString());
+    $response->assertViewHas('period', now()->format('Y-m'));
+    $response->assertSee('data-payroll-period');
+    $response->assertDontSee('data-payroll-date-from');
+    $response->assertDontSee('data-payroll-date-to');
     $response->assertSee('data-payroll-export-excel');
     $response->assertSee('data-payroll-export-pdf');
     $response->assertSee('<th>NIK</th>', false);
@@ -55,6 +58,41 @@ it('renders the payroll report page with a default current-month date range', fu
     $response->assertSee('<th>Seragam (Kaos/Celana)</th>', false);
     $response->assertDontSee('<th>Aksi</th>', false);
     $response->assertDontSee('Slip gaji');
+});
+
+it('limits leader payroll to the linked employee record', function () {
+    $leader = User::factory()->create();
+    $client = Client::factory()->create();
+    $role = Role::query()->where('code', 'leader')->firstOrFail();
+    $leader->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $employee = makePayrollReportFixture($client, $leader);
+    $employee->update(['user_id' => $leader->getKey()]);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP002', 'full_name' => 'Bukan Leader']);
+
+    $response = $this->actingAs($leader)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&period=2026-08');
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.full_name', 'Ananda Julian');
+});
+
+it('hides payroll export controls from own payroll users', function () {
+    $user = User::factory()->create();
+    $client = Client::factory()->create();
+    $role = Role::query()->where('code', 'leader')->firstOrFail();
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('reports.payroll'));
+
+    $response->assertOk()
+        ->assertDontSee('Export mengikuti periode aktif')
+        ->assertDontSee('data-payroll-export-excel', false)
+        ->assertDontSee('data-payroll-export-pdf', false)
+        ->assertDontSee('Unduh laporan');
 });
 
 it('uses the requirement order for payroll export columns', function () {
@@ -95,7 +133,7 @@ it('subtracts health and employment BPJS from gross salary', function () {
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&date_from=2026-08-01&date_to=2026-08-31');
+        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&period=2026-08');
 
     $response->assertOk();
     $response->assertJsonPath('data.0.bpjs_health', 5000);
@@ -118,8 +156,7 @@ it('searches the payroll report by employee name', function () {
             'draw' => 1,
             'start' => 0,
             'length' => 10,
-            'date_from' => '2026-08-01',
-            'date_to' => '2026-08-31',
+            'period' => '2026-08',
             'search' => ['value' => 'ananda', 'regex' => 'false'],
             'columns' => $columns,
             'order' => [['column' => 1, 'dir' => 'asc']],
@@ -137,10 +174,10 @@ it('downloads the payroll report as an Excel file for the selected period', func
 
     $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->get(route('reports.payroll.export.excel', ['date_from' => '2026-08-01', 'date_to' => '2026-08-31']))
+        ->get(route('reports.payroll.export.excel', ['period' => '2026-08']))
         ->assertOk();
 
-    Excel::assertDownloaded('laporan-payroll-2026-08-01-2026-08-31.xlsx', function (PayrollReportExport $export): bool {
+    Excel::assertDownloaded('laporan-payroll-2026-08.xlsx', function (PayrollReportExport $export): bool {
         return true;
     });
 });
@@ -151,13 +188,13 @@ it('downloads the payroll report as a PDF file for the selected period', functio
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->get(route('reports.payroll.export.pdf', ['date_from' => '2026-08-01', 'date_to' => '2026-08-31']));
+        ->get(route('reports.payroll.export.pdf', ['period' => '2026-08']));
 
     $response->assertOk();
     expect($response->getContent())->toStartWith('%PDF');
 });
 
-it('filters payroll attendance and gross salary by the selected date range', function () {
+it('filters payroll attendance and gross salary by the selected period', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP001', 'full_name' => 'Ananda Julian']);
@@ -190,7 +227,7 @@ it('filters payroll attendance and gross salary by the selected date range', fun
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&date_from=2026-08-01&date_to=2026-08-31');
+        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&period=2026-08');
 
     $response->assertOk();
     $response->assertJsonPath('data.0.employee_no', 'EMP001');

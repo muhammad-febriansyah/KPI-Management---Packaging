@@ -34,7 +34,7 @@ class WorkRealizationPolicy
 
         $client = Client::query()->find($workRealization->client_id);
 
-        if ($client && $user->roleCodeFor($client) === 'employee') {
+        if ($client && in_array($user->roleCodeFor($client), ['leader', 'employee'], true)) {
             return $this->belongsToEmployee($user, $workRealization) || $workRealization->created_by === $user->id;
         }
 
@@ -49,7 +49,7 @@ class WorkRealizationPolicy
         $client = app(CurrentClientService::class);
 
         return $user->status === 'active'
-            && ($user->is_super_admin || ($client->isResolved() && $user->roleCodeFor($client->get()) === 'employee'));
+            && ($user->is_super_admin || ($client->isResolved() && in_array($user->roleCodeFor($client->get()), ['admin', 'leader', 'employee'], true)));
     }
 
     /**
@@ -71,15 +71,15 @@ class WorkRealizationPolicy
             return false;
         }
 
-        if ($user->is_super_admin) {
+        $client = app(CurrentClientService::class);
+
+        if ($user->is_super_admin || ($client->isResolved() && $user->roleCodeFor($client->get()) === 'admin')) {
             return true;
         }
 
-        $client = app(CurrentClientService::class);
-
         return $client->isResolved()
             && $workRealization->client_id === $client->id()
-            && $user->roleCodeFor($client->get()) === 'employee'
+            && in_array($user->roleCodeFor($client->get()), ['leader', 'employee'], true)
             && $workRealization->created_by === $user->id;
     }
 

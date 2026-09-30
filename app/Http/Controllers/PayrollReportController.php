@@ -6,6 +6,7 @@ use App\Exports\PayrollReportExport;
 use App\Services\CurrentClientService;
 use App\Services\PayrollReportBuilder;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,9 +20,11 @@ class PayrollReportController extends Controller
 {
     public function __invoke(Request $request, CurrentClientService $client, PayrollReportBuilder $builder): View|JsonResponse
     {
-        abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
-        [$dateFrom, $dateTo] = $this->resolveRange($request);
+        $ownPayroll = $this->isOwnPayroll($request, $client);
+        abort_unless($request->user()->canAccessMenu($ownPayroll ? 'my-payroll' : 'reports', $client->get()), 403);
+        [$dateFrom, $dateTo, $period] = $this->resolveRange($request);
         $query = $builder->forClient($client->id(), $dateFrom, $dateTo);
+        $this->scopeToUser($query, $request, $ownPayroll);
 
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
@@ -64,25 +67,29 @@ class PayrollReportController extends Controller
                 ->toJson();
         }
 
-        return view('reports.payroll', ['currentClient' => $client->get(), 'user' => $request->user(), 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
+        return view('reports.payroll', ['currentClient' => $client->get(), 'user' => $request->user(), 'period' => $period, 'isOwnPayroll' => $ownPayroll]);
     }
 
     public function exportExcel(Request $request, CurrentClientService $client): BinaryFileResponse
     {
-        abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
+        $ownPayroll = $this->isOwnPayroll($request, $client);
+        abort_unless($request->user()->canAccessMenu($ownPayroll ? 'my-payroll' : 'reports', $client->get()), 403);
         [$dateFrom, $dateTo] = $this->resolveRange($request);
 
         return Excel::download(
-            new PayrollReportExport($client->id(), $dateFrom, $dateTo),
-            "laporan-payroll-{$dateFrom}-{$dateTo}.xlsx",
+            new PayrollReportExport($client->id(), $dateFrom, $dateTo, $ownPayroll ? $request->user()->id : null),
+            "laporan-payroll-{$this->periodFileLabel($request, $dateFrom, $dateTo)}.xlsx",
         );
     }
 
     public function exportPdf(Request $request, CurrentClientService $client, PayrollReportBuilder $builder): Response
     {
-        abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
+        $ownPayroll = $this->isOwnPayroll($request, $client);
+        abort_unless($request->user()->canAccessMenu($ownPayroll ? 'my-payroll' : 'reports', $client->get()), 403);
         [$dateFrom, $dateTo] = $this->resolveRange($request);
-        $rows = $builder->forClient($client->id(), $dateFrom, $dateTo)->lazy(500);
+        $query = $builder->forClient($client->id(), $dateFrom, $dateTo);
+        $this->scopeToUser($query, $request, $ownPayroll);
+        $rows = $query->lazy(500);
         $pdf = Pdf::loadView('reports.payroll-pdf', [
             'client' => $client->get(),
             'dateFrom' => $dateFrom,
@@ -90,20 +97,48 @@ class PayrollReportController extends Controller
             'rows' => $rows,
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download("laporan-payroll-{$dateFrom}-{$dateTo}.pdf");
+        return $pdf->download("laporan-payroll-{$this->periodFileLabel($request, $dateFrom, $dateTo)}.pdf");
     }
 
-    /** @return array{0: string, 1: string} */
+    /** @return array{0: string, 1: string, 2: string} */
     private function resolveRange(Request $request): array
     {
         $validated = $request->validate([
+            'period' => ['nullable', 'date_format:Y-m'],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
         ]);
 
+        if ($validated['period'] ?? null) {
+            $month = Carbon::createFromFormat('!Y-m', $validated['period']);
+
+            return [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString(), $validated['period']];
+        }
+
+        $dateFrom = $validated['date_from'] ?? now()->startOfMonth()->toDateString();
+        $dateTo = $validated['date_to'] ?? now()->endOfMonth()->toDateString();
+
         return [
-            $validated['date_from'] ?? now()->startOfMonth()->toDateString(),
-            $validated['date_to'] ?? now()->endOfMonth()->toDateString(),
+            $dateFrom,
+            $dateTo,
+            substr($dateFrom, 0, 7),
         ];
+    }
+
+    private function periodFileLabel(Request $request, string $dateFrom, string $dateTo): string
+    {
+        return $request->filled('period') ? $request->string('period')->toString() : "{$dateFrom}-{$dateTo}";
+    }
+
+    private function isOwnPayroll(Request $request, CurrentClientService $client): bool
+    {
+        return in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true);
+    }
+
+    private function scopeToUser(Builder $query, Request $request, bool $ownPayroll): void
+    {
+        if ($ownPayroll) {
+            $query->where('employees.user_id', $request->user()->id);
+        }
     }
 }

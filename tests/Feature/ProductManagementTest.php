@@ -77,6 +77,39 @@ it('includes related names and rates in the detail payload for the datatable', f
         ->and(substr_count($html, '&quot;cost_center_name&quot;:&quot;CC Produksi&quot;'))->toBe(2);
 });
 
+it('shows products from all active clients to super admins', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create(['name' => 'Client Aktif']);
+    $otherClient = Client::factory()->create(['name' => 'Client Lain']);
+    Product::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Produk Aktif']);
+    Product::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Cumi']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('products.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
+
+    $response->assertOk()
+        ->assertJsonFragment(['client_name' => $currentClient->name])
+        ->assertJsonFragment(['client_name' => $otherClient->name]);
+});
+
+it('filters product listing by selected client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create(['name' => 'Client Aktif']);
+    $otherClient = Client::factory()->create(['name' => 'Client Lain']);
+    Product::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Produk Aktif']);
+    Product::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Cumi']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('products.index', ['draw' => 1, 'start' => 0, 'length' => 10, 'client_id' => $otherClient->getKey()]));
+
+    $response->assertOk()
+        ->assertJsonPath('recordsFiltered', 1)
+        ->assertJsonFragment(['client_name' => $otherClient->name])
+        ->assertJsonMissing(['client_name' => $currentClient->name]);
+});
+
 it('shows a searchable client selector in the product form', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create(['name' => 'PT Produk Aktif']);
@@ -91,6 +124,9 @@ it('shows a searchable client selector in the product form', function () {
         ->assertSee('data-select2-select', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
         ->assertSee('Pilih client...', false)
+        ->assertSee('data-product-client-filter', false)
+        ->assertSee('data-select2-select', false)
+        ->assertSee('data-select2-placeholder="Semua client"', false)
         ->assertSee('placeholder="Contoh: PROD"', false)
         ->assertSee('placeholder="Contoh: Operator Produksi"', false)
         ->assertSee('Pilih status...', false)

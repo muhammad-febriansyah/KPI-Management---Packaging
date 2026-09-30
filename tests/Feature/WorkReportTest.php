@@ -1,5 +1,6 @@
 <?php
 
+use App\Exports\WorkReportExport;
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Product;
@@ -8,6 +9,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 uses(RefreshDatabase::class);
 
@@ -50,11 +52,36 @@ it('lists assigned realizations without exposing a status field', function () {
     $response->assertJsonCount(2, 'data')->assertJsonMissingPath('data.0.status');
 });
 
+it('exports assigned realizations using the selected date range', function () {
+    Excel::fake();
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+    $includedId = makeAssignedRealization($client, $admin, $employee);
+    $excludedId = makeAssignedRealization($client, $admin, $employee);
+
+    DB::table('work_realizations')->where('id', $includedId)->update(['work_date' => '2026-09-08']);
+    DB::table('work_realizations')->where('id', $excludedId)->update(['work_date' => '2026-10-01']);
+
+    $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('reports.work.export.excel', ['date_from' => '2026-09-01', 'date_to' => '2026-09-30']));
+
+    $response->assertOk();
+    Excel::assertDownloaded('hasil-pekerjaan-2026-09-01-2026-09-30.xlsx', function (WorkReportExport $export) use ($includedId, $excludedId): bool {
+        $realizationIds = $export->query()->pluck('realization_id')->all();
+
+        return $export->headings()[2] === 'ID Karyawan'
+            && in_array($includedId, $realizationIds, true)
+            && ! in_array($excludedId, $realizationIds, true);
+    });
+});
+
 it('reads the report row fields from the assigned realization', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create([
         'client_id' => $client->getKey(),
+        'employee_no' => 'EMPRPT001',
         'sim_id' => 'SIM-REAL-001',
         'full_name' => 'Karyawan Realisasi',
     ]);
@@ -76,6 +103,7 @@ it('reads the report row fields from the assigned realization', function () {
 
     $response->assertOk()
         ->assertJsonPath('data.0.work_date', '08/09/2026')
+        ->assertJsonPath('data.0.employee_no', 'EMPRPT001')
         ->assertJsonPath('data.0.sim_id', 'SIM-REAL-001')
         ->assertJsonPath('data.0.full_name', 'Karyawan Realisasi')
         ->assertJsonPath('data.0.product_name', 'Produk dari Realisasi')
@@ -97,11 +125,11 @@ it('searches the work report by employee name', function () {
     makeAssignedRealization($client, $admin, $employee);
     $columns = array_map(
         fn (string $column): array => ['data' => $column, 'searchable' => 'true', 'orderable' => 'true', 'search' => ['value' => '', 'regex' => 'false']],
-        ['work_date', 'sim_id', 'full_name', 'shift_name', 'sku_snapshot', 'product_name', 'target', 'target_price', 'actual', 'actual_price', 'description'],
+        ['work_date', 'employee_no', 'sim_id', 'full_name', 'shift_name', 'sku_snapshot', 'product_name', 'target', 'target_price', 'actual', 'actual_price', 'description'],
     );
-    $columns[6]['searchable'] = 'false';
     $columns[7]['searchable'] = 'false';
-    $columns[9]['searchable'] = 'false';
+    $columns[8]['searchable'] = 'false';
+    $columns[10]['searchable'] = 'false';
 
     $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?'.http_build_query([
@@ -189,5 +217,5 @@ it('only reports products and work results from the active client', function () 
         ->getJson(route('reports.work').'?draw=1&start=0&length=10');
 
     $response->assertOk()->assertJsonCount(1, 'data');
-    expect($response->json('data.0.full_name'))->toBe($activeEmployee->full_name);
+    expect(html_entity_decode($response->json('data.0.full_name')))->toBe($activeEmployee->full_name);
 });

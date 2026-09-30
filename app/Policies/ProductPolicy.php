@@ -74,8 +74,15 @@ class ProductPolicy
      */
     private function access(User $user, Product $product): bool
     {
-        return $this->viewAny($user)
-            && $this->currentClient->isResolved()
+        if (! $this->viewAny($user)) {
+            return false;
+        }
+
+        if ($user->is_super_admin) {
+            return $this->currentClient->availableFor($user)->contains('id', $product->client_id);
+        }
+
+        return $this->currentClient->isResolved()
             && $product->client_id === $this->currentClient->id();
     }
 }

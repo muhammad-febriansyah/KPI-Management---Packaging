@@ -8,10 +8,23 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+it('hides my payroll from the super admin sidebar', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('dashboard'));
+
+    $response->assertOk()
+        ->assertDontSee('Gaji Saya')
+        ->assertSee('Gaji');
+});
+
 it('only shows menus granted to the user\'s role in the sidebar', function () {
     $client = Client::factory()->create();
     $role = Role::query()->create(['code' => 'client', 'name' => 'Client']);
-    $dashboard = Permission::query()->create(['code' => 'menu.dashboard', 'name' => 'Menu: Dashboard']);
+    $dashboard = Permission::query()->firstOrCreate(['code' => 'menu.dashboard'], ['name' => 'Menu: Dashboard']);
     $role->permissions()->attach($dashboard);
 
     $user = User::factory()->create();
@@ -29,8 +42,8 @@ it('only shows menus granted to the user\'s role in the sidebar', function () {
 it('reflects a menu revoked by the super admin without redeploying', function () {
     $client = Client::factory()->create();
     $role = Role::query()->create(['code' => 'client', 'name' => 'Client']);
-    $dashboard = Permission::query()->create(['code' => 'menu.dashboard', 'name' => 'Menu: Dashboard']);
-    $products = Permission::query()->create(['code' => 'menu.products', 'name' => 'Menu: Produk']);
+    $dashboard = Permission::query()->firstOrCreate(['code' => 'menu.dashboard'], ['name' => 'Menu: Dashboard']);
+    $products = Permission::query()->firstOrCreate(['code' => 'menu.products'], ['name' => 'Menu: Produk']);
     $role->permissions()->attach([$dashboard->id, $products->id]);
 
     $user = User::factory()->create();

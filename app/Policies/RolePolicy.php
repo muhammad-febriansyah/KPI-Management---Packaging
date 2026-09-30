@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Services\CurrentClientService;
 
 class RolePolicy
 {
@@ -12,7 +13,13 @@ class RolePolicy
      */
     public function viewAny(User $user): bool
     {
-        return $this->isActiveSuperAdmin($user);
+        if ($this->isActiveSuperAdmin($user)) {
+            return true;
+        }
+
+        $client = app(CurrentClientService::class);
+
+        return $client->isResolved() && $user->isAdminFor($client->get());
     }
 
     /**

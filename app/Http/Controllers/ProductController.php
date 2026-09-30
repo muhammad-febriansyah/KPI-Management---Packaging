@@ -30,16 +30,27 @@ class ProductController extends Controller
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('viewAny', Product::class);
         $currentClient = $client->get();
-        $query = Product::query()->where('client_id', $client->id())->with(['unit', 'group', 'costCenter'])->orderBy('name');
+        $availableClientIds = $client->availableFor($request->user())->modelKeys();
+        $selectedClientId = $request->integer('client_id');
+        $query = Product::query()
+            ->when(
+                $request->user()->is_super_admin,
+                fn ($query) => $query->withoutGlobalScopes()
+                    ->whereIn('products.client_id', $availableClientIds)
+                    ->when(in_array($selectedClientId, $availableClientIds, true), fn ($query) => $query->where('products.client_id', $selectedClientId)),
+                fn ($query) => $query->where('client_id', $client->id()),
+            )
+            ->with(['client', 'unit', 'group', 'costCenter'])
+            ->orderBy('name');
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->addColumn('client_name', fn (): string => $currentClient->name)->addColumn('unit_name', fn (Product $p): string => $p->unit?->name ?? '—')->addColumn('group_name', fn (Product $p): string => $p->group?->name ?? '—')->editColumn('status', fn (Product $p): string => view('components.badge', [
+            return DataTables::eloquent($query)->addColumn('client_name', fn (Product $p): string => $p->client?->name ?? '—')->addColumn('unit_name', fn (Product $p): string => $p->unit?->name ?? '—')->addColumn('group_name', fn (Product $p): string => $p->group?->name ?? '—')->editColumn('status', fn (Product $p): string => view('components.badge', [
                 'variant' => $p->status === 'active' ? 'success' : 'neutral',
                 'slot' => $p->status === 'active' ? 'Aktif' : 'Nonaktif',
-            ])->render())->addColumn('action', function (Product $p) use ($currentClient): string {
+            ])->render())->addColumn('action', function (Product $p): string {
                 $detail = e(json_encode([
-                    'client_code' => $currentClient->code,
-                    'client_name' => $currentClient->name,
-                    'client_status' => $currentClient->status,
+                    'client_code' => $p->client?->code,
+                    'client_name' => $p->client?->name,
+                    'client_status' => $p->client?->status,
                     'sku' => $p->sku,
                     'name' => $p->name,
                     'unit_name' => $p->unit?->name,
@@ -74,6 +85,7 @@ class ProductController extends Controller
         return view('products.index', [
             'currentClient' => $currentClient,
             'user' => $request->user(),
+            'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(),
             'units' => Unit::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
             'groups' => Group::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
             'costCenters' => CostCenter::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
@@ -163,7 +175,6 @@ class ProductController extends Controller
 
     public function update(UpdateProductRequest $request, Product $product, CurrentClientService $client): JsonResponse
     {
-        abort_unless($product->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('update', $product);
         $product->update($request->validated());
@@ -173,7 +184,6 @@ class ProductController extends Controller
 
     public function destroy(Request $request, Product $product, CurrentClientService $client): JsonResponse
     {
-        abort_unless($product->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('delete', $product);
         $this->deleteRestricted($product, 'Produk tidak dapat dihapus karena masih dipakai pada batch atau realisasi kerja.');

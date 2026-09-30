@@ -14,9 +14,8 @@ class ProductFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * Every foreign key stays null because each one is enforced by a composite
-     * foreign key on (client_id, id); a caller that sets one must pass a record
-     * belonging to the same client.
+     * Foreign keys stay null by default; callers may assign active master data
+     * from any client.
      *
      * @return array<string, mixed>
      */

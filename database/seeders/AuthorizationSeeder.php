@@ -16,6 +16,8 @@ class AuthorizationSeeder extends Seeder
     {
         $roles = [
             'super-admin' => 'Super Admin PT SIM',
+            'admin' => 'Admin',
+            'leader' => 'Leader',
             'employee' => 'Karyawan',
             'client' => 'Client',
         ];
@@ -60,7 +62,9 @@ class AuthorizationSeeder extends Seeder
         }
 
         $defaultRoleMenus = [
-            'employee' => ['dashboard', 'realizations'],
+            'admin' => ['dashboard', 'units', 'groups', 'cost-centers', 'products', 'employees', 'shifts', 'realizations', 'invoices', 'deductions', 'work-reports', 'reports', 'settings'],
+            'leader' => ['realizations', 'invoices', 'my-payroll'],
+            'employee' => ['my-payroll'],
             // A client inputs its own products and product masters, and follows the work
             // through Hasil Pekerjaan. Assigning employees, potongan gaji and laporan gaji
             // stay with PT SIM, so the client role is not granted those menus.

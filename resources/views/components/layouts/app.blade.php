@@ -14,7 +14,9 @@
     $roleCode = $user?->roleCodeFor($currentClient);
     $resolvedUserRole = match ($roleCode) {
         'employee' => 'Karyawan',
+        'leader' => 'Leader',
         'client' => 'Client',
+        'admin' => 'Admin',
         'super-admin' => 'Super Admin',
         default => 'Administrator',
     };
@@ -37,11 +39,13 @@
             ['key' => 'products', 'label' => 'Produk', 'icon' => 'cube', 'route' => 'products.index'],
             ['key' => 'employees', 'label' => 'Karyawan', 'icon' => 'users', 'route' => 'employees.index'],
             ['key' => 'clients', 'label' => 'Client', 'icon' => 'building-office-2', 'route' => 'clients.index'],
-            ['key' => 'shifts', 'label' => 'Master Shift', 'icon' => 'clock', 'route' => 'shifts.index', 'hidden' => true],
+            ['key' => 'shifts', 'label' => 'Master Shift', 'icon' => 'clock', 'route' => 'shifts.index'],
         ]],
         ['key' => 'pemborongan', 'label' => 'Pemborongan', 'icon' => 'clipboard-document-list', 'children' => [
             ['key' => 'target', 'label' => 'Target', 'hidden' => true],
             ['key' => 'realizations', 'label' => 'Realisasi', 'route' => 'realizations.index'],
+            ['key' => 'invoices', 'label' => 'Invoice Borongan', 'route' => 'invoices.index'],
+            ['key' => 'my-payroll', 'label' => 'Gaji Saya', 'route' => 'reports.payroll'],
             ['key' => 'deductions', 'label' => 'Potongan Gaji', 'route' => 'deductions.index'],
         ]],
         ['key' => 'reports-group', 'label' => 'Laporan', 'icon' => 'document-chart-bar', 'children' => [
@@ -85,7 +89,7 @@
                 @foreach ($navigation as $item)
                     @php
                         $visibleChildren = isset($item['children'])
-                            ? collect($item['children'])->filter(fn (array $child): bool => ! ($child['hidden'] ?? false) && ($allowedNavigation === null || in_array($child['key'], $allowedNavigation, true)))->values()
+                            ? collect($item['children'])->filter(fn (array $child): bool => ! ($child['hidden'] ?? false) && ! ($user?->is_super_admin && $child['key'] === 'my-payroll') && ($allowedNavigation === null || in_array($child['key'], $allowedNavigation, true)))->values()
                             : collect();
                     @endphp
                     @continue(($item['hidden'] ?? false) || ($allowedNavigation !== null && (isset($item['children']) ? $visibleChildren->isEmpty() : ! in_array($item['key'], $allowedNavigation, true))))
@@ -167,7 +171,7 @@
                     <x-icon name="bars-3" />
                 </button>
 
-                @if (! in_array($roleCode, ['client', 'employee'], true))
+                @if (! in_array($roleCode, ['client', 'leader', 'employee'], true))
                     <div data-global-search class="relative min-w-0 max-w-[520px] flex-1">
                         <label class="relative block">
                             <span class="sr-only">Pencarian global</span>
@@ -180,7 +184,7 @@
 
                 <div class="flex-1"></div>
 
-                @unless ($roleCode === 'client')
+                @unless (in_array($roleCode, ['client', 'leader', 'employee'], true))
                 <div class="relative shrink-0">
                     <button type="button" data-dropdown-button="notifications-dropdown" class="relative grid size-[42px] shrink-0 cursor-pointer place-items-center rounded-lg text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-primary-600" aria-label="Notifikasi" aria-haspopup="true">
                         <x-icon name="bell" />

@@ -209,15 +209,24 @@ class RealisticDemoDataSeeder extends Seeder
                 'finalized_at' => $isFinalized ? now()->subDays($daysAgo)->addHours(10) : null,
             ]);
 
-            foreach ($employeeIndexes as $employeeIndex) {
+            $assignmentCount = count($employeeIndexes);
+            $totalGrossAmount = (int) round($output * (float) $product->employee_rate);
+            $sharedOutput = round($output / $assignmentCount, 3);
+            $sharedGrossAmount = intdiv($totalGrossAmount, $assignmentCount);
+            $grossRemainder = $totalGrossAmount % $assignmentCount;
+
+            foreach ($employeeIndexes as $index => $employeeIndex) {
                 $employee = $employees->get($employeeIndex);
                 $rate = $product->employee_rate;
+                $isLastAssignment = $index === $assignmentCount - 1;
 
                 DB::table('realization_employees')->insert([
                     'client_id' => $client->id, 'work_realization_id' => $realization->id, 'employee_id' => $employee->id,
                     'rate_category_snapshot' => $employee->rate_category, 'rate_per_unit_snapshot' => $rate,
-                    'allocation_output' => $output,
-                    'gross_amount' => $isFinalized ? (int) round($output * (float) $rate) : 0,
+                    'allocation_output' => $isFinalized
+                        ? ($isLastAssignment ? round($output - ($sharedOutput * ($assignmentCount - 1)), 3) : $sharedOutput)
+                        : 0,
+                    'gross_amount' => $isFinalized ? $sharedGrossAmount + ($isLastAssignment ? $grossRemainder : 0) : 0,
                     'created_at' => now(),
                 ]);
             }

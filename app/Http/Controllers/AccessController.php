@@ -71,7 +71,7 @@ class AccessController extends Controller
                     $status = $user->is_super_admin ? $user->status : ($user->client_user_status ?? $user->status);
                     $isActive = $status === 'active';
                     $label = $isActive ? 'Nonaktifkan' : 'Aktifkan';
-                    $classes = $isActive ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+                    $classes = $isActive ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
                     $icon = $isActive ? 'x-mark' : 'check-circle';
                     $buttons = [];
 

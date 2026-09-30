@@ -474,6 +474,8 @@ const initializeServerTables = () => {
         const workFilters = resource === 'reports/work' ? document.querySelector('[data-work-filters]') : null;
         const payrollFilters = resource === 'reports/payroll' ? document.querySelector('[data-payroll-filters]') : null;
         const invoiceFilters = resource === 'invoices' ? document.querySelector('[data-invoice-filters]') : null;
+        const productFilters = resource === 'products' ? document.querySelector('[data-product-filters]') : null;
+        const employeeFilters = resource === 'employees' ? document.querySelector('[data-employee-filters]') : null;
         const initialSearch = new URLSearchParams(window.location.search).get('q') ?? '';
         const headerRow = table.querySelector('thead tr');
         const numberHeader = document.createElement('th');
@@ -483,7 +485,7 @@ const initializeServerTables = () => {
         const dataTable = new DataTable(table, {
             processing: true,
             serverSide: true,
-            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.period = payrollFilters.querySelector('[data-payroll-period]')?.value; } if (invoiceFilters) { params.period = invoiceFilters.querySelector('[data-invoice-period]')?.value; params.shift_id = invoiceFilters.querySelector('[data-invoice-shift]')?.value; params.cost_center_id = invoiceFilters.querySelector('[data-invoice-cost-center]')?.value; params.sku = invoiceFilters.querySelector('[data-invoice-sku]')?.value; params.batch_no = invoiceFilters.querySelector('[data-invoice-batch]')?.value; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } } },
+            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.period = payrollFilters.querySelector('[data-payroll-period]')?.value; } if (invoiceFilters) { params.period = invoiceFilters.querySelector('[data-invoice-period]')?.value; params.shift_id = invoiceFilters.querySelector('[data-invoice-shift]')?.value; params.cost_center_id = invoiceFilters.querySelector('[data-invoice-cost-center]')?.value; params.sku = invoiceFilters.querySelector('[data-invoice-sku]')?.value; params.batch_no = invoiceFilters.querySelector('[data-invoice-batch]')?.value; } if (productFilters) { params.client_id = productFilters.querySelector('[data-product-client-filter]')?.value ?? ''; } if (employeeFilters) { params.client_id = employeeFilters.querySelector('[data-employee-client-filter]')?.value ?? ''; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } } },
             pageLength: 10,
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
@@ -549,6 +551,14 @@ const initializeServerTables = () => {
                 paginate: { next: 'Berikutnya', previous: 'Sebelumnya' },
             },
         });
+        const productClientFilter = productFilters?.querySelector('[data-product-client-filter]');
+        if (productClientFilter) {
+            $(productClientFilter).on('change', () => dataTable.ajax.reload(null, true));
+        }
+        const employeeClientFilter = employeeFilters?.querySelector('[data-employee-client-filter]');
+        if (employeeClientFilter) {
+            $(employeeClientFilter).on('change', () => dataTable.ajax.reload(null, true));
+        }
         table._dataTable = dataTable;
         auditFilters?.querySelector('[data-audit-filter-submit]')?.addEventListener('click', () => dataTable.ajax.reload());
         const updateWorkExportLink = () => {
@@ -1470,6 +1480,11 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         fields.forEach((field) => {
             const input = item && form.elements[field];
             if (!input) return;
+            const radioInputs = form.querySelectorAll(`input[type="radio"][name="${field}"]`);
+            if (radioInputs.length) {
+                radioInputs.forEach((radio) => { radio.checked = String(radio.value) === String(item[field] ?? ''); });
+                return;
+            }
             if (input.tomselect) {
                 setTomSelectValue(input, item[field], item, field);
             } else {

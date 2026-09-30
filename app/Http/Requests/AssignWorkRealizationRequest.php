@@ -19,7 +19,7 @@ class AssignWorkRealizationRequest extends FormRequest
 
         return $user?->status === 'active'
             && $client->isResolved()
-            && ($user->is_super_admin || $user->roleCodeFor($client->get()) === 'employee');
+            && ($user->is_super_admin || in_array($user->roleCodeFor($client->get()), ['admin', 'leader', 'employee'], true));
     }
 
     /**

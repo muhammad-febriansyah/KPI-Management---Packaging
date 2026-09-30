@@ -29,11 +29,21 @@ class DeductionController extends Controller
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
                 ->editColumn('created_at', fn (EmployeeDeduction $deduction): string => $deduction->created_at?->format('d/m/Y') ?? '—')
+                ->addColumn('client_code', fn (): string => $client->get()->code)
+                ->addColumn('bulan', fn (EmployeeDeduction $deduction): string => $deduction->deductionPeriod?->month?->format('Y-m') ?? '—')
+                ->addColumn('minggu', fn (EmployeeDeduction $deduction): string|int => $deduction->deductionPeriod?->week_no ?? '—')
+                ->addColumn('no_karyawan', fn (EmployeeDeduction $deduction): string => $deduction->employee?->employee_no ?? '—')
                 ->addColumn('periode', fn (EmployeeDeduction $deduction): string => $this->periodLabel($deduction->deductionPeriod))
                 ->addColumn('sim_id', fn (EmployeeDeduction $deduction): string => $deduction->employee?->sim_id ?: ($deduction->employee?->employee_no ?? '—'))
                 ->addColumn('full_name', fn (EmployeeDeduction $deduction): string => $deduction->employee?->full_name ?? '—')
+                ->addColumn('uniform_amount', fn (EmployeeDeduction $deduction): int => (int) $deduction->uniform_amount)
+                ->addColumn('equipment_amount', fn (EmployeeDeduction $deduction): int => (int) $deduction->equipment_amount)
+                ->addColumn('meal_amount', fn (EmployeeDeduction $deduction): int => (int) $deduction->meal_amount)
                 ->addColumn('bpjs_health', fn (EmployeeDeduction $deduction): string => $this->formatPercent($deduction->bpjs_health_percent))
                 ->addColumn('bpjs_employment', fn (EmployeeDeduction $deduction): string => $this->formatPercent($deduction->bpjs_employment_percent))
+                ->addColumn('salary_advance_type', fn (EmployeeDeduction $deduction): string => $this->formatSalaryAdvanceType($deduction->salary_advance_type))
+                ->addColumn('salary_advance_value', fn (EmployeeDeduction $deduction): float => (float) $deduction->salary_advance_value)
+                ->addColumn('notes', fn (EmployeeDeduction $deduction): string => $deduction->notes ?: '—')
                 ->addColumn('action', fn (EmployeeDeduction $deduction): string => '<div class="flex justify-end gap-2"><button type="button" data-deduction-row-edit data-url="'.route('deductions.update', $deduction).'" data-deduction-row="'.e($deduction->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button><form method="POST" action="'.route('deductions.destroy', $deduction).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form></div>')
                 ->rawColumns(['action'])
                 ->toJson();
@@ -53,6 +63,28 @@ class DeductionController extends Controller
         ]);
     }
 
+    public function employeeOptions(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
+        $targetClient = $client->availableFor($request->user())->firstWhere('id', $request->integer('client_id'));
+        abort_unless($targetClient !== null, 403);
+        $search = trim($request->string('q')->toString());
+
+        $employees = $client->runAs($targetClient, fn () => Employee::query()
+            ->where('status', 'active')
+            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
+                ->where('employee_no', 'like', "%{$search}%")
+                ->orWhere('full_name', 'like', "%{$search}%")))
+            ->orderBy('full_name')
+            ->limit(100)
+            ->get(['id', 'employee_no', 'full_name']));
+
+        return response()->json(['results' => $employees->map(fn (Employee $employee): array => [
+            'id' => $employee->getKey(),
+            'text' => "{$employee->employee_no} — {$employee->full_name}",
+        ])]);
+    }
+
     /**
      * "1.00%" is harder to scan than "1%". Keeps decimals only when they matter
      * (e.g. "2.5%"), so whole-number rates read as plain "2%" / "1%".
@@ -60,6 +92,15 @@ class DeductionController extends Controller
     private function formatPercent(float|string $value): string
     {
         return rtrim(rtrim(number_format((float) $value, 2), '0'), '.').'%';
+    }
+
+    private function formatSalaryAdvanceType(?string $type): string
+    {
+        return match ($type) {
+            'fixed' => 'Fixed',
+            'percentage' => 'Percentage',
+            default => '—',
+        };
     }
 
     private function periodLabel(?DeductionPeriod $period): string
@@ -77,18 +118,24 @@ class DeductionController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $data = $request->validated();
+        $targetClient = $client->availableFor($request->user())->firstWhere('id', $data['client_id']);
+        abort_unless($targetClient !== null, 403);
+        $targetClientId = (int) $data['client_id'];
         $employeeIds = $data['employee_ids'] ?? [];
-        unset($data['employee_ids']);
+        unset($data['client_id'], $data['employee_ids']);
         $deductionData = collect($data)->except(['month', 'week_no'])->all();
 
-        $period = DB::transaction(function () use ($data, $deductionData, $employeeIds, $client, $request): DeductionPeriod {
-            $period = DeductionPeriod::query()->create(['month' => $data['month'].'-01', 'week_no' => $data['week_no'] ?? null, 'client_id' => $client->id(), 'status' => 'draft', 'created_by' => $request->user()->id]);
+        $period = $client->runAs($targetClient, fn (): DeductionPeriod => DB::transaction(function () use ($data, $deductionData, $employeeIds, $targetClientId, $request): DeductionPeriod {
+            $period = DeductionPeriod::query()->firstOrCreate(
+                ['client_id' => $targetClientId, 'month' => $data['month'].'-01', 'week_no' => $data['week_no'] ?? null],
+                ['status' => 'draft', 'created_by' => $request->user()->id],
+            );
             foreach ($employeeIds as $employeeId) {
-                $period->deductions()->create([...$deductionData, 'client_id' => $client->id(), 'employee_id' => $employeeId]);
+                $period->deductions()->create([...$deductionData, 'client_id' => $targetClientId, 'employee_id' => $employeeId]);
             }
 
             return $period;
-        });
+        }));
 
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json(['message' => 'Potongan gaji berhasil disimpan.', 'id' => $period->id], 201);
@@ -127,7 +174,7 @@ class DeductionController extends Controller
         abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $exampleEmployee = Employee::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('full_name')->first();
 
-        return Excel::download(new DeductionTemplateExport($exampleEmployee), 'template-potongan-gaji.xlsx');
+        return Excel::download(new DeductionTemplateExport($client->get(), $exampleEmployee), 'template-potongan-gaji.xlsx');
     }
 
     public function import(Request $request, CurrentClientService $client): JsonResponse
@@ -135,7 +182,7 @@ class DeductionController extends Controller
         abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls']]);
 
-        $import = new DeductionImport($client->id(), $request->user()->id);
+        $import = new DeductionImport($client->id(), $client->availableFor($request->user())->modelKeys(), $request->user()->id);
         Excel::import($import, $request->file('file'));
 
         if ($import->failures !== []) {

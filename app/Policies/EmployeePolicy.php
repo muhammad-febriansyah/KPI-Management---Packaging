@@ -79,8 +79,15 @@ class EmployeePolicy
      */
     private function canAccess(User $user, Employee $employee): bool
     {
-        return $this->hasAccess($user)
-            && $this->currentClient->isResolved()
+        if (! $this->hasAccess($user)) {
+            return false;
+        }
+
+        if ($user->is_super_admin) {
+            return $this->currentClient->availableFor($user)->contains('id', $employee->client_id);
+        }
+
+        return $this->currentClient->isResolved()
             && $employee->client_id === $this->currentClient->id();
     }
 }

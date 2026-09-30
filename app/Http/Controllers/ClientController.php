@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ClientTemplateExport;
 use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
+use App\Imports\ClientImport;
 use App\Models\Client;
 use App\Models\Role;
 use App\Models\User;
@@ -14,6 +16,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Yajra\DataTables\Facades\DataTables;
 
 class ClientController extends Controller
@@ -90,6 +94,35 @@ class ClientController extends Controller
         }
 
         return view('clients.index', ['user' => $request->user()]);
+    }
+
+    public function template(Request $request): BinaryFileResponse
+    {
+        abort_unless($request->user()->is_super_admin, 403);
+        Gate::authorize('create', Client::class);
+
+        return Excel::download(new ClientTemplateExport, 'template-master-client.xlsx');
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->is_super_admin, 403);
+        Gate::authorize('create', Client::class);
+        $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls']]);
+
+        $import = new ClientImport;
+        Excel::import($import, $request->file('file'));
+
+        if ($import->failures !== []) {
+            return response()->json([
+                'message' => $import->imported > 0
+                    ? "{$import->imported} baris berhasil diimpor, ".count($import->failures).' baris gagal. Perbaiki lalu import ulang baris yang gagal.'
+                    : 'Import gagal, tidak ada baris yang berhasil disimpan.',
+                'failures' => $import->failures,
+            ], $import->imported > 0 ? 207 : 422);
+        }
+
+        return response()->json(['message' => "{$import->imported} baris client berhasil diimpor."]);
     }
 
     public function store(StoreClientRequest $request): JsonResponse

@@ -2,8 +2,12 @@
 
 namespace App\Imports;
 
+use App\Models\Client;
 use App\Models\DeductionPeriod;
 use App\Models\Employee;
+use App\Models\EmployeeDeduction;
+use App\Models\Scopes\ClientScope;
+use App\Services\CurrentClientService;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -20,20 +24,33 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
 
     public int $imported = 0;
 
-    public function __construct(private readonly int $clientId, private readonly int $userId) {}
+    /** @param list<int> $allowedClientIds */
+    public function __construct(
+        private readonly int $currentClientId,
+        private readonly array $allowedClientIds,
+        private readonly int $userId,
+    ) {}
 
     public function collection(SupportCollection $rows): void
     {
         DB::transaction(function () use ($rows): void {
             /** @var array<string, DeductionPeriod> $periodCache */
             $periodCache = [];
+            $clients = Client::query()
+                ->active()
+                ->whereIn('id', $this->allowedClientIds)
+                ->get()
+                ->keyBy(fn (Client $client): string => mb_strtolower($client->code));
+            $clientsById = $clients->keyBy('id');
             $employeeKeys = $rows
                 ->map(fn ($row): string => trim((string) ($row['no_karyawan'] ?? $row['sim_id'] ?? '')))
                 ->filter()
                 ->unique()
                 ->values();
             $employees = Employee::query()
-                ->where('client_id', $this->clientId)
+                ->withoutGlobalScope(ClientScope::class)
+                ->whereIn('client_id', $this->allowedClientIds)
+                ->where('status', 'active')
                 ->where(function ($query) use ($employeeKeys): void {
                     $query->whereIn('employee_no', $employeeKeys)->orWhereIn('sim_id', $employeeKeys);
                 })
@@ -42,12 +59,13 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
             $employeeCache = [];
             foreach ($employees as $employee) {
                 if ($employee->employee_no) {
-                    $employeeCache[$employee->employee_no] = $employee;
+                    $employeeCache[$employee->client_id.'|'.mb_strtolower($employee->employee_no)] = $employee;
                 }
                 if ($employee->sim_id) {
-                    $employeeCache[$employee->sim_id] = $employee;
+                    $employeeCache[$employee->client_id.'|'.mb_strtolower($employee->sim_id)] = $employee;
                 }
             }
+            $seenDeductionKeys = [];
 
             foreach ($rows as $index => $row) {
                 $rowNumber = $index + 2; // Row 1 is the heading row.
@@ -82,7 +100,16 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 }
 
                 $employeeNo = trim((string) $data['no_karyawan']);
-                $employee = $employeeCache[$employeeNo] ?? null;
+                $client = filled($data['client_code'])
+                    ? $clients->get(mb_strtolower($data['client_code']))
+                    : $clientsById->get($this->currentClientId);
+                if (! $client) {
+                    $this->failures[] = ['row' => $rowNumber, 'errors' => [sprintf('Client dengan kode "%s" tidak ditemukan atau tidak dapat diakses.', $data['client_code'] ?: $this->currentClientId)]];
+
+                    continue;
+                }
+
+                $employee = $employeeCache[$client->id.'|'.mb_strtolower($employeeNo)] ?? null;
                 if (! $employee) {
                     $this->failures[] = ['row' => $rowNumber, 'errors' => ["No Karyawan \"{$employeeNo}\" tidak ditemukan."]];
 
@@ -97,18 +124,36 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 }
 
                 $weekNo = filled($data['minggu'] ?? null) ? (int) $data['minggu'] : null;
-                $cacheKey = $data['bulan'].'|'.($weekNo ?? 0);
+                $deductionKey = $client->id.'|'.$data['bulan'].'|'.($weekNo ?? 0).'|'.$employee->id;
+                if (isset($seenDeductionKeys[$deductionKey])) {
+                    $this->failures[] = ['row' => $rowNumber, 'errors' => [sprintf('Kombinasi client, bulan, minggu, dan karyawan duplikat pada file import (baris %d).', $seenDeductionKeys[$deductionKey])]];
+
+                    continue;
+                }
+                $seenDeductionKeys[$deductionKey] = $rowNumber;
+
+                $cacheKey = $client->id.'|'.$data['bulan'].'|'.($weekNo ?? 0);
                 if (! isset($periodCache[$cacheKey])) {
-                    $periodCache[$cacheKey] = DeductionPeriod::query()->firstOrCreate(
-                        ['client_id' => $this->clientId, 'month' => $data['bulan'].'-01', 'week_no' => $weekNo],
+                    $periodCache[$cacheKey] = app(CurrentClientService::class)->runAs($client, fn (): DeductionPeriod => DeductionPeriod::query()->firstOrCreate(
+                        ['client_id' => $client->id, 'month' => $data['bulan'].'-01', 'week_no' => $weekNo],
                         ['status' => 'draft', 'created_by' => $this->userId],
-                    );
+                    ));
                 }
 
-                $periodCache[$cacheKey]->deductions()->updateOrCreate(
-                    ['employee_id' => $employee->id],
-                    [
-                        'client_id' => $this->clientId,
+                $alreadyExists = app(CurrentClientService::class)->runAs($client, fn (): bool => EmployeeDeduction::query()
+                    ->where('deduction_period_id', $periodCache[$cacheKey]->getKey())
+                    ->where('employee_id', $employee->id)
+                    ->exists());
+                if ($alreadyExists) {
+                    $this->failures[] = ['row' => $rowNumber, 'errors' => ['Karyawan sudah memiliki potongan pada kombinasi client, bulan, dan minggu tersebut.']];
+
+                    continue;
+                }
+
+                app(CurrentClientService::class)->runAs($client, function () use ($data, $employee, $periodCache, $cacheKey, $client): void {
+                    $periodCache[$cacheKey]->deductions()->create([
+                        'client_id' => $client->id,
+                        'employee_id' => $employee->id,
                         'uniform_amount' => (int) round((float) ($data['potongan_seragam'] ?? 0)),
                         'equipment_amount' => (int) round((float) ($data['potongan_perlengkapan'] ?? 0)),
                         'meal_amount' => (int) round((float) ($data['potongan_uang_makan'] ?? 0)),
@@ -119,8 +164,8 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                         'correction_minus' => (int) round((float) ($data['koreksi_pengurangan'] ?? 0)),
                         'correction_plus' => (int) round((float) ($data['koreksi_penambahan'] ?? 0)),
                         'notes' => filled($data['catatan'] ?? null) ? $data['catatan'] : null,
-                    ],
-                );
+                    ]);
+                });
 
                 $this->imported++;
             }
@@ -140,6 +185,13 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
         return trim((string) $value);
     }
 
+    private function normalizeCode(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
     /**
      * Convert the visible list-table format into the detailed import shape.
      * The detailed format remains supported for existing files.
@@ -149,17 +201,25 @@ class DeductionImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
      */
     private function normalizeTableRow(array $data): array
     {
+        $clientCode = $this->normalizeCode($data['client_code'] ?? $data['kode_client'] ?? $data['kode_klien'] ?? null);
         if (! array_key_exists('periode', $data) && ! array_key_exists('sim_id', $data)) {
-            return $data;
+            return [
+                ...$data,
+                'client_code' => $clientCode,
+                'no_karyawan' => $this->normalizeCode($data['no_karyawan'] ?? $data['employee_no'] ?? null),
+                'potongan_perlengkapan' => $data['potongan_perlengkapan'] ?? $data['potongan_perlengkapan_kerja'] ?? null,
+            ];
         }
 
         $period = $this->parseTablePeriod($data['periode'] ?? null);
 
         return [
             ...$data,
+            'client_code' => $clientCode,
             'bulan' => $period['month'] ?? '',
             'minggu' => $period['week'],
             'no_karyawan' => trim((string) ($data['sim_id'] ?? '')),
+            'potongan_perlengkapan' => $data['potongan_perlengkapan'] ?? $data['potongan_perlengkapan_kerja'] ?? 0,
             'bpjs_kesehatan_persen' => $this->normalizePercent($data['bpjs_kesehatan'] ?? null),
             'bpjs_ketenagakerjaan_persen' => $this->normalizePercent($data['bpjs_ketenagakerjaan'] ?? null),
             'potongan_seragam' => 0,

@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
@@ -21,6 +22,34 @@ it('allows every active user to open the profile page without a client context',
     $response->assertOk();
     $response->assertSee('Profil Saya');
     $response->assertSee('User Tanpa Client');
+    $response->assertSee('Ganti password');
+    $response->assertSee('name="current_password"', false);
+});
+
+it('changes the authenticated user password with the current password', function () {
+    $user = User::factory()->create(['password' => 'password']);
+
+    $response = $this->actingAs($user)->put(route('profile.password.update'), [
+        'current_password' => 'password',
+        'password' => 'password-baru',
+        'password_confirmation' => 'password-baru',
+    ]);
+
+    $response->assertRedirectToRoute('profile.edit');
+    expect(Hash::check('password-baru', $user->fresh()->password))->toBeTrue();
+});
+
+it('rejects a password change when the current password is invalid', function () {
+    $user = User::factory()->create(['password' => 'password']);
+
+    $response = $this->actingAs($user)->put(route('profile.password.update'), [
+        'current_password' => 'password-salah',
+        'password' => 'password-baru',
+        'password_confirmation' => 'password-baru',
+    ]);
+
+    $response->assertSessionHasErrors(['current_password']);
+    expect(Hash::check('password', $user->fresh()->password))->toBeTrue();
 });
 
 it('updates profile details and avatar', function () {

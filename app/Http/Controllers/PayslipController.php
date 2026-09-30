@@ -13,9 +13,14 @@ class PayslipController extends Controller
 {
     public function show(Request $request, Employee $employee, CurrentClientService $client, PayrollReportBuilder $builder): Response
     {
-        abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
+        $ownPayroll = $this->isOwnPayroll($request, $client);
+        abort_unless($request->user()->canAccessMenu($ownPayroll ? 'my-payroll' : 'reports', $client->get()), 403);
         [$dateFrom, $dateTo] = $this->resolveRange($request);
-        $row = $builder->forClient($client->id(), $dateFrom, $dateTo)->where('employees.id', $employee->id)->first();
+        $query = $builder->forClient($client->id(), $dateFrom, $dateTo)->where('employees.id', $employee->id);
+        if ($ownPayroll) {
+            $query->where('employees.user_id', $request->user()->id);
+        }
+        $row = $query->first();
         abort_unless($row, 404);
 
         $pdf = Pdf::loadView('reports.payslip', ['rows' => [$row], 'client' => $client->get(), 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
@@ -25,9 +30,14 @@ class PayslipController extends Controller
 
     public function bulk(Request $request, CurrentClientService $client, PayrollReportBuilder $builder): Response
     {
-        abort_unless($request->user()->canAccessMenu('reports', $client->get()), 403);
+        $ownPayroll = $this->isOwnPayroll($request, $client);
+        abort_unless($request->user()->canAccessMenu($ownPayroll ? 'my-payroll' : 'reports', $client->get()), 403);
         [$dateFrom, $dateTo] = $this->resolveRange($request);
-        $rows = $builder->forClient($client->id(), $dateFrom, $dateTo)->lazy(500);
+        $query = $builder->forClient($client->id(), $dateFrom, $dateTo);
+        if ($ownPayroll) {
+            $query->where('employees.user_id', $request->user()->id);
+        }
+        $rows = $query->lazy(500);
 
         $pdf = Pdf::loadView('reports.payslip', ['rows' => $rows, 'client' => $client->get(), 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]);
 
@@ -45,5 +55,10 @@ class PayslipController extends Controller
         $dateTo = $validated['date_to'] ?? now()->endOfMonth()->toDateString();
 
         return [$dateFrom, $dateTo];
+    }
+
+    private function isOwnPayroll(Request $request, CurrentClientService $client): bool
+    {
+        return in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true);
     }
 }

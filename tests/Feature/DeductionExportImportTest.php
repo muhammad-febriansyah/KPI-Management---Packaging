@@ -9,6 +9,7 @@ use App\Models\EmployeeDeduction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -17,7 +18,9 @@ uses(RefreshDatabase::class);
 
 function buildDeductionImportFile(array $rows): UploadedFile
 {
-    $headings = ['Bulan', 'Minggu', 'No Karyawan', 'Nama Lengkap', 'Potongan Seragam', 'Potongan Perlengkapan', 'Potongan Uang Makan', 'BPJS Kesehatan Persen', 'BPJS Ketenagakerjaan Persen', 'Tipe DP Gaji', 'Nilai DP Gaji', 'Koreksi Pengurangan', 'Koreksi Penambahan', 'Catatan'];
+    $headings = count($rows[0] ?? []) === 15
+        ? ['Kode Klien', 'Bulan', 'Minggu', 'No Karyawan', 'Nama Lengkap', 'Potongan Seragam', 'Potongan Perlengkapan Kerja', 'Potongan Uang Makan', 'BPJS Kesehatan Persen', 'BPJS Ketenagakerjaan Persen', 'Tipe DP Gaji', 'Nilai DP Gaji', 'Koreksi Pengurangan', 'Koreksi Penambahan', 'Catatan']
+        : ['Bulan', 'Minggu', 'No Karyawan', 'Nama Lengkap', 'Potongan Seragam', 'Potongan Perlengkapan', 'Potongan Uang Makan', 'BPJS Kesehatan Persen', 'BPJS Ketenagakerjaan Persen', 'Tipe DP Gaji', 'Nilai DP Gaji', 'Koreksi Pengurangan', 'Koreksi Penambahan', 'Catatan'];
 
     $spreadsheet = new Spreadsheet;
     $spreadsheet->getActiveSheet()->fromArray([$headings, ...$rows]);
@@ -65,8 +68,38 @@ it('downloads a deduction import template', function () {
         ->assertOk();
 
     Excel::assertDownloaded('template-potongan-gaji.xlsx', function (DeductionTemplateExport $export): bool {
-        return $export->headings() === ['Tanggal Input', 'Periode', 'SIM ID', 'Nama Lengkap', 'BPJS Kesehatan', 'BPJS Ketenagakerjaan', 'Koreksi Pengurangan', 'Koreksi Penambahan'];
+        return $export->headings() === ['Kode Klien', 'Bulan', 'Minggu', 'No Karyawan', 'Nama Lengkap', 'Potongan Seragam', 'Potongan Perlengkapan Kerja', 'Potongan Uang Makan', 'BPJS Kesehatan Persen', 'BPJS Ketenagakerjaan Persen', 'Tipe DP Gaji', 'Nilai DP Gaji', 'Koreksi Pengurangan', 'Koreksi Penambahan', 'Catatan'];
     });
+});
+
+it('imports deduction rows for the client code in the template', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $targetClient = Client::factory()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $targetClient->getKey(),
+        'employee_no' => 'EMPTAR001',
+        'full_name' => 'Karyawan Target',
+    ]);
+
+    $file = buildDeductionImportFile([
+        [$targetClient->code, '2026-09', 1, 'EMPTAR001', 'Karyawan Target', 50000, 25000, 10000, 1, 2, '', 0, 0, 0, 'Import client target'],
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->post(route('deductions.import'), ['file' => $file]);
+
+    $response->assertOk()->assertJson(['message' => '1 baris potongan gaji berhasil diimpor.']);
+    $periodId = DB::table('deduction_periods')->where('client_id', $targetClient->getKey())->value('id');
+    $this->assertDatabaseHas('employee_deductions', [
+        'client_id' => $targetClient->getKey(),
+        'deduction_period_id' => $periodId,
+        'employee_id' => $employee->getKey(),
+        'uniform_amount' => 50000,
+        'equipment_amount' => 25000,
+        'meal_amount' => 10000,
+    ]);
 });
 
 it('imports deduction rows using the visible table format', function () {

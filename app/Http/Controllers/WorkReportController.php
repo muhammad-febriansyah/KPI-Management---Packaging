@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\WorkReportExport;
 use App\Services\CurrentClientService;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
@@ -9,6 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Yajra\DataTables\Facades\DataTables;
 
 class WorkReportController extends Controller
@@ -16,10 +19,7 @@ class WorkReportController extends Controller
     public function __invoke(Request $request, CurrentClientService $client): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('work-reports', $client->get()), 403);
-        $request->validate([
-            'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
-        ]);
+        [$dateFrom, $dateTo] = $this->dateFilters($request);
 
         $query = $this->realizationQuery($request, $client);
 
@@ -31,6 +31,7 @@ class WorkReportController extends Controller
                             ->orWhere('employees.employee_no', 'like', "%{$keyword}%");
                     });
                 })
+                ->filterColumn('employee_no', fn (Builder $query, string $keyword): Builder => $query->where('employees.employee_no', 'like', "%{$keyword}%"))
                 ->filterColumn('full_name', function (Builder $query, string $keyword): void {
                     $query->where('employees.full_name', 'like', "%{$keyword}%");
                 })
@@ -47,6 +48,7 @@ class WorkReportController extends Controller
                     $query->where('realization.report', 'like', "%{$keyword}%");
                 })
                 ->orderColumn('sim_id', 'COALESCE(employees.sim_id, employees.employee_no) $1')
+                ->orderColumn('employee_no', 'employees.employee_no $1')
                 ->orderColumn('full_name', 'employees.full_name $1')
                 ->orderColumn('shift_name', 'shifts.name $1')
                 ->orderColumn('product_name', 'realization.product_name_snapshot $1')
@@ -61,6 +63,23 @@ class WorkReportController extends Controller
         }
 
         return view('reports.work', ['currentClient' => $client->get(), 'user' => $request->user()]);
+    }
+
+    public function exportExcel(Request $request, CurrentClientService $client): BinaryFileResponse
+    {
+        abort_unless($request->user()->canAccessMenu('work-reports', $client->get()), 403);
+        [$dateFrom, $dateTo] = $this->dateFilters($request);
+        $employeeUserId = ! $request->user()->is_super_admin && $request->user()->roleCodeFor($client->get()) === 'employee'
+            ? $request->user()->id
+            : null;
+        $period = $dateFrom === null && $dateTo === null
+            ? 'semua-periode'
+            : ($dateFrom ?? 'awal').'-'.($dateTo ?? 'akhir');
+
+        return Excel::download(
+            new WorkReportExport($client->id(), $dateFrom, $dateTo, $employeeUserId),
+            "hasil-pekerjaan-{$period}.xlsx",
+        );
     }
 
     private function realizationQuery(Request $request, CurrentClientService $client): Builder
@@ -79,6 +98,7 @@ class WorkReportController extends Controller
                 'assignment.id as assignment_id',
                 'realization.id as realization_id',
                 'realization.work_date',
+                'employees.employee_no',
                 'shifts.name as shift_name',
                 'realization.sku_snapshot',
                 DB::raw('COALESCE(employees.sim_id, employees.employee_no) AS sim_id'),
@@ -116,6 +136,17 @@ class WorkReportController extends Controller
         }
 
         return $query;
+    }
+
+    /** @return array{0: ?string, 1: ?string} */
+    private function dateFilters(Request $request): array
+    {
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ]);
+
+        return [$validated['date_from'] ?? null, $validated['date_to'] ?? null];
     }
 
     private function targetOutput(object $row): ?float

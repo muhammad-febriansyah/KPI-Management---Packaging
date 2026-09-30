@@ -61,6 +61,9 @@ it('keeps email and password out of the employee master form', function () {
         ->assertDontSee('name="password"', false)
         ->assertSee('Password default: tanggal lahir dengan format ddmmyyyy.', false)
         ->assertSee('name="birth_date"', false)
+        ->assertSee('type="radio"', false)
+        ->assertSee('name="marital_status" value="single"', false)
+        ->assertDontSee('<select name="marital_status"', false)
         ->assertSee('Password dapat diatur dari menu Akses.');
 });
 
@@ -76,7 +79,33 @@ it('shows a searchable client selector for super admins', function () {
         ->assertSee('name="client_id"', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
         ->assertSee('data-select2-placeholder=', false)
+        ->assertSee('data-employee-client-filter', false)
+        ->assertSee('data-select2-placeholder="Semua client"', false)
         ->assertSee('Pilih client', false);
+});
+
+it('shows and filters employees from all clients for super admins', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    Employee::factory()->create(['client_id' => $currentClient->getKey(), 'full_name' => 'Karyawan Client Aktif']);
+    Employee::factory()->create(['client_id' => $otherClient->getKey(), 'full_name' => 'Karyawan Client Lain']);
+
+    $allResponse = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('employees.index', ['draw' => 1, 'start' => 0, 'length' => 10]))
+        ->assertOk();
+
+    expect(collect($allResponse->json('data'))->pluck('full_name'))
+        ->toContain('Karyawan Client Aktif', 'Karyawan Client Lain');
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->getJson(route('employees.index', ['draw' => 1, 'start' => 0, 'length' => 10, 'client_id' => $otherClient->getKey()]));
+
+    $names = collect($response->json('data'))->pluck('full_name');
+
+    expect($names)->toContain('Karyawan Client Lain')->not->toContain('Karyawan Client Aktif');
 });
 
 it('stores an employee under the selected client', function () {

@@ -50,6 +50,11 @@ class User extends Authenticatable
         return $roleId ? Role::query()->whereKey($roleId)->value('code') : null;
     }
 
+    public function isAdminFor(?Client $client): bool
+    {
+        return $this->status === 'active' && ($this->is_super_admin || $this->roleCodeFor($client) === 'admin');
+    }
+
     /**
      * Sidebar menu keys this user may see for the given client.
      * Null means unrestricted (super admins always see every menu).

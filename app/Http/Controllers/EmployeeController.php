@@ -34,9 +34,20 @@ class EmployeeController extends Controller
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('viewAny', Employee::class);
         $currentClient = $client->get();
-        $query = Employee::query()->where('client_id', $client->id())->with(['group', 'client'])->orderBy('full_name');
+        $availableClientIds = $client->availableFor($request->user())->modelKeys();
+        $selectedClientId = $request->integer('client_id');
+        $query = Employee::query()
+            ->when(
+                $request->user()->is_super_admin,
+                fn ($query) => $query->withoutGlobalScopes()
+                    ->whereIn('employees.client_id', $availableClientIds)
+                    ->when(in_array($selectedClientId, $availableClientIds, true), fn ($query) => $query->where('employees.client_id', $selectedClientId)),
+                fn ($query) => $query->where('client_id', $client->id()),
+            )
+            ->with(['group', 'client'])
+            ->orderBy('full_name');
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->addColumn('client_name', fn (): string => $currentClient->name)->addColumn('group_name', fn (Employee $employee): string => $employee->group?->name ?? '—')->editColumn('status', fn (Employee $employee): string => view('components.badge', [
+            return DataTables::eloquent($query)->addColumn('client_name', fn (Employee $employee): string => $employee->client?->name ?? '—')->addColumn('group_name', fn (Employee $employee): string => $employee->group?->name ?? '—')->editColumn('status', fn (Employee $employee): string => view('components.badge', [
                 'variant' => $employee->status === 'active' ? 'success' : 'neutral',
                 'slot' => $employee->status === 'active' ? 'Aktif' : 'Nonaktif',
             ])->render())->addColumn('action', function (Employee $employee): string {
@@ -78,7 +89,7 @@ class EmployeeController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('employees.index', ['currentClient' => $client->get(), 'user' => $request->user(), 'groups' => $groups]);
+        return view('employees.index', ['currentClient' => $client->get(), 'user' => $request->user(), 'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(), 'groups' => $groups]);
     }
 
     public function groupOptions(Request $request, CurrentClientService $client): JsonResponse
@@ -185,7 +196,7 @@ class EmployeeController extends Controller
      */
     public function update(UpdateEmployeeRequest $request, Employee $employee, CurrentClientService $client): JsonResponse
     {
-        abort_unless($employee->client_id === $client->id(), 404);
+        abort_unless($request->user()->is_super_admin ? $client->availableFor($request->user())->contains('id', $employee->client_id) : $employee->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('update', $employee);
         $data = $request->validated();
@@ -204,7 +215,7 @@ class EmployeeController extends Controller
      */
     public function destroy(Request $request, Employee $employee, CurrentClientService $client): JsonResponse
     {
-        abort_unless($employee->client_id === $client->id(), 404);
+        abort_unless($request->user()->is_super_admin ? $client->availableFor($request->user())->contains('id', $employee->client_id) : $employee->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('delete', $employee);
         DB::transaction(function () use ($employee): void {

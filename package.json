@@ -17,6 +17,7 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
+        "apexcharts": "^7.6.1",
         "datatables.net": "^3.0.3",
         "datatables.net-dt": "^3.0.3",
         "flatpickr": "^4.6.13",

@@ -19,7 +19,7 @@ class ShiftController extends Controller
 
     public function index(Request $request, CurrentClientService $client): View|JsonResponse
     {
-        abort_unless($request->user()->is_super_admin, 403);
+        abort_unless($request->user()->isAdminFor($client->get()), 403);
         Gate::authorize('viewAny', Shift::class);
         $query = Shift::query()->where('client_id', $client->id())->orderBy('name');
         if ($request->has('draw') || $request->expectsJson()) {
@@ -34,7 +34,7 @@ class ShiftController extends Controller
 
     public function store(StoreShiftRequest $request, CurrentClientService $client): JsonResponse
     {
-        abort_unless($request->user()->is_super_admin, 403);
+        abort_unless($request->user()->isAdminFor($client->get()), 403);
         $shift = Shift::query()->create([...$request->validated(), 'client_id' => $client->id()]);
 
         return response()->json(['message' => 'Shift berhasil ditambahkan.', 'data' => $shift], 201);
@@ -43,7 +43,7 @@ class ShiftController extends Controller
     public function update(UpdateShiftRequest $request, Shift $shift, CurrentClientService $client): JsonResponse
     {
         abort_unless($shift->client_id === $client->id(), 404);
-        abort_unless($request->user()->is_super_admin, 403);
+        abort_unless($request->user()->isAdminFor($client->get()), 403);
         Gate::authorize('update', $shift);
         $shift->update($request->validated());
 
@@ -53,7 +53,7 @@ class ShiftController extends Controller
     public function destroy(Request $request, Shift $shift, CurrentClientService $client): JsonResponse
     {
         abort_unless($shift->client_id === $client->id(), 404);
-        abort_unless($request->user()->is_super_admin, 403);
+        abort_unless($request->user()->isAdminFor($client->get()), 403);
         Gate::authorize('delete', $shift);
         $this->deleteRestricted($shift, 'Shift tidak dapat dihapus karena masih dipakai pada realisasi kerja.');
 

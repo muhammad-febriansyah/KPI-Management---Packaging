@@ -487,7 +487,7 @@ it('renders distinct user actions with icons', function () {
     expect($action)
         ->toContain('bg-sky-50')
         ->toContain('bg-amber-50')
-        ->toContain('bg-red-50')
+        ->toContain('bg-slate-100')
         ->toContain('bg-rose-50')
         ->toContain('heroicons.svg#pencil')
         ->toContain('heroicons.svg#lock-closed')

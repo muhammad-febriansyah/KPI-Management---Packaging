@@ -5,6 +5,7 @@ use App\Models\Employee;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 uses(RefreshDatabase::class);
@@ -27,6 +28,16 @@ it('seeds a payroll-ready co-packing workspace with realistic records', function
     $this->assertDatabaseHas('products', ['sku' => 'KOP-3IN1-20G', 'name' => 'Kopi Sachet 3in1 20g']);
     $this->assertDatabaseHas('products', ['sku' => 'DET-BUB-1KG', 'employee_rate' => 260]);
     $this->assertDatabaseHas('work_realizations', ['is_complaint' => true]);
+
+    $realization = DB::table('work_realizations')
+        ->where('client_id', Client::query()->where('code', 'CLIENT001')->value('id'))
+        ->where('total_output', 780)
+        ->first(['id', 'total_output']);
+    $assignmentCount = DB::table('realization_employees')->where('work_realization_id', $realization->id)->count();
+    $grossTotal = DB::table('realization_employees')->where('work_realization_id', $realization->id)->sum('gross_amount');
+
+    expect($assignmentCount)->toBe(2)
+        ->and((int) $grossTotal)->toBe(780 * 520);
 
     $this->assertDatabaseCount('units', 10);
     $this->assertDatabaseCount('groups', 10);

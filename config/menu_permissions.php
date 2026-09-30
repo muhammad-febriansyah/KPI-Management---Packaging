@@ -8,10 +8,17 @@
  */
 return [
     'dashboard' => 'Dashboard',
+    'units' => 'Satuan',
+    'groups' => 'Group',
+    'cost-centers' => 'Cost Center',
     'products' => 'Produk',
     'employees' => 'Karyawan',
+    'shifts' => 'Master Shift',
     'realizations' => 'Realisasi',
+    'invoices' => 'Invoice Borongan',
+    'my-payroll' => 'Gaji Saya',
     'deductions' => 'Potongan Gaji',
     'work-reports' => 'Hasil Pekerjaan',
     'reports' => 'Laporan Gaji',
+    'settings' => 'User & Hak Akses',
 ];
