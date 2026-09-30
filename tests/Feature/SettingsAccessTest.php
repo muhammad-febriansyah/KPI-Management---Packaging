@@ -86,6 +86,32 @@ it('lists users from every client when the user filter is empty', function () {
         ->and($row['client_name'])->toBe('PT Other');
 });
 
+it('uses distinct badge colors for each user role', function () {
+    $client = Client::factory()->create();
+    $superAdmin = User::factory()->superAdmin()->create(['username' => 'badge.super']);
+    collect([
+        'admin' => 'badge.admin',
+        'leader' => 'badge.leader',
+        'employee' => 'badge.employee',
+        'client' => 'badge.client',
+    ])->each(function (string $username, string $roleCode) use ($client): void {
+        $user = User::factory()->create(['username' => $username]);
+        attachRole($user, $client, $roleCode);
+    });
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access', ['draw' => 1, 'start' => 0, 'length' => 25]));
+
+    $rows = collect($response->json('data'))->keyBy('username');
+
+    expect($rows['badge.super']['role_name'])->toContain('bg-indigo-50')
+        ->and($rows['badge.admin']['role_name'])->toContain('bg-amber-50')
+        ->and($rows['badge.leader']['role_name'])->toContain('bg-sky-50')
+        ->and($rows['badge.employee']['role_name'])->toContain('bg-green-50')
+        ->and($rows['badge.client']['role_name'])->toContain('bg-slate-50');
+});
+
 it('filters user rows by the selected client without changing the active workspace', function () {
     $currentClient = Client::factory()->create(['name' => 'PT Current']);
     $otherClient = Client::factory()->create(['name' => 'PT Other']);
@@ -118,17 +144,21 @@ it('renders unified role form and reset password modal on settings/access', func
         ->assertSee('Role user')
         ->assertSee('name="create_role"', false)
         ->assertSee('value="super-admin"', false)
+        ->assertSee('value="admin"', false)
+        ->assertSee('value="leader"', false)
         ->assertSee('value="employee"', false)
         ->assertSee('value="client"', false)
         ->assertSee('name="employee_id"', false)
         ->assertSee('data-tom-select-remote="'.route('settings.access.employee-options').'"', false)
+        ->assertSee('data-user-default-password-toggle', false)
+        ->assertSee('name="use_default_password"', false)
         ->assertSee('Jika karyawan sudah memiliki akun, pilihannya akan memunculkan peringatan dan tidak dapat dibuat ulang.')
         ->assertSee('name="client_id"', false)
         ->assertSee('data-tom-select-remote="'.route('settings.access.client-options').'"', false)
         ->assertSee('data-super-admin-form', false)
         ->assertSee('data-user-reset-form', false);
 
-    expect(substr_count($response->getContent(), 'data-password-toggle'))->toBe(12);
+    expect(substr_count($response->getContent(), 'data-password-toggle'))->toBe(14);
 });
 
 it('searches active master employees for employee account creation', function () {
@@ -198,6 +228,97 @@ it('creates an account for an existing master employee', function () {
     expect(Hash::check('password-baru', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
 });
 
+it('creates an employee account with birth date as the default password', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'birth_date' => '1990-01-02',
+        'user_id' => null,
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('settings.access.employee-accounts.store'), [
+            'employee_id' => $employee->getKey(),
+            'email' => 'employee.default@example.com',
+            'use_default_password' => '1',
+        ])
+        ->assertCreated();
+
+    $employee->refresh();
+    expect(Hash::check('02011990', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
+});
+
+it('creates a leader account with birth date as the default password', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'birth_date' => '1988-12-31',
+        'user_id' => null,
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('settings.access.employee-accounts.store'), [
+            'create_role' => 'leader',
+            'employee_id' => $employee->getKey(),
+            'email' => 'leader.default@example.com',
+            'use_default_password' => '1',
+        ])
+        ->assertCreated();
+
+    $employee->refresh();
+    expect(Hash::check('31121988', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
+});
+
+it('rejects default password when employee birth date is missing', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'birth_date' => null,
+        'user_id' => null,
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('settings.access.employee-accounts.store'), [
+            'employee_id' => $employee->getKey(),
+            'email' => 'employee.missing-birth-date@example.com',
+            'use_default_password' => '1',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['use_default_password']);
+});
+
+it('creates a leader account for an existing master employee', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => null]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('settings.access.employee-accounts.store'), [
+            'create_role' => 'leader',
+            'employee_id' => $employee->getKey(),
+            'email' => 'leader.account@example.com',
+            'password' => 'password-baru',
+            'password_confirmation' => 'password-baru',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('message', 'Akun Leader berhasil ditambahkan.');
+
+    $employee->refresh();
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $client->getKey(),
+        'user_id' => $employee->user_id,
+        'role_id' => Role::query()->where('code', 'leader')->value('id'),
+        'status' => 'active',
+    ]);
+});
+
 it('rejects creating a second account for an employee', function () {
     $client = Client::factory()->create();
     $admin = User::factory()->superAdmin()->create();
@@ -260,6 +381,88 @@ it('creates a client account for an existing master client', function () {
     expect(Hash::check('password-baru', $account->password))->toBeTrue();
 });
 
+it('creates an admin account scoped to the selected client', function () {
+    $currentClient = Client::factory()->create();
+    $targetClient = Client::factory()->create();
+    $superAdmin = User::factory()->superAdmin()->create();
+
+    $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->postJson(route('settings.access.admin-accounts.store'), [
+            'client_id' => $targetClient->getKey(),
+            'name' => 'Admin Target',
+            'username' => 'admin.target',
+            'email' => 'admin.target@example.com',
+            'password' => 'password-baru',
+            'password_confirmation' => 'password-baru',
+        ])
+        ->assertCreated();
+
+    $account = User::query()->where('username', 'admin.target')->firstOrFail();
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $targetClient->getKey(),
+        'user_id' => $account->getKey(),
+        'role_id' => Role::query()->where('code', 'admin')->value('id'),
+        'status' => 'active',
+    ]);
+    expect($account->is_super_admin)->toBeFalse();
+});
+
+it('updates role-specific user accounts from the user access flow', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $adminAccount = User::factory()->create(['name' => 'Admin Lama', 'username' => 'admin.lama', 'email' => 'admin.lama@example.com']);
+    attachRole($adminAccount, $client, 'admin');
+    $employeeAccount = User::factory()->create(['email' => 'employee.lama@example.com']);
+    attachRole($employeeAccount, $client, 'employee');
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => $employeeAccount->getKey(),
+        'email' => 'employee.lama@example.com',
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.admin-accounts.update', $adminAccount), [
+            'client_id' => $client->getKey(),
+            'name' => 'Admin Baru',
+            'username' => 'admin.baru',
+            'email' => 'admin.baru@example.com',
+        ])->assertOk();
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.employee-accounts.update', $employeeAccount), [
+            'email' => 'employee.baru@example.com',
+        ])->assertOk();
+
+    $this->assertDatabaseHas('users', ['id' => $adminAccount->getKey(), 'name' => 'Admin Baru', 'username' => 'admin.baru', 'email' => 'admin.baru@example.com']);
+    $this->assertDatabaseHas('users', ['id' => $employeeAccount->getKey(), 'email' => 'employee.baru@example.com']);
+    $this->assertDatabaseHas('employees', ['id' => $employee->getKey(), 'email' => 'employee.baru@example.com']);
+});
+
+it('limits admin access to its assigned client', function () {
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $admin = User::factory()->create();
+    attachRole($admin, $client, 'admin');
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('products.index'))
+        ->assertOk();
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('clients.index'))
+        ->assertForbidden();
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $otherClient->getKey()])
+        ->get(route('products.index'))
+        ->assertForbidden();
+});
+
 it('renders distinct user actions with icons', function () {
     $client = Client::factory()->create();
     $admin = User::factory()->superAdmin()->create();
@@ -278,8 +481,8 @@ it('renders distinct user actions with icons', function () {
     $action = collect($response->json('data'))->firstWhere('name', 'Akun Karyawan')['action'];
     $row = collect($response->json('data'))->firstWhere('name', 'Akun Karyawan');
     expect($row['role_name'])
-        ->toContain('border-sky-200')
-        ->toContain('bg-sky-50')
+        ->toContain('border-green-200')
+        ->toContain('bg-green-50')
         ->toContain('Karyawan');
     expect($action)
         ->toContain('bg-sky-50')
@@ -426,8 +629,8 @@ it('rejects a non super admin from toggling a user status', function () {
 it('lets a super admin update which menus a role can see', function () {
     $admin = User::factory()->superAdmin()->create();
     $role = Role::factory()->create(['code' => 'client']);
-    Permission::query()->create(['code' => 'menu.dashboard', 'name' => 'Menu: Dashboard']);
-    $productsPermission = Permission::query()->create(['code' => 'menu.products', 'name' => 'Menu: Produk']);
+    Permission::query()->firstOrCreate(['code' => 'menu.dashboard'], ['name' => 'Menu: Dashboard']);
+    $productsPermission = Permission::query()->firstOrCreate(['code' => 'menu.products'], ['name' => 'Menu: Produk']);
     $role->permissions()->attach($productsPermission);
 
     $response = $this->actingAs($admin)->putJson(route('settings.access.roles.update', $role), [

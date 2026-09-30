@@ -680,6 +680,8 @@ const initializeUserCreateModal = () => {
     const form = document.querySelector('[data-user-create-form]');
     if (!modal || !trigger || !form) return;
 
+    const title = modal.querySelector('[data-user-create-title]');
+    const kicker = modal.querySelector('[data-user-create-kicker]');
     const sections = [...modal.querySelectorAll('[data-user-create-section]')];
     const employeeSection = modal.querySelector('[data-user-create-section="employee"]');
     const employeeSelect = employeeSection?.querySelector('[name="employee_id"]');
@@ -722,15 +724,84 @@ const initializeUserCreateModal = () => {
     };
     const open = () => {
         form.reset();
+        form.action = '';
+        form.elements._method.value = 'POST';
+        form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.clear(true));
+        form.querySelectorAll('input[name="create_role"]').forEach((input) => { input.disabled = false; });
+        form.querySelectorAll('input[name="password"], input[name="password_confirmation"]').forEach((input) => {
+            input.disabled = false;
+            input.required = true;
+            input.closest('label')?.classList.remove('hidden');
+        });
+        employeeSelect?.tomselect?.enable();
         setRole('super-admin');
         setPasswordMode(false);
+        if (title) title.textContent = 'Tambah User';
+        if (kicker) kicker.textContent = 'User baru';
         syncDefaultPasswordToggle();
         modal.classList.remove('hidden');
         modal.classList.add('grid');
         modal.querySelector('[data-user-create-section="super-admin"] input[name="name"]')?.focus();
     };
 
+    const openEdit = (button) => {
+        let item;
+        try {
+            item = JSON.parse(button.dataset.userEdit);
+        } catch {
+            Swal.fire({ title: 'Gagal', text: 'Data user tidak dapat dibaca.', icon: 'error' });
+            return;
+        }
+
+        form.reset();
+        form.action = button.dataset.url;
+        form.elements._method.value = 'PUT';
+        const role = ['admin', 'leader', 'employee'].includes(item.role) ? item.role : 'employee';
+        const roleInput = form.querySelector(`input[name="create_role"][value="${role}"]`);
+        if (!roleInput) return;
+        roleInput.checked = true;
+        setRole(role);
+        form.querySelectorAll('input[name="create_role"]').forEach((input) => { input.disabled = true; });
+        const activeSection = form.querySelector(`[data-user-create-section="${role === 'leader' ? 'employee' : role}"]`);
+
+        const setField = (name, value) => {
+            const field = activeSection?.querySelector(`[name="${name}"]`);
+            if (field && value !== undefined && value !== null) field.value = value;
+        };
+        setField('name', item.name);
+        setField('username', item.username);
+        setField('email', item.email);
+
+        const clientSelect = form.querySelector('[data-user-create-section="admin"] select[name="client_id"]');
+        if (role === 'admin' && clientSelect?.tomselect && item.client_id) {
+            clientSelect.tomselect.addOption({ value: String(item.client_id), text: item.client_text ?? String(item.client_id) });
+            clientSelect.tomselect.setValue(String(item.client_id), true);
+        }
+
+        const employeeSelect = form.querySelector('[data-user-create-section="employee"] select[name="employee_id"]');
+        if ((role === 'leader' || role === 'employee') && employeeSelect?.tomselect && item.employee_id) {
+            employeeSelect.tomselect.addOption({ value: String(item.employee_id), text: item.employee_text ?? String(item.employee_id) });
+            employeeSelect.tomselect.setValue(String(item.employee_id), true);
+            employeeSelect.tomselect.disable();
+        }
+
+        activeSection?.querySelectorAll('input[name="password"], input[name="password_confirmation"]').forEach((input) => {
+            input.required = false;
+            input.disabled = true;
+            input.closest('label')?.classList.add('hidden');
+        });
+        if (title) title.textContent = `Edit User — ${role === 'leader' ? 'Leader' : role === 'employee' ? 'Karyawan' : 'Admin'}`;
+        if (kicker) kicker.textContent = 'Edit user';
+        modal.querySelector('button[type="submit"]')?.lastChild && (modal.querySelector('button[type="submit"]').lastChild.textContent = ' Perbarui');
+        modal.classList.remove('hidden');
+        modal.classList.add('grid');
+    };
+
     trigger.addEventListener('click', open);
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest?.('[data-user-edit]');
+        if (button) openEdit(button);
+    });
     modal.querySelectorAll('[data-user-create-close]').forEach((button) => button.addEventListener('click', close));
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     form.querySelectorAll('input[name="create_role"]').forEach((input) => input.addEventListener('change', () => setRole(input.value)));
@@ -755,13 +826,15 @@ const initializeUserCreateModal = () => {
         }[role];
         if (!config) return;
 
-        const result = await Swal.fire({ title: `Simpan ${config.label}?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
+        const isEdit = form.elements._method.value === 'PUT';
+        const actionUrl = isEdit ? form.action : config.url;
+        const result = await Swal.fire({ title: `${isEdit ? 'Perbarui' : 'Simpan'} ${config.label}?`, icon: 'question', showCancelButton: true, confirmButtonText: isEdit ? 'Perbarui' : 'Simpan', cancelButtonText: 'Batal' });
         if (!result.isConfirmed) return;
         try {
-            await $.ajax({ url: config.url, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            await $.ajax({ url: actionUrl, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             close();
             reloadServerTables();
-            await Swal.fire({ title: 'Berhasil', text: `${config.label} berhasil ditambahkan.`, icon: 'success', timer: 1500, showConfirmButton: false });
+            await Swal.fire({ title: 'Berhasil', text: `${config.label} berhasil ${isEdit ? 'diperbarui' : 'ditambahkan'}.`, icon: 'success', timer: 1500, showConfirmButton: false });
         } catch (error) {
             const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
             await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || `Data ${config.label} tidak valid.`, icon: 'error' });
@@ -1199,6 +1272,7 @@ const initializeTomSelect = () => {
 
         if (select.dataset.tomSelectAccountWarning !== undefined) {
             tomSelect.on('item_add', (value) => {
+                if (select.disabled) return;
                 const option = tomSelect.options[value];
 
                 if (!option?.has_account) {

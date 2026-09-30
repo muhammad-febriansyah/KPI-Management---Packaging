@@ -81,6 +81,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/settings/access', [AccessController::class, 'index'])->name('settings.access')->middleware('client');
     Route::get('/settings/access/employee-options', [AccessController::class, 'employeeOptions'])->name('settings.access.employee-options')->middleware('client');
     Route::post('/settings/access/employee-accounts', [AccessController::class, 'storeEmployeeAccount'])->name('settings.access.employee-accounts.store')->middleware('client');
+    Route::put('/settings/access/employee-accounts/{user}', [AccessController::class, 'updateEmployeeAccount'])->name('settings.access.employee-accounts.update')->middleware('client');
+    Route::post('/settings/access/admin-accounts', [AccessController::class, 'storeAdminAccount'])->name('settings.access.admin-accounts.store')->middleware('client');
+    Route::put('/settings/access/admin-accounts/{user}', [AccessController::class, 'updateAdminAccount'])->name('settings.access.admin-accounts.update')->middleware('client');
     Route::get('/settings/access/client-options', [AccessController::class, 'clientOptions'])->name('settings.access.client-options')->middleware('client');
     Route::post('/settings/access/client-accounts', [AccessController::class, 'storeClientAccount'])->name('settings.access.client-accounts.store')->middleware('client');
     Route::put('/settings/access/roles/{role}', [AccessController::class, 'updateRolePermissions'])->name('settings.access.roles.update');

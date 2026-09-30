@@ -12,9 +12,11 @@ use App\Services\CurrentClientService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -24,7 +26,8 @@ class AccessController extends Controller
     {
         Gate::authorize('viewAny', Role::class);
 
-        $selectedClientId = $request->filled('client_filter') ? $request->integer('client_filter') : null;
+        $isSuperAdmin = $request->user()->is_super_admin;
+        $selectedClientId = $isSuperAdmin && $request->filled('client_filter') ? $request->integer('client_filter') : ($isSuperAdmin ? null : $client->id());
         if ($selectedClientId !== null) {
             Client::query()->active()->findOrFail($selectedClientId);
         }
@@ -41,6 +44,7 @@ class AccessController extends Controller
             ->where(function ($query): void {
                 $query->where('users.is_super_admin', true)->orWhereNotNull('client_user.user_id');
             })
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('client_user.client_id', $client->id()))
             ->orderBy('users.name');
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
@@ -73,8 +77,10 @@ class AccessController extends Controller
 
                     if ($user->is_super_admin) {
                         $buttons[] = '<button type="button" data-super-admin-edit data-url="'.route('settings.access.super-admins.update', $user).'" data-super-admin="'.e(json_encode($this->superAdminPayload($user))).'" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
-                    } elseif ($user->role_code === 'employee' && $user->employee && (int) $user->access_client_id === $client->id()) {
-                        $buttons[] = '<button type="button" data-employee-edit data-url="'.route('employees.update', $user->employee).'" data-employee="'.e($user->employee->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
+                    } elseif ($user->role_code === 'admin') {
+                        $buttons[] = '<button type="button" data-user-edit="'.e(json_encode($this->accountPayload($user))).'" data-url="'.route('settings.access.admin-accounts.update', $user).'" class="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
+                    } elseif (in_array($user->role_code, ['leader', 'employee'], true) && $user->employee && (int) $user->access_client_id === $client->id()) {
+                        $buttons[] = '<button type="button" data-user-edit="'.e(json_encode($this->accountPayload($user))).'" data-url="'.route('settings.access.employee-accounts.update', $user).'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
                     } elseif ($user->role_code === 'client') {
                         $buttons[] = '<button type="button" data-client-edit data-url="'.route('clients.update', $targetClient).'?account_user_id='.$user->getKey().'" data-client="'.e(json_encode($this->clientPayload($user, $targetClient))).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button>';
                     }
@@ -106,6 +112,7 @@ class AccessController extends Controller
             'user' => $request->user(),
             'roles' => $roles,
             'menuOptions' => config('menu_permissions'),
+            'canManageRolePermissions' => $isSuperAdmin,
             'groups' => Group::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('name')->get(),
         ]);
     }
@@ -125,7 +132,7 @@ class AccessController extends Controller
                     ->orWhere('sim_id', 'like', "%{$search}%");
             }))
             ->orderBy('full_name')
-            ->paginate(20, ['id', 'employee_no', 'sim_id', 'full_name', 'user_id'], 'page', $page);
+            ->paginate(20, ['id', 'employee_no', 'sim_id', 'full_name', 'birth_date', 'user_id'], 'page', $page);
 
         return response()->json([
             'results' => $paginator->getCollection()->map(fn (Employee $employee): array => [
@@ -134,6 +141,7 @@ class AccessController extends Controller
                 'name' => $employee->full_name,
                 'employee_no' => $employee->employee_no,
                 'sim_id' => $employee->sim_id,
+                'birth_date' => $employee->birth_date ? date('Y-m-d', strtotime((string) $employee->birth_date)) : null,
                 'has_account' => $employee->user_id !== null,
             ]),
             'pagination' => ['more' => $paginator->hasMorePages()],
@@ -143,27 +151,46 @@ class AccessController extends Controller
     public function storeEmployeeAccount(Request $request, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
+        $useDefaultPassword = $request->boolean('use_default_password');
         $data = $request->validate([
+            'create_role' => ['nullable', Rule::in(['employee', 'leader'])],
             'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')->where(fn ($query) => $query
                 ->where('client_id', $client->id())
                 ->where('status', 'active')
                 ->whereNull('user_id'))],
             'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')],
-            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
-            'password_confirmation' => ['required', 'string'],
+            'use_default_password' => ['nullable', 'boolean'],
+            'password' => [$useDefaultPassword ? 'nullable' : 'required', 'string', 'min:8', 'max:255', 'confirmed'],
+            'password_confirmation' => [$useDefaultPassword ? 'nullable' : 'required', 'string'],
         ]);
 
-        DB::transaction(function () use ($client, $data): void {
+        DB::transaction(function () use ($client, $data, $useDefaultPassword): void {
             $employee = Employee::query()
                 ->where('client_id', $client->id())
                 ->whereNull('user_id')
                 ->findOrFail($data['employee_id']);
-            $role = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan']);
+            $password = $data['password'] ?? null;
+
+            if ($useDefaultPassword) {
+                if (! $employee->birth_date) {
+                    throw ValidationException::withMessages(['use_default_password' => 'Tanggal lahir karyawan belum tersedia.']);
+                }
+
+                $password = date('dmY', strtotime((string) $employee->birth_date));
+            }
+
+            $roleCode = $data['create_role'] ?? 'employee';
+            $role = Role::query()->firstOrCreate(['code' => $roleCode], ['name' => $roleCode === 'leader' ? 'Leader' : 'Karyawan']);
+            $permissionIds = Permission::query()
+                ->whereIn('code', ['menu.realizations', 'menu.my-payroll'])
+                ->when($roleCode === 'employee', fn ($query) => $query->where('code', 'menu.my-payroll'))
+                ->pluck('id');
+            $role->permissions()->syncWithoutDetaching($permissionIds);
             $user = User::query()->create([
                 'name' => $employee->full_name,
                 'username' => $employee->employee_no,
                 'email' => $data['email'],
-                'password' => $data['password'],
+                'password' => $password,
                 'status' => 'active',
             ]);
             $user->clients()->attach($client->id(), [
@@ -174,12 +201,13 @@ class AccessController extends Controller
             $employee->update(['email' => $data['email'], 'user_id' => $user->getKey()]);
         });
 
-        return response()->json(['message' => 'Akun Karyawan berhasil ditambahkan.'], 201);
+        return response()->json(['message' => ($data['create_role'] ?? 'employee') === 'leader' ? 'Akun Leader berhasil ditambahkan.' : 'Akun Karyawan berhasil ditambahkan.'], 201);
     }
 
     public function clientOptions(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
+        abort_unless($request->user()->is_super_admin, 403);
         $search = trim($request->string('q')->toString());
         $page = max(1, $request->integer('page', 1));
         $paginator = Client::query()
@@ -205,6 +233,7 @@ class AccessController extends Controller
     public function storeClientAccount(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
+        abort_unless($request->user()->is_super_admin, 403);
         $data = $request->validate([
             'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'account_name' => ['required', 'string', 'max:150'],
@@ -234,6 +263,74 @@ class AccessController extends Controller
         return response()->json(['message' => 'Akun Client berhasil ditambahkan.'], 201);
     }
 
+    public function storeAdminAccount(Request $request, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        $allowedClientIds = $request->user()->is_super_admin
+            ? Client::query()->active()->pluck('id')->all()
+            : [$client->id()];
+        $data = $request->validate([
+            'client_id' => ['required', 'integer', Rule::in($allowedClientIds)],
+            'name' => ['required', 'string', 'max:150'],
+            'username' => ['required', 'string', 'max:100', Rule::unique('users', 'username')],
+            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+
+        DB::transaction(function () use ($data): void {
+            $targetClient = Client::query()->active()->lockForUpdate()->findOrFail($data['client_id']);
+            $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+            $user = User::query()->create([
+                'name' => $data['name'],
+                'username' => $data['username'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'status' => 'active',
+            ]);
+            $user->clients()->attach($targetClient->getKey(), [
+                'role_id' => $role->getKey(),
+                'is_default' => true,
+                'status' => 'active',
+            ]);
+        });
+
+        return response()->json(['message' => 'Akun Admin berhasil ditambahkan.'], 201);
+    }
+
+    public function updateAdminAccount(Request $request, User $user, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        abort_unless($user->clients()->whereKey($client->id())->wherePivot('role_id', Role::query()->where('code', 'admin')->value('id'))->exists(), 404);
+        $data = $request->validate([
+            'client_id' => ['required', 'integer', Rule::in($request->user()->is_super_admin ? Client::query()->active()->pluck('id')->all() : [$client->id()])],
+            'name' => ['required', 'string', 'max:150'],
+            'username' => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($user->getKey())],
+            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($user->getKey())],
+        ]);
+
+        $user->update(Arr::only($data, ['name', 'username', 'email']));
+
+        return response()->json(['message' => 'Akun Admin berhasil diperbarui.']);
+    }
+
+    public function updateEmployeeAccount(Request $request, User $user, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        $employee = $user->employee;
+        abort_unless($employee && (int) $employee->client_id === $client->id(), 404);
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($user->getKey())],
+        ]);
+
+        DB::transaction(function () use ($data, $employee, $user): void {
+            $user->update(['email' => $data['email']]);
+            $employee->update(['email' => $data['email']]);
+        });
+
+        return response()->json(['message' => 'Akun user berhasil diperbarui.']);
+    }
+
     public function toggleUserStatus(Request $request, User $user, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
@@ -250,6 +347,7 @@ class AccessController extends Controller
 
         DB::transaction(function () use ($actionClient, $status, $user): void {
             $user->update(['status' => $status]);
+
             if (! $user->is_super_admin) {
                 $user->clients()->updateExistingPivot($actionClient->getKey(), ['status' => $status]);
             }
@@ -287,7 +385,8 @@ class AccessController extends Controller
     public function resetPassword(Request $request, User $user, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
-        $this->assertUserVisible($user, $this->resolveActionClient($request, $user, $client));
+        $actionClient = $this->resolveActionClient($request, $user, $client);
+        $this->assertUserVisible($user, $actionClient);
         $data = $request->validate([
             'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
             'password_confirmation' => ['required', 'string'],
@@ -300,14 +399,25 @@ class AccessController extends Controller
     public function destroy(Request $request, User $user, CurrentClientService $client): JsonResponse
     {
         Gate::authorize('viewAny', Role::class);
-        $this->assertUserVisible($user, $this->resolveActionClient($request, $user, $client));
+        $actionClient = $this->resolveActionClient($request, $user, $client);
+        $this->assertUserVisible($user, $actionClient);
         abort_if($user->getKey() === request()->user()?->getKey(), 422, 'Akun yang sedang digunakan tidak dapat dihapus.');
         abort_if($user->is_super_admin && User::query()->where('is_super_admin', true)->count() <= 1, 422, 'Minimal satu Super Admin harus dipertahankan.');
 
         try {
-            DB::transaction(function () use ($user): void {
-                $user->clients()->detach();
-                $user->delete();
+            DB::transaction(function () use ($actionClient, $user): void {
+                if ($user->is_super_admin) {
+                    $user->clients()->detach();
+                    $user->delete();
+
+                    return;
+                }
+
+                $user->clients()->detach($actionClient->getKey());
+
+                if (! $user->clients()->exists()) {
+                    $user->delete();
+                }
             });
         } catch (QueryException) {
             return response()->json(['message' => 'User tidak dapat dihapus karena masih dipakai pada data lain.'], 422);
@@ -341,7 +451,7 @@ class AccessController extends Controller
 
     private function resolveActionClient(Request $request, User $user, CurrentClientService $currentClient): Client
     {
-        if (! $user->is_super_admin && ! $request->filled('client_id')) {
+        if (! $user->is_super_admin) {
             return $currentClient->get();
         }
 
@@ -375,9 +485,27 @@ class AccessController extends Controller
         ];
     }
 
+    /** @return array<string, mixed> */
+    private function accountPayload(User $user): array
+    {
+        return [
+            'id' => $user->getKey(),
+            'role' => $user->role_code,
+            'name' => $user->name,
+            'username' => $user->username,
+            'email' => $user->email,
+            'client_id' => $user->access_client_id,
+            'client_text' => $user->access_client_code.' — '.$user->access_client_name,
+            'employee_id' => $user->employee?->getKey(),
+            'employee_text' => $user->employee ? $user->employee->full_name.' — '.$user->employee->employee_no : null,
+        ];
+    }
+
     private function roleName(User $user): string
     {
         return match ($user->is_super_admin ? 'super-admin' : $user->role_code) {
+            'admin' => 'Admin',
+            'leader' => 'Leader',
             'employee' => 'Karyawan',
             'client' => 'Client',
             'super-admin' => 'Super Admin',
@@ -389,8 +517,10 @@ class AccessController extends Controller
     {
         return match ($user->is_super_admin ? 'super-admin' : $user->role_code) {
             'super-admin' => 'primary',
-            'employee' => 'info',
-            'client' => 'success',
+            'admin' => 'warning',
+            'leader' => 'info',
+            'employee' => 'success',
+            'client' => 'neutral',
             default => 'neutral',
         };
     }
