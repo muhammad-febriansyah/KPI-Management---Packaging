@@ -26,7 +26,7 @@
                     <label class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Nama lengkap <span class="text-danger">*</span></span><input name="name" required autocomplete="name" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="Nama Super Admin"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Username <span class="text-danger">*</span></span><input name="username" required autocomplete="username" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="superadmin"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Email <span class="text-danger">*</span></span><input type="email" name="email" required autocomplete="email" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="admin@perusahaan.com"></label>
-                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" required /></label>
+                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" placeholder="Minimal 8 karakter" required /></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Konfirmasi password <span class="text-danger">*</span></span><x-form.password-input name="password_confirmation" placeholder="Ulangi password" required /></label>
                 </div>
             </section>
@@ -44,7 +44,7 @@
                     <label class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Nama lengkap <span class="text-danger">*</span></span><input name="name" required autocomplete="name" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="Nama Admin"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Username <span class="text-danger">*</span></span><input name="username" required autocomplete="username" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="admin.client"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Email <span class="text-danger">*</span></span><input type="email" name="email" required autocomplete="email" class="h-11 rounded-lg border border-line px-3 font-normal" placeholder="admin@perusahaan.com"></label>
-                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" required /></label>
+                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" placeholder="Minimal 8 karakter" required /></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Konfirmasi password <span class="text-danger">*</span></span><x-form.password-input name="password_confirmation" placeholder="Ulangi password" required /></label>
                 </div>
             </section>
@@ -59,7 +59,7 @@
                 </div>
                 <label class="grid gap-2 text-sm font-semibold"><span>Email login <span class="text-danger">*</span></span><input type="email" name="email" required autocomplete="email" placeholder="karyawan@perusahaan.com" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
                 <div data-user-manual-password-fields class="grid gap-4 sm:grid-cols-2">
-                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" required /></label>
+                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" placeholder="Minimal 8 karakter" required /></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Konfirmasi password <span class="text-danger">*</span></span><x-form.password-input name="password_confirmation" placeholder="Ulangi password" required /></label>
                 </div>
             </section>
@@ -71,7 +71,7 @@
                     <label class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Nama PIC <span class="text-danger">*</span></span><input name="account_name" required placeholder="Nama penanggung jawab" autocomplete="name" class="h-11 rounded-lg border border-line bg-white px-3 font-normal"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Username <span class="text-danger">*</span></span><input name="login_username" required placeholder="Contoh: pic.client" autocomplete="username" class="h-11 rounded-lg border border-line bg-white px-3 font-normal"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Email login <span class="text-danger">*</span></span><input type="email" name="login_email" required placeholder="pic@perusahaan.com" autocomplete="email" class="h-11 rounded-lg border border-line bg-white px-3 font-normal"></label>
-                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" class="bg-white" required /></label>
+                    <label class="grid gap-2 text-sm font-semibold"><span>Password <span class="text-danger">*</span></span><x-form.password-input name="password" placeholder="Minimal 8 karakter" class="bg-white" required /></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Konfirmasi password <span class="text-danger">*</span></span><x-form.password-input name="password_confirmation" placeholder="Ulangi password" class="bg-white" required /></label>
                 </div>
             </section>

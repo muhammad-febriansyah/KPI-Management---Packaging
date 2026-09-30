@@ -12,7 +12,7 @@
             <input type="hidden" name="_method" value="POST">
             <label class="grid gap-2 text-sm font-semibold"><span>Kode client <span class="text-danger">*</span></span><input name="code" required placeholder="Contoh: KP-001" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
             <label class="grid gap-2 text-sm font-semibold"><span>Nama client <span class="text-danger">*</span></span><input name="name" required placeholder="Masukkan nama perusahaan" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
-            <label class="grid gap-2 text-sm font-semibold"><span>Status <span class="text-danger">*</span></span><select name="status" required class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
+            <label class="grid gap-2 text-sm font-semibold"><span>Status <span class="text-danger">*</span></span><select name="status" required class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="" selected disabled>Pilih status...</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
             <div class="flex justify-end gap-3"><button type="button" data-client-master-close class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold">Batal</button><button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white"><x-icon name="check-circle" size="size-4" /> Simpan</button></div>
         </form>
     </div>

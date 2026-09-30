@@ -28,6 +28,11 @@ it('renders the dashboard with the active client context', function () {
     $response
         ->assertOk()
         ->assertSee('Ringkasan performa')
+        ->assertSee('Tren output bulanan')
+        ->assertSee('data-dashboard-output-chart', false)
+        ->assertSee('Output per shift bulan ini')
+        ->assertSee('data-dashboard-shift-chart', false)
+        ->assertDontSee('30 Hari Terakhir')
         ->assertDontSee('Total komplain')
         ->assertDontSee('data-filter-toggle')
         ->assertDontSee('Unduh laporan')
@@ -54,10 +59,33 @@ it('gives an employee-role user their own scoped dashboard', function () {
     $response
         ->assertOk()
         ->assertViewIs('dashboard-employee')
-        ->assertSee('Ringkasan performa saya')
-        ->assertDontSee('Karyawan aktif')
+        ->assertSee('Ringkasan gaji saya')
+        ->assertSee('Profil saya')
+        ->assertSee('Belum ada data gaji bulan ini')
+        ->assertSee('data-dashboard-output-chart', false)
+        ->assertDontSee('Akses pribadi')
+        ->assertDontSee('Realisasi terbaru saya')
         ->assertDontSee('data-global-search', false)
         ->assertDontSee('Pencarian global')
         ->assertDontSee('data-realization-fill-modal', false)
         ->assertDontSee('Isi sekarang');
+});
+
+it('gives a leader an operational dashboard separate from employee dashboard', function () {
+    $user = User::factory()->create();
+    $client = Client::factory()->create();
+    $leaderRole = Role::query()->firstOrCreate(['code' => 'leader'], ['name' => 'Leader']);
+    $user->clients()->attach($client, ['role_id' => $leaderRole->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $response = $this->actingAs($user)->get(route('dashboard'));
+
+    $response
+        ->assertOk()
+        ->assertViewIs('dashboard-leader')
+        ->assertSee('Ringkasan operasional')
+        ->assertSee('Realisasi terbaru saya')
+        ->assertSee('Output per shift')
+        ->assertSee('Gaji saya bulan ini')
+        ->assertDontSee('Ringkasan gaji saya')
+        ->assertViewHas('metrics.unassignedToday', 0);
 });

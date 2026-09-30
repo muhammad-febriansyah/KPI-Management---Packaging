@@ -64,17 +64,17 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <label class="grid gap-2 text-sm font-semibold text-slate-700">
                     <span>Nama lengkap <span class="text-danger">*</span></span>
-                    <input name="name" value="{{ old('name', $user->name) }}" required maxlength="150" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                    <input name="name" value="{{ old('name', $user->name) }}" required maxlength="150" placeholder="Masukkan nama lengkap" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
                     @error('name')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
                 </label>
                 <label class="grid gap-2 text-sm font-semibold text-slate-700">
                     <span>Username @if ($isEmployee)<span class="font-normal text-slate-400">(mengikuti ID karyawan)</span>@endif</span>
-                    <input name="username" value="{{ old('username', $user->username) }}" maxlength="100" @readonly($isEmployee) class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100 @if ($isEmployee) bg-slate-50 text-slate-500 @endif">
+                    <input name="username" value="{{ old('username', $user->username) }}" maxlength="100" placeholder="Masukkan username" @readonly($isEmployee) class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100 @if ($isEmployee) bg-slate-50 text-slate-500 @endif">
                     @error('username')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
                 </label>
                 <label class="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
                     <span>Email</span>
-                    <input type="email" name="email" value="{{ old('email', $user->email) }}" maxlength="150" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                    <input type="email" name="email" value="{{ old('email', $user->email) }}" maxlength="150" placeholder="nama@perusahaan.com" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
                     @error('email')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
                 </label>
             </div>
@@ -93,12 +93,12 @@
                     </label>
                     <label class="grid gap-2 text-sm font-semibold text-slate-700">
                         <span>SIM ID</span>
-                        <input name="sim_id" value="{{ old('sim_id', $employee->sim_id) }}" maxlength="100" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                        <input name="sim_id" value="{{ old('sim_id', $employee->sim_id) }}" maxlength="100" placeholder="Contoh: PEG1234" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
                         @error('sim_id')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
                     </label>
                     <label class="grid gap-2 text-sm font-semibold text-slate-700">
                         <span>Nomor telepon <span class="text-danger">*</span></span>
-                        <input name="phone" value="{{ old('phone', $employee->phone) }}" required maxlength="30" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                        <input name="phone" value="{{ old('phone', $employee->phone) }}" required maxlength="30" placeholder="Contoh: 081234567890" class="h-11 rounded-lg border border-line px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
                         @error('phone')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
                     </label>
                     <label class="grid gap-2 text-sm font-semibold text-slate-700">
@@ -116,6 +116,7 @@
                     <label class="grid gap-2 text-sm font-semibold text-slate-700">
                         <span>Status perkawinan <span class="text-danger">*</span></span>
                         <select name="marital_status" required class="h-11 rounded-lg border border-line bg-white px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                            <option value="" disabled @selected(old('marital_status', $employee->marital_status) === null)>Pilih status perkawinan...</option>
                             <option value="single" @selected(old('marital_status', $employee->marital_status) === 'single')>Belum menikah</option>
                             <option value="married" @selected(old('marital_status', $employee->marital_status) === 'married')>Menikah</option>
                             <option value="divorced" @selected(old('marital_status', $employee->marital_status) === 'divorced')>Cerai hidup</option>
@@ -157,5 +158,39 @@
                 <x-icon name="check-circle" size="size-4" /> Simpan profil
             </button>
         </div>
+    </form>
+
+    <form method="POST" action="{{ route('profile.password.update') }}" class="mt-5">
+        @csrf
+        @method('PUT')
+
+        <x-card>
+            <div class="mb-5">
+                <h2 class="text-base font-semibold text-slate-900">Keamanan akun</h2>
+                <p class="mt-1 text-sm text-slate-500">Ganti password login akun Anda.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <label class="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                    <span>Password saat ini <span class="text-danger">*</span></span>
+                    <x-form.password-input name="current_password" autocomplete="current-password" placeholder="Masukkan password saat ini" required />
+                    @error('current_password')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
+                </label>
+                <label class="grid gap-2 text-sm font-semibold text-slate-700">
+                    <span>Password baru <span class="text-danger">*</span></span>
+                    <x-form.password-input name="password" autocomplete="new-password" placeholder="Masukkan password baru" required />
+                    @error('password')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
+                </label>
+                <label class="grid gap-2 text-sm font-semibold text-slate-700">
+                    <span>Konfirmasi password baru <span class="text-danger">*</span></span>
+                    <x-form.password-input name="password_confirmation" autocomplete="new-password" placeholder="Ulangi password baru" required />
+                    @error('password_confirmation')<span class="text-xs font-normal text-red-600">{{ $message }}</span>@enderror
+                </label>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700">
+                    <x-icon name="key" size="size-4" /> Ganti password
+                </button>
+            </div>
+        </x-card>
     </form>
 </x-layouts.app>

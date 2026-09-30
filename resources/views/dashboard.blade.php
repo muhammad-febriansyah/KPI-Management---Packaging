@@ -59,40 +59,22 @@
         @endforeach
     </section>
 
-    <section class="mt-3 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
+    <section class="mt-3 grid min-w-0 gap-3">
         <x-card class="min-w-0" :padding="false">
             <div class="flex min-h-[55px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5">
-                <h2 class="text-sm font-semibold text-slate-900">Tren output 7 hari</h2>
-                <select class="h-9 rounded-lg border border-line bg-white px-2.5 text-xs text-slate-600 outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100" aria-label="Periode tren">
-                    <option>7 Hari Terakhir</option>
-                    <option>30 Hari Terakhir</option>
-                </select>
+                <h2 class="text-sm font-semibold text-slate-900">Tren output bulanan</h2>
             </div>
             <div class="overflow-x-auto p-4 sm:p-5">
-                <svg class="h-[235px] min-w-[620px] w-full" viewBox="0 0 700 250" role="img" aria-label="Grafik batang tren output tujuh hari">
-                    <g stroke="#E9EDF3" stroke-width="1"><line x1="52" y1="20" x2="680" y2="20"/><line x1="52" y1="70" x2="680" y2="70"/><line x1="52" y1="120" x2="680" y2="120"/><line x1="52" y1="170" x2="680" y2="170"/><line x1="52" y1="220" x2="680" y2="220"/></g>
-                    <g fill="#7C8AA0" font-size="10"><text x="6" y="23">20.000</text><text x="6" y="73">15.000</text><text x="6" y="123">10.000</text><text x="16" y="173">5.000</text><text x="37" y="223">0</text></g>
-                    <g fill="#81A7FF"><rect x="83" y="137" width="46" height="83" rx="5"/><rect x="170" y="119" width="46" height="101" rx="5"/><rect x="257" y="124" width="46" height="96" rx="5"/><rect x="344" y="106" width="46" height="114" rx="5"/><rect x="431" y="95" width="46" height="125" rx="5"/><rect x="518" y="88" width="46" height="132" rx="5"/></g><rect x="605" y="95" width="46" height="125" rx="5" fill="#2547F9"/>
-                    <g fill="#4B5F7C" font-size="10" font-weight="600" text-anchor="middle"><text x="106" y="129">8.240</text><text x="193" y="111">10.120</text><text x="280" y="116">9.560</text><text x="367" y="98">11.340</text><text x="454" y="87">12.480</text><text x="541" y="80">13.200</text><text x="628" y="87">12.480</text></g>
-                    <g fill="#7C8AA0" font-size="10" text-anchor="middle"><text x="106" y="241">12 Apr</text><text x="193" y="241">13 Apr</text><text x="280" y="241">14 Apr</text><text x="367" y="241">15 Apr</text><text x="454" y="241">16 Apr</text><text x="541" y="241">17 Apr</text><text x="628" y="241">18 Apr</text></g>
-                </svg>
+                <div data-dashboard-output-chart data-values='@json($outputTrend)' class="h-[235px] min-w-[620px] w-full" role="img" aria-label="Grafik tren output bulanan"></div>
             </div>
         </x-card>
 
         <x-card class="min-w-0" :padding="false">
             <div class="flex min-h-[55px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5">
-                <h2 class="text-sm font-semibold text-slate-900">Output per shift</h2>
-                <select class="h-9 rounded-lg border border-line bg-white px-2.5 text-xs text-slate-600 outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100" aria-label="Periode output shift"><option>Hari Ini</option><option>Minggu Ini</option></select>
+                <h2 class="text-sm font-semibold text-slate-900">Output per shift bulan ini</h2>
             </div>
-            <div class="grid min-h-[250px] items-center gap-6 p-5 sm:grid-cols-[190px_1fr]">
-                <div class="relative mx-auto grid size-[178px] place-items-center rounded-full" style="background: conic-gradient(#2547F9 0 41%, #6D95FF 41% 76%, #B7CCFF 76% 100%)">
-                    <div class="absolute inset-7 grid place-content-center rounded-full bg-white text-center"><strong class="text-[21px] text-slate-950">12.480</strong><span class="mt-0.5 text-[10px] text-slate-400">Total output</span></div>
-                </div>
-                <div class="grid gap-4 text-xs text-slate-600">
-                    @foreach ([['Shift pagi', '5.120', '41%', '#2547F9'], ['Shift siang', '4.320', '35%', '#6D95FF'], ['Shift malam', '3.040', '24%', '#B7CCFF']] as $shift)
-                        <div class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2.5"><span class="size-2.5 rounded-full" style="background: {{ $shift[3] }}"></span><span>{{ $shift[0] }}</span><strong class="text-slate-900">{{ $shift[1] }}</strong><span class="w-8 text-right text-slate-500">{{ $shift[2] }}</span></div>
-                    @endforeach
-                </div>
+            <div class="p-4 sm:p-5">
+                <div data-dashboard-shift-chart data-values='@json($shiftTrend)' class="min-h-[250px]" role="img" aria-label="Grafik output per shift bulan ini"></div>
             </div>
         </x-card>
     </section>

@@ -50,6 +50,7 @@
                 <label class="grid max-w-sm gap-2 text-sm font-semibold text-slate-700">
                     <span>Status <span class="text-danger">*</span></span>
                     <select name="status" required class="h-11 rounded-lg border border-line bg-white px-3 font-normal outline-none focus:border-primary-600 focus:ring-3 focus:ring-primary-100">
+                        <option value="" selected disabled>Pilih status...</option>
                         <option value="active">Aktif</option>
                         <option value="inactive">Nonaktif</option>
                     </select>

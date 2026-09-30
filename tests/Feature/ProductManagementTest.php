@@ -90,7 +90,11 @@ it('shows a searchable client selector in the product form', function () {
         ->assertSee('name="client_id"', false)
         ->assertSee('data-select2-select', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
-        ->assertSee('Pilih client...', false);
+        ->assertSee('Pilih client...', false)
+        ->assertSee('placeholder="Contoh: PROD"', false)
+        ->assertSee('placeholder="Contoh: Operator Produksi"', false)
+        ->assertSee('Pilih status...', false)
+        ->assertSee('Kode <span class="text-danger">*</span>', false);
 });
 
 it('loads only active units remotely for the product form', function () {

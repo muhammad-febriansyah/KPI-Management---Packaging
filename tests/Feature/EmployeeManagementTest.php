@@ -75,7 +75,8 @@ it('shows a searchable client selector for super admins', function () {
     $response->assertOk()
         ->assertSee('name="client_id"', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
-        ->assertSee($client->name, false);
+        ->assertSee('data-select2-placeholder=', false)
+        ->assertSee('Pilih client', false);
 });
 
 it('stores an employee under the selected client', function () {

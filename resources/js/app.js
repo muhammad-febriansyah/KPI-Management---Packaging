@@ -2168,9 +2168,17 @@ const initializeDashboardCharts = async () => {
     }
 
     const { default: ApexCharts } = await import('apexcharts');
+    const readChartData = (element) => {
+        try {
+            return JSON.parse(element.dataset.values ?? '[]');
+        } catch (error) {
+            console.error('Dashboard chart data invalid.', error);
+            return [];
+        }
+    };
 
     if (outputElement) {
-        const points = JSON.parse(outputElement.dataset.values ?? '[]');
+        const points = readChartData(outputElement);
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         new ApexCharts(outputElement, {
@@ -2188,18 +2196,18 @@ const initializeDashboardCharts = async () => {
     }
 
     if (shiftElement) {
-        const shifts = JSON.parse(shiftElement.dataset.values ?? '[]');
+        const shifts = readChartData(shiftElement);
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         new ApexCharts(shiftElement, {
-            chart: { type: 'bar', height: 230, toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: !reducedMotion } },
+            chart: { type: 'bar', height: Math.max(250, shifts.length * 38), toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: !reducedMotion } },
             series: [{ name: 'Output', data: shifts.map((shift) => shift.value) }],
             colors: ['#3155f5'],
-            plotOptions: { bar: { borderRadius: 5, columnWidth: '45%' } },
+            plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '55%' } },
             dataLabels: { enabled: false },
             grid: { borderColor: '#e8ebf2', strokeDashArray: 4, padding: { left: 8, right: 8 } },
-            xaxis: { categories: shifts.map((shift) => shift.label), labels: { style: { colors: '#64748b', fontSize: '11px' }, trim: true, hideOverlappingLabels: true }, axisBorder: { show: false }, axisTicks: { show: false } },
-            yaxis: { min: 0, labels: { style: { colors: '#94a3b8', fontSize: '11px' }, formatter: (value) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(value) } },
+            xaxis: { categories: shifts.map((shift) => shift.label), labels: { style: { colors: '#94a3b8', fontSize: '11px' }, formatter: (value) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(value) }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { labels: { style: { colors: '#64748b', fontSize: '11px' }, maxWidth: 180 } },
             tooltip: { y: { formatter: (value) => `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(value)} output` } },
         }).render();
     }
