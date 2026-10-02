@@ -43,10 +43,11 @@
 
     <x-card :padding="false">
         <div class="overflow-x-auto">
-            <table data-server-table data-search-placeholder="Cari NIK atau nama karyawan" class="w-full min-w-[1650px] text-left text-sm">
+            <table data-server-table data-search-placeholder="Cari ID karyawan, SIM ID, atau nama karyawan" class="w-full min-w-[1650px] text-left text-sm">
                 <thead>
                     <tr>
-                        <th>NIK</th>
+                        <th>ID Karyawan</th>
+                        <th>SIM ID</th>
                         <th>Nama lengkap</th>
                         <th>Jenis kelamin</th>
                         <th>Total hari masuk</th>

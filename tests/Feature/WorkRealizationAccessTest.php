@@ -87,7 +87,8 @@ it('scopes the realization list to only the employee\'s own entries', function (
     $response->assertJsonCount(1, 'data');
     expect($response->json('data.0.action'))
         ->not->toContain('data-realization-fill-open')
-        ->not->toContain('Edit hasil');
+        ->toContain('Edit hasil')
+        ->toContain('/edit');
 });
 
 it('lets a super admin see every employee\'s realizations', function () {
@@ -107,6 +108,50 @@ it('lets a super admin see every employee\'s realizations', function () {
 
     $response->assertOk();
     $response->assertJsonCount(2, 'data');
+});
+
+it('allows only a super admin to bulk delete realizations', function () {
+    $client = Client::factory()->create();
+    $superAdmin = User::factory()->superAdmin()->create();
+    $employeeUser = User::factory()->create();
+    attachEmployeeRole($employeeUser, $client);
+    $firstId = createRealization($client, $employeeUser, '2026-08-01');
+    $secondId = createRealization($client, $employeeUser, '2026-08-02');
+
+    $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->deleteJson(route('realizations.bulk-destroy'), ['realization_ids' => [$firstId]])
+        ->assertForbidden();
+
+    $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->deleteJson(route('realizations.bulk-destroy'), ['realization_ids' => [$firstId, $secondId]])
+        ->assertOk()
+        ->assertJsonPath('message', '2 realisasi berhasil dihapus.');
+
+    $this->assertDatabaseMissing('work_realizations', ['id' => $firstId]);
+    $this->assertDatabaseMissing('work_realizations', ['id' => $secondId]);
+});
+
+it('shows bulk delete checkboxes only to a super admin', function () {
+    $client = Client::factory()->create();
+    $superAdmin = User::factory()->superAdmin()->create();
+    $employeeUser = User::factory()->create();
+    attachEmployeeRole($employeeUser, $client);
+
+    $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.index'))
+        ->assertOk()
+        ->assertSee('data-realization-select-all', false)
+        ->assertSee('data-realization-bulk-delete', false);
+
+    $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.index'))
+        ->assertOk()
+        ->assertDontSee('data-realization-select-all', false)
+        ->assertDontSee('data-realization-bulk-delete', false);
 });
 
 it('blocks an employee from viewing another employee\'s realization detail', function () {
@@ -156,6 +201,56 @@ it('lets an employee view their own realization detail', function () {
         ->assertSee('data-realization-image-placeholder', false)
         ->assertSee('No image')
         ->assertSee('heroicons.svg#photo', false);
+});
+
+it('allows only a super admin to edit realization master data', function () {
+    $client = Client::factory()->create();
+    $superAdmin = User::factory()->superAdmin()->create();
+    $employeeUser = User::factory()->create();
+    attachEmployeeRole($employeeUser, $client);
+    $realizationId = createRealization($client, $employeeUser, '2026-08-01');
+    $realization = WorkRealization::query()->findOrFail($realizationId);
+    $assignedEmployee = Employee::query()->where('user_id', $employeeUser->getKey())->firstOrFail();
+
+    $this->actingAs($employeeUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.edit', $realization))
+        ->assertOk()
+        ->assertSee('Edit Hasil Realisasi')
+        ->assertDontSee('name="work_date"', false)
+        ->assertSee('name="total_output"', false);
+
+    $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.edit', $realization))
+        ->assertOk()
+        ->assertViewIs('realizations.edit')
+        ->assertSee('Edit Data Realisasi')
+        ->assertSee('data-assignment-section', false)
+        ->assertSee($assignedEmployee->full_name);
+
+    $response = $this->actingAs($superAdmin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('realizations.admin-update', $realization), [
+            'work_date' => '2026-08-03',
+            'shift_id' => $realization->shift_id,
+            'product_id' => 999999,
+            'total_output' => 24,
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'report' => 'Data diperbaiki Super Admin.',
+            'employee_ids' => [$assignedEmployee->getKey()],
+        ]);
+
+    $response->assertOk();
+    $this->assertDatabaseHas('work_realizations', [
+        'id' => $realizationId,
+        'work_date' => '2026-08-03',
+        'total_output' => 24,
+        'report' => 'Data diperbaiki Super Admin.',
+        'start_time' => '09:00:00',
+        'end_time' => '17:00:00',
+    ]);
 });
 
 it('hides the assignment controls on the realization detail page', function () {

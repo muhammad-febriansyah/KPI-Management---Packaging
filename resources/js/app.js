@@ -460,6 +460,77 @@ const refreshMasterSelectOptions = async () => {
     }));
 };
 
+const initializeRealizationBulkDelete = (table, dataTable) => {
+    const actions = document.querySelector('[data-realization-bulk-actions]');
+    const selectAll = table.querySelector('[data-realization-select-all]');
+    const deleteButton = actions?.querySelector('[data-realization-bulk-delete]');
+    const selectedCount = actions?.querySelector('[data-realization-selected-count]');
+
+    if (!actions || !selectAll || !deleteButton || !selectedCount) return;
+
+    const syncSelection = () => {
+        const checkboxes = [...table.querySelectorAll('[data-realization-select]')];
+        const selected = checkboxes.filter((checkbox) => checkbox.checked);
+        const hasSelection = selected.length > 0;
+
+        actions.classList.toggle('hidden', !hasSelection);
+        actions.classList.toggle('flex', hasSelection);
+        deleteButton.disabled = !hasSelection;
+        selectedCount.textContent = `${selected.length} dipilih`;
+        selectAll.checked = checkboxes.length > 0 && selected.length === checkboxes.length;
+        selectAll.indeterminate = hasSelection && selected.length < checkboxes.length;
+    };
+
+    table.addEventListener('change', (event) => {
+        if (event.target.matches('[data-realization-select]')) syncSelection();
+    });
+
+    selectAll.addEventListener('change', () => {
+        table.querySelectorAll('[data-realization-select]').forEach((checkbox) => {
+            checkbox.checked = selectAll.checked;
+        });
+        syncSelection();
+    });
+
+    deleteButton.addEventListener('click', async () => {
+        const realizationIds = [...table.querySelectorAll('[data-realization-select]:checked')].map((checkbox) => checkbox.value);
+        if (!realizationIds.length) return;
+
+        const confirmation = await Swal.fire({
+            title: 'Hapus realisasi?',
+            text: `${realizationIds.length} data akan dihapus permanen.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, hapus',
+            cancelButtonText: 'Batal',
+        });
+
+        if (!confirmation.isConfirmed) return;
+
+        try {
+            const response = await $.ajax({
+                url: deleteButton.dataset.url,
+                type: 'DELETE',
+                data: { realization_ids: realizationIds },
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
+                dataType: 'json',
+            });
+
+            await Swal.fire({ title: 'Berhasil', text: response.message ?? 'Realisasi berhasil dihapus.', icon: 'success' });
+            dataTable.ajax.reload(null, false);
+        } catch (error) {
+            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data tidak dapat dihapus.', icon: 'error' });
+        }
+    });
+
+    dataTable.on('draw', () => {
+        selectAll.checked = false;
+        syncSelection();
+    });
+    syncSelection();
+};
+
 const initializeServerTables = () => {
     // Every real resource index page already marks its table with data-server-table.
     // Do NOT widen this to `, body table` — it grabs unrelated static tables too
@@ -476,11 +547,12 @@ const initializeServerTables = () => {
         const invoiceFilters = resource === 'invoices' ? document.querySelector('[data-invoice-filters]') : null;
         const productFilters = resource === 'products' ? document.querySelector('[data-product-filters]') : null;
         const employeeFilters = resource === 'employees' ? document.querySelector('[data-employee-filters]') : null;
+        const hasRealizationBulkDelete = resource === 'realizations' && table.dataset.realizationCanBulkDelete === 'true';
         const initialSearch = new URLSearchParams(window.location.search).get('q') ?? '';
         const headerRow = table.querySelector('thead tr');
         const numberHeader = document.createElement('th');
-        numberHeader.className = 'w-14 px-5 py-3';
-        numberHeader.textContent = 'No';
+        numberHeader.className = hasRealizationBulkDelete ? 'w-24 px-3 py-3' : 'w-14 px-5 py-3';
+        numberHeader.innerHTML = hasRealizationBulkDelete ? '<div class="flex items-center gap-3"><input type="checkbox" data-realization-select-all class="size-4 rounded border-line accent-primary-600" aria-label="Pilih semua realisasi"><span>No</span></div>' : 'No';
         headerRow?.prepend(numberHeader);
         const dataTable = new DataTable(table, {
             processing: true,
@@ -490,7 +562,7 @@ const initializeServerTables = () => {
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
             search: { search: initialSearch },
-            columns: [{ data: null, orderable: false, searchable: false, className: 'w-14 px-5 py-4 text-slate-500', render: (_data, _type, _row, meta) => Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1 }, ...(resource === 'shifts' ? [
+            columns: [{ data: null, orderable: false, searchable: false, className: hasRealizationBulkDelete ? 'w-24 px-3 py-4 text-slate-500' : 'w-14 px-5 py-4 text-slate-500', render: (_data, _type, row, meta) => { const number = Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1; return hasRealizationBulkDelete ? `<div class="flex items-center gap-3"><input type="checkbox" data-realization-select value="${row.id}" class="size-4 rounded border-line accent-primary-600" aria-label="Pilih realisasi"><span>${number}</span></div>` : number; } }, ...(resource === 'shifts' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'start_time' }, { data: 'end_time' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'employees' ? [
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'client_name' }, { data: 'group_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
@@ -501,11 +573,22 @@ const initializeServerTables = () => {
             ] : resource === 'reports/work' ? [
                 { data: 'work_date' }, { data: 'employee_no' }, { data: 'sim_id' }, { data: 'full_name' }, { data: 'shift_name' }, { data: 'sku_snapshot' }, { data: 'product_name' },
                 { data: 'target', orderable: false, searchable: false }, { data: 'target_price', orderable: false, searchable: false },
-                { data: 'actual' }, { data: 'actual_price', orderable: false, searchable: false }, { data: 'description', defaultContent: '—' },
+                { data: 'actual' }, { data: 'actual_price', orderable: false, searchable: false },
+                { data: 'status', orderable: false, searchable: false, render: (value) => {
+                    const statusStyles = {
+                        'Tercapai': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+                        'Belum tercapai': 'bg-rose-50 text-rose-700 ring-rose-600/20',
+                        'Belum dapat dinilai': 'bg-slate-100 text-slate-600 ring-slate-500/20',
+                    };
+                    const label = value ?? 'Belum dapat dinilai';
+
+                    return `<span class="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusStyles[label] ?? statusStyles['Belum dapat dinilai']}">${label}</span>`;
+                } },
+                { data: 'description', defaultContent: '—' },
             ] : resource === 'invoices' ? [
                 { data: 'invoice' }, { data: 'period' }, { data: 'shift' }, { data: 'sku' }, { data: 'cost_center' }, { data: 'batch' }, { data: 'qty' }, { data: 'unit' }, { data: 'manpower' }, { data: 'po_price' }, { data: 'amount_po' },
             ] : resource === 'reports/payroll' ? [
-                { data: 'employee_no' }, { data: 'full_name' }, { data: 'gender' }, { data: 'attendance_days' },
+                { data: 'employee_no' }, { data: 'sim_id', defaultContent: '—' }, { data: 'full_name' }, { data: 'gender' }, { data: 'attendance_days' },
                 { data: 'net_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'gross_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'bpjs_health', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
@@ -560,6 +643,7 @@ const initializeServerTables = () => {
             $(employeeClientFilter).on('change', () => dataTable.ajax.reload(null, true));
         }
         table._dataTable = dataTable;
+        if (hasRealizationBulkDelete) initializeRealizationBulkDelete(table, dataTable);
         auditFilters?.querySelector('[data-audit-filter-submit]')?.addEventListener('click', () => dataTable.ajax.reload());
         const updateWorkExportLink = () => {
             const dateFrom = workFilters?.querySelector('[data-work-date-from]')?.value ?? '';
@@ -1624,11 +1708,11 @@ const initializeRealizationProductPreview = () => {
         const selectedOption = select.selectedOptions[0];
         const selectedTomOption = select.tomselect?.options?.[select.value];
         nameInput.value = selectedOption?.dataset.productName ?? selectedTomOption?.name ?? selectedTomOption?.text?.split(' — ').slice(1).join(' — ') ?? '';
-        const unitName = selectedTomOption?.unit_name ?? '';
+        const unitName = selectedOption?.dataset.productUnit ?? selectedTomOption?.unit_name ?? '';
         if (unitInput) unitInput.value = unitName;
         if (unitLabel) unitLabel.textContent = unitName || 'Karton/Kg';
         if (estimateInput) {
-            const estimate = selectedTomOption?.estimated_output_per_hour;
+            const estimate = selectedOption?.dataset.productEstimate ?? selectedTomOption?.estimated_output_per_hour;
             estimateInput.value = estimate ? `${Number(estimate).toLocaleString('id-ID')} / jam` : '';
         }
     };
@@ -1668,7 +1752,7 @@ const initializeRealizationBatchNumber = () => {
 };
 
 const initializeRealizationPricePreview = () => {
-    const form = document.querySelector('[data-realization-form]');
+    const form = document.querySelector('[data-realization-form], [data-realization-edit-form]');
     const input = document.querySelector('[data-total-output-input]');
     const preview = document.querySelector('[data-total-price-preview]');
     const productSelect = document.querySelector('[data-product-select]');
@@ -1676,9 +1760,10 @@ const initializeRealizationPricePreview = () => {
     if (!form || !input || !preview) return;
 
     const update = () => {
+        const selectedOption = productSelect?.selectedOptions?.[0];
         const selectedTomOption = productSelect?.tomselect?.options?.[productSelect.value];
         const output = Number(input.value || 0);
-        const rate = Number(selectedTomOption?.employee_rate ?? 0);
+        const rate = Number(selectedOption?.dataset.productRate ?? selectedTomOption?.employee_rate ?? 0);
         const totalPrice = Number.isFinite(output) ? Math.round(output * rate) : 0;
 
         preview.value = `Rp ${totalPrice.toLocaleString('id-ID')}`;
@@ -1694,7 +1779,7 @@ const initializeRealizationAssignments = () => {
     const section = document.querySelector('[data-assignment-section]');
     const rows = section?.querySelector('[data-assignment-rows]');
     const groupSelect = section?.querySelector('[data-assignment-group]');
-    const form = document.querySelector('[data-realization-form]');
+    const form = document.querySelector('[data-realization-form], [data-realization-edit-form]');
 
     if (!section || !rows || !form) return;
 
@@ -1771,6 +1856,27 @@ const initializeRealizationCreatePage = () => {
         try {
             await $.ajax({ url: form.action, type: 'POST', data: $(form).serialize(), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             await Swal.fire({ title: 'Berhasil', text: 'Realisasi berhasil disimpan.', icon: 'success' });
+            window.location.href = form.dataset.redirect;
+        } catch (error) {
+            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data tidak valid.', icon: 'error' });
+        }
+    });
+};
+
+const initializeRealizationEditPage = () => {
+    const form = document.querySelector('[data-realization-edit-form]');
+    if (!form) return;
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const result = await Swal.fire({ title: 'Simpan perubahan?', text: 'Data realisasi akan diperbarui.', icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
+        if (!result.isConfirmed) return;
+        if (!(await validateRealizationImage(form))) return;
+
+        try {
+            await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            await Swal.fire({ title: 'Berhasil', text: 'Data realisasi berhasil diperbarui.', icon: 'success' });
             window.location.href = form.dataset.redirect;
         } catch (error) {
             const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
@@ -2272,6 +2378,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRealizationPricePreview();
     initializeRealizationAssignments();
     initializeRealizationCreatePage();
+    initializeRealizationEditPage();
     initializeRealizationSubmitPage();
     initializeRealizationInlineAssignPage();
     initializeRealizationAssignModal();

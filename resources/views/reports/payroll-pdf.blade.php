@@ -50,7 +50,8 @@
             <thead>
                 <tr>
                     <th>No</th>
-                    <th>NIK</th>
+                    <th>ID Karyawan</th>
+                    <th>SIM ID</th>
                     <th>Nama Lengkap</th>
                     <th class="center">Jenis Kelamin</th>
                     <th class="number">Total Hari Masuk</th>
@@ -77,6 +78,7 @@
                     <tr>
                         <td class="center">{{ $loop->iteration }}</td>
                         <td class="employee">{{ $row->employee_no }}</td>
+                        <td>{{ $row->sim_id ?: '—' }}</td>
                         <td class="employee">{{ $row->full_name }}</td>
                         <td class="center">{{ $row->gender === 'male' ? 'Laki-laki' : 'Perempuan' }}</td>
                         <td class="number">{{ $row->attendance_days }}</td>

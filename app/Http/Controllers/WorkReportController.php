@@ -59,6 +59,7 @@ class WorkReportController extends Controller
                 ->addColumn('target_price', fn (object $row): string => $this->formatCurrency($this->targetOutput($row), $row->po_price))
                 ->editColumn('actual', fn (object $row): string => $this->formatQuantity($row->actual))
                 ->addColumn('actual_price', fn (object $row): string => $this->formatCurrency($row->actual, $row->po_price))
+                ->addColumn('status', fn (object $row): string => $this->achievementStatus($this->targetOutput($row), $row->actual))
                 ->toJson();
         }
 
@@ -184,5 +185,14 @@ class WorkReportController extends Controller
         }
 
         return 'Rp '.number_format((int) round((float) $quantity * (float) $unitPrice), 0, ',', '.');
+    }
+
+    private function achievementStatus(?float $target, mixed $actual): string
+    {
+        if ($target === null || $actual === null || $actual === '') {
+            return 'Belum dapat dinilai';
+        }
+
+        return (float) $actual >= $target ? 'Tercapai' : 'Belum tercapai';
     }
 }

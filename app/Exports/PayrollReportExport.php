@@ -35,7 +35,8 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
     {
         return [
             'No',
-            'NIK',
+            'ID Karyawan',
+            'SIM ID',
             'Nama Lengkap',
             'Jenis Kelamin',
             'Total Hari Masuk',
@@ -58,6 +59,7 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
         return [
             ++$this->rowNumber,
             $row->employee_no,
+            $row->sim_id ?: '—',
             $row->full_name,
             $row->gender === 'male' ? 'Laki-laki' : 'Perempuan',
             (int) $row->attendance_days,
@@ -78,8 +80,8 @@ class PayrollReportExport implements FromQuery, ShouldAutoSize, WithHeadings, Wi
     public function styles(Worksheet $sheet): array
     {
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:O1');
-        $sheet->getStyle('A1:O1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->setAutoFilter('A1:P1');
+        $sheet->getStyle('A1:P1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         return [
             1 => [

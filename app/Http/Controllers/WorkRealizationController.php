@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AssignWorkRealizationRequest;
 use App\Http\Requests\StoreWorkRealizationRequest;
+use App\Http\Requests\UpdateWorkRealizationBySuperAdminRequest;
 use App\Http\Requests\UpdateWorkRealizationRequest;
 use App\Models\Batch;
 use App\Models\Employee;
@@ -21,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Yajra\DataTables\Facades\DataTables;
@@ -77,10 +79,15 @@ class WorkRealizationController extends Controller
             });
         }
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i): string {
-                $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
+            $canEditResult = in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true);
 
-                return $detailAction;
+            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request, $canEditResult): string {
+                $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
+                $editAction = $request->user()->is_super_admin
+                    ? ' <a href="'.route('realizations.edit', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</a>'
+                    : ($canEditResult ? ' <a href="'.route('realizations.edit', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit hasil</a>' : '');
+
+                return $detailAction.$editAction;
             })->rawColumns(['action'])->toJson();
         }
 
@@ -91,6 +98,34 @@ class WorkRealizationController extends Controller
                 ? Employee::query()->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group:id,client_id,name')->orderBy('full_name')->get()
                 : collect(),
         ]);
+    }
+
+    public function bulkDestroy(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        abort_unless($request->user()->is_super_admin, 403);
+
+        $validated = $request->validate([
+            'realization_ids' => ['required', 'array', 'min:1'],
+            'realization_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('work_realizations', 'id')->where(fn ($query) => $query->where('client_id', $client->id())),
+            ],
+        ]);
+
+        $realizations = WorkRealization::query()
+            ->where('client_id', $client->id())
+            ->whereIn('id', $validated['realization_ids'])
+            ->get(['id', 'result_image_path']);
+
+        DB::transaction(function () use ($realizations): void {
+            $realizations->each->delete();
+        });
+
+        $realizations->pluck('result_image_path')->filter()->each(fn (string $path): bool => Storage::disk('public')->delete($path));
+
+        return response()->json(['message' => $realizations->count().' realisasi berhasil dihapus.']);
     }
 
     private function formatQuantity(mixed $value): string
@@ -165,6 +200,24 @@ class WorkRealizationController extends Controller
         abort_unless($request->user()->can('view', $realization), 404);
 
         return view('realizations.show', ['realization' => $realization->load(['shift', 'batch', 'product', 'employeeAssignments.employee']), 'currentClient' => $client->get(), 'user' => $request->user()]);
+    }
+
+    public function edit(Request $request, WorkRealization $realization, CurrentClientService $client): View
+    {
+        abort_unless($realization->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        $isSuperAdmin = $request->user()->is_super_admin;
+        Gate::authorize($isSuperAdmin ? 'adminUpdate' : 'update', $realization);
+
+        return view('realizations.edit', [
+            'realization' => $realization->load(['shift', 'batch', 'product.unit', 'employeeAssignments.employee']),
+            'currentClient' => $client->get(),
+            'user' => $request->user(),
+            'isSuperAdmin' => $isSuperAdmin,
+            'employees' => $isSuperAdmin
+                ? Employee::query()->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group:id,client_id,name')->orderBy('full_name')->get()
+                : collect(),
+        ]);
     }
 
     public function shiftOptions(Request $request, CurrentClientService $client): JsonResponse
@@ -317,6 +370,86 @@ class WorkRealizationController extends Controller
         User::query()->where('is_super_admin', true)->get()->each->notify($notification);
 
         return response()->json(['message' => 'Realisasi berhasil dikirim.']);
+    }
+
+    public function adminUpdate(UpdateWorkRealizationBySuperAdminRequest $request, WorkRealization $realization, CurrentClientService $client, RichTextSanitizer $sanitizer): JsonResponse
+    {
+        abort_unless($realization->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
+        abort_unless($request->user()->is_super_admin, 403);
+        Gate::authorize('adminUpdate', $realization);
+
+        $data = $request->validated();
+        $data['report'] = $sanitizer->sanitize($data['report'] ?? null);
+        $oldImagePath = $realization->result_image_path;
+        $newImagePath = null;
+
+        if ($request->hasFile('result_image')) {
+            $newImagePath = $request->file('result_image')->store('realizations', 'public');
+            $data['result_image_path'] = $newImagePath;
+        }
+
+        $product = filled($data['product_id'] ?? null)
+            ? Product::query()->where('client_id', $client->id())->with('unit')->findOrFail($data['product_id'])
+            : null;
+        $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
+        $batchNumber = $data['batch_no'] ?? null;
+        unset($data['result_image'], $data['batch_no'], $data['employee_ids']);
+
+        DB::transaction(function () use (&$data, $batchNumber, $employeeIds, $product, $realization, $client): void {
+            if (filled($batchNumber)) {
+                $batch = $realization->batch;
+
+                if ($batch) {
+                    $batch->update(['batch_no' => $batchNumber, 'product_id' => $product?->getKey()]);
+                } else {
+                    $batch = Batch::query()->create([
+                        'client_id' => $client->id(),
+                        'batch_no' => $batchNumber,
+                        'product_id' => $product?->getKey(),
+                        'status' => 'active',
+                    ]);
+                }
+
+                $data['batch_id'] = $batch->getKey();
+            } else {
+                $data['batch_id'] = null;
+            }
+
+            $data['sku_snapshot'] = $product?->sku;
+            $data['product_name_snapshot'] = $product?->name;
+            $data['unit_name_snapshot'] = $product?->unit?->name;
+
+            $realization->update($data);
+
+            if ($employeeIds === []) {
+                $realization->employeeAssignments()->delete();
+            } else {
+                $realization->employeeAssignments()->whereNotIn('employee_id', $employeeIds)->delete();
+            }
+            foreach ($employeeIds as $employeeId) {
+                $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
+                $assignment = $realization->employeeAssignments()->firstOrNew(['employee_id' => $employee->id]);
+                $assignment->fill([
+                    'client_id' => $client->id(),
+                    'rate_category_snapshot' => $employee->rate_category,
+                    'rate_per_unit_snapshot' => $product?->employee_rate ?? 0,
+                ]);
+                $assignment->save();
+
+                if ($assignment->wasRecentlyCreated) {
+                    $employee->user?->notify(new RealizationAssigned($realization));
+                }
+            }
+
+            $this->rebalanceAssignments($realization);
+        });
+
+        if ($newImagePath !== null && $oldImagePath !== null) {
+            Storage::disk('public')->delete($oldImagePath);
+        }
+
+        return response()->json(['message' => 'Data realisasi berhasil diperbarui.']);
     }
 
     public function assign(AssignWorkRealizationRequest $request, WorkRealization $realization, CurrentClientService $client): JsonResponse

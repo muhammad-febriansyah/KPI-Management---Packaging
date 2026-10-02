@@ -15,7 +15,7 @@ uses(RefreshDatabase::class);
 
 function makePayrollReportFixture(Client $client, User $user): Employee
 {
-    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP001', 'full_name' => 'Ananda Julian']);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP001', 'sim_id' => 'SIM001', 'full_name' => 'Ananda Julian']);
     $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
     $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
     $productId = DB::table('products')->insertGetId([
@@ -50,7 +50,8 @@ it('renders the payroll report page with a default current-month period', functi
     $response->assertDontSee('data-payroll-date-to');
     $response->assertSee('data-payroll-export-excel');
     $response->assertSee('data-payroll-export-pdf');
-    $response->assertSee('<th>NIK</th>', false);
+    $response->assertSee('<th>ID Karyawan</th>', false);
+    $response->assertSee('<th>SIM ID</th>', false);
     $response->assertSee('<th>Gaji bersih</th>', false);
     $response->assertSee('<th>Gaji kotor</th>', false);
     $response->assertSee('<th>BPJS Kesehatan</th>', false);
@@ -75,6 +76,7 @@ it('limits leader payroll to the linked employee record', function () {
 
     $response->assertOk()
         ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.sim_id', 'SIM001')
         ->assertJsonPath('data.0.full_name', 'Ananda Julian');
 });
 
@@ -100,7 +102,8 @@ it('uses the requirement order for payroll export columns', function () {
 
     expect($export->headings())->toBe([
         'No',
-        'NIK',
+        'ID Karyawan',
+        'SIM ID',
         'Nama Lengkap',
         'Jenis Kelamin',
         'Total Hari Masuk',

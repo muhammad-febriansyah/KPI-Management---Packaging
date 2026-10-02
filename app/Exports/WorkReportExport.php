@@ -85,7 +85,7 @@ class WorkReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithM
     {
         return [
             'No', 'Tanggal pekerjaan', 'ID Karyawan', 'SIM ID', 'Nama lengkap', 'Shift', 'SKU',
-            'Produk', 'Target', 'Harga target', 'Aktual', 'Harga aktual', 'Deskripsi',
+            'Produk', 'Target', 'Harga target', 'Aktual', 'Harga aktual', 'Status tercapai', 'Deskripsi',
         ];
     }
 
@@ -93,6 +93,7 @@ class WorkReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithM
     public function map(mixed $row): array
     {
         $target = $this->targetOutput($row);
+        $status = $this->achievementStatus($target, $row->actual);
 
         return [
             ++$this->rowNumber,
@@ -107,6 +108,7 @@ class WorkReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithM
             $target === null || $row->po_price === null ? null : round($target * (float) $row->po_price),
             $row->actual === null ? null : (float) $row->actual,
             $row->actual === null || $row->po_price === null ? null : round((float) $row->actual * (float) $row->po_price),
+            $status,
             $row->description ?: '—',
         ];
     }
@@ -115,8 +117,25 @@ class WorkReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithM
     public function styles(Worksheet $sheet): array
     {
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:M1');
-        $sheet->getStyle('A1:M1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->setAutoFilter('A1:N1');
+        $sheet->getStyle('A1:N1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $currencyFormat = '[$Rp-421] #,##0;[Red]-[$Rp-421] #,##0';
+        $sheet->getStyle('J2:J'.$sheet->getHighestRow())->getNumberFormat()->setFormatCode($currencyFormat);
+        $sheet->getStyle('L2:L'.$sheet->getHighestRow())->getNumberFormat()->setFormatCode($currencyFormat);
+
+        for ($row = 2; $row <= $sheet->getHighestRow(); $row++) {
+            $status = $sheet->getCell("M{$row}")->getValue();
+            $style = match ($status) {
+                'Tercapai' => ['background' => 'D1FAE5', 'foreground' => '047857'],
+                'Belum tercapai' => ['background' => 'FFE4E6', 'foreground' => 'BE123C'],
+                default => ['background' => 'F1F5F9', 'foreground' => '475569'],
+            };
+
+            $sheet->getStyle("M{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($style['background']);
+            $sheet->getStyle("M{$row}")->getFont()->getColor()->setRGB($style['foreground']);
+            $sheet->getStyle("M{$row}")->getFont()->setBold(true);
+        }
 
         return [
             1 => [
@@ -142,5 +161,14 @@ class WorkReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithM
         }
 
         return (float) $row->estimated_output_per_hour * ($minutes / 60);
+    }
+
+    private function achievementStatus(?float $target, mixed $actual): string
+    {
+        if ($target === null || $actual === null || $actual === '') {
+            return 'Belum dapat dinilai';
+        }
+
+        return (float) $actual >= $target ? 'Tercapai' : 'Belum tercapai';
     }
 }

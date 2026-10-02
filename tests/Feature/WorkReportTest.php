@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 uses(RefreshDatabase::class);
 
@@ -38,7 +39,7 @@ function makeAssignedRealization(Client $client, User $admin, Employee $employee
     return $realizationId;
 }
 
-it('lists assigned realizations without exposing a status field', function () {
+it('lists assigned realizations with achievement status', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
@@ -49,7 +50,7 @@ it('lists assigned realizations without exposing a status field', function () {
         ->getJson(route('reports.work').'?draw=1&start=0&length=10');
 
     $response->assertOk();
-    $response->assertJsonCount(2, 'data')->assertJsonMissingPath('data.0.status');
+    $response->assertJsonCount(2, 'data')->assertJsonPath('data.0.status', 'Belum dapat dinilai');
 });
 
 it('exports assigned realizations using the selected date range', function () {
@@ -71,6 +72,7 @@ it('exports assigned realizations using the selected date range', function () {
         $realizationIds = $export->query()->pluck('realization_id')->all();
 
         return $export->headings()[2] === 'ID Karyawan'
+            && $export->headings()[12] === 'Status tercapai'
             && in_array($includedId, $realizationIds, true)
             && ! in_array($excludedId, $realizationIds, true);
     });
@@ -111,7 +113,41 @@ it('reads the report row fields from the assigned realization', function () {
         ->assertJsonPath('data.0.target_price', 'Rp 1.600.000')
         ->assertJsonPath('data.0.actual', '380')
         ->assertJsonPath('data.0.actual_price', 'Rp 1.520.000')
+        ->assertJsonPath('data.0.status', 'Belum tercapai')
         ->assertJsonPath('data.0.description', 'Catatan dari realisasi');
+});
+
+it('marks a work report as achieved when actual output equals target', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+    $realizationId = makeAssignedRealization($client, $admin, $employee);
+
+    DB::table('work_realizations')->where('id', $realizationId)->update(['total_output' => 400]);
+    DB::table('products')->where('id', DB::table('work_realizations')->where('id', $realizationId)->value('product_id'))->update([
+        'estimated_output_per_hour' => 50,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('reports.work').'?draw=1&start=0&length=10');
+
+    $response->assertOk()->assertJsonPath('data.0.status', 'Tercapai');
+});
+
+it('colors achievement status cells in the Excel export', function () {
+    $export = new WorkReportExport(1);
+    $spreadsheet = new Spreadsheet;
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Laporan');
+    $sheet->setCellValue('M2', 'Tercapai');
+
+    $export->styles($sheet);
+
+    expect($sheet->getStyle('M2')->getFill()->getStartColor()->getRGB())->toBe('D1FAE5')
+        ->and($sheet->getStyle('M2')->getFont()->getColor()->getRGB())->toBe('047857')
+        ->and($sheet->getStyle('J2')->getNumberFormat()->getFormatCode())->toBe('[$Rp-421] #,##0;[Red]-[$Rp-421] #,##0')
+        ->and($sheet->getStyle('L2')->getNumberFormat()->getFormatCode())->toBe('[$Rp-421] #,##0;[Red]-[$Rp-421] #,##0');
 });
 
 it('searches the work report by employee name', function () {
@@ -125,11 +161,12 @@ it('searches the work report by employee name', function () {
     makeAssignedRealization($client, $admin, $employee);
     $columns = array_map(
         fn (string $column): array => ['data' => $column, 'searchable' => 'true', 'orderable' => 'true', 'search' => ['value' => '', 'regex' => 'false']],
-        ['work_date', 'employee_no', 'sim_id', 'full_name', 'shift_name', 'sku_snapshot', 'product_name', 'target', 'target_price', 'actual', 'actual_price', 'description'],
+        ['work_date', 'employee_no', 'sim_id', 'full_name', 'shift_name', 'sku_snapshot', 'product_name', 'target', 'target_price', 'actual', 'actual_price', 'status', 'description'],
     );
     $columns[7]['searchable'] = 'false';
     $columns[8]['searchable'] = 'false';
     $columns[10]['searchable'] = 'false';
+    $columns[11]['searchable'] = 'false';
 
     $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?'.http_build_query([
@@ -155,6 +192,7 @@ it('does not render a status filter on the work report page', function () {
         ->get(route('reports.work'));
 
     $response->assertOk()
+        ->assertSee('Status tercapai')
         ->assertDontSee('data-work-status', false)
         ->assertDontSee('Semua status');
 });
@@ -187,7 +225,7 @@ it('ignores a legacy status filter parameter', function () {
     $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=assigned');
 
-    $response->assertOk()->assertJsonCount(2, 'data')->assertJsonMissingPath('data.0.status');
+    $response->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.status', 'Belum dapat dinilai');
 });
 
 it('ignores an undefined legacy status filter parameter', function () {
@@ -199,7 +237,7 @@ it('ignores an undefined legacy status filter parameter', function () {
     $response = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('reports.work').'?draw=1&start=0&length=10&status=undefined');
 
-    $response->assertOk()->assertJsonCount(1, 'data')->assertJsonMissingPath('data.0.status');
+    $response->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.status', 'Belum dapat dinilai');
 });
 
 it('only reports products and work results from the active client', function () {

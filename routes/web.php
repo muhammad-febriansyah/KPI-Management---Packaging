@@ -93,9 +93,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/realizations/create', [WorkRealizationController::class, 'create'])->name('realizations.create')->middleware('client');
     Route::get('/batches/options', [WorkRealizationController::class, 'batchOptions'])->name('batches.options')->middleware('client');
     Route::get('/batches/next-number', [WorkRealizationController::class, 'nextBatchNumber'])->name('batches.next-number')->middleware('client');
+    Route::delete('/realizations/bulk', [WorkRealizationController::class, 'bulkDestroy'])->name('realizations.bulk-destroy')->middleware('client');
     Route::get('/realizations/{realization}', [WorkRealizationController::class, 'show'])->name('realizations.show')->middleware('client');
+    Route::get('/realizations/{realization}/edit', [WorkRealizationController::class, 'edit'])->name('realizations.edit')->middleware('client');
     Route::post('/realizations', [WorkRealizationController::class, 'store'])->name('realizations.store')->middleware('client');
     Route::put('/realizations/{realization}', [WorkRealizationController::class, 'update'])->name('realizations.update')->middleware('client');
+    Route::put('/realizations/{realization}/admin-update', [WorkRealizationController::class, 'adminUpdate'])->name('realizations.admin-update')->middleware('client');
     Route::post('/realizations/{realization}/assign', [WorkRealizationController::class, 'assign'])->name('realizations.assign')->middleware('client');
     Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index')->middleware('client');
     Route::get('/invoices/export/excel', [InvoiceController::class, 'exportExcel'])->name('invoices.export.excel')->middleware('client');

@@ -63,6 +63,14 @@ class WorkRealizationPolicy
     }
 
     /**
+     * Determine whether the super admin can edit the realization master data.
+     */
+    public function adminUpdate(User $user, WorkRealization $workRealization): bool
+    {
+        return $user->status === 'active' && $user->is_super_admin;
+    }
+
+    /**
      * Determine whether the user can assign employees to the model.
      */
     public function assign(User $user, WorkRealization $workRealization): bool

@@ -59,6 +59,7 @@ class PayrollReportBuilder
             ->select([
                 'employees.id',
                 'employees.employee_no',
+                'employees.sim_id',
                 'employees.full_name',
                 'employees.gender',
                 DB::raw('COALESCE(attendance.attendance_days, 0) AS attendance_days'),

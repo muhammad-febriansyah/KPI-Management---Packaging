@@ -500,7 +500,7 @@ it('hides the realization assignment button from the action column', function ()
 
     $response->assertOk();
     $action = $response->json('data.0.action');
-    expect($action)->not->toContain('data-realization-assign-open')->not->toContain('Assign')->toContain('Detail');
+    expect($action)->not->toContain('data-realization-assign-open')->not->toContain('Assign')->toContain('Detail')->toContain('Edit');
     expect($response->json('data.0.assignment_action'))->toBeNull();
 });
 
