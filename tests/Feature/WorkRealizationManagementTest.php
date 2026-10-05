@@ -3,6 +3,7 @@
 use App\Models\Batch;
 use App\Models\Client;
 use App\Models\Employee;
+use App\Models\Group;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Role;
@@ -26,6 +27,44 @@ function realizationEmployeeRole(): Role
     return $role;
 }
 
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function realizationRequiredPayloadForClient(Client $client, array $overrides = []): array
+{
+    $payload = [
+        'work_date' => '2026-09-09',
+        'batch_no' => 'B-20260909-0001',
+        'total_output' => 10,
+        'start_time' => '08:00',
+        'end_time' => '16:00',
+        'report' => 'Hasil pekerjaan sesuai rencana.',
+    ];
+
+    if (! array_key_exists('shift_id', $overrides)) {
+        $payload['shift_id'] = Shift::factory()->create(['client_id' => $client->getKey()])->getKey();
+    }
+
+    if (! array_key_exists('product_id', $overrides)) {
+        $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+        $payload['product_id'] = Product::factory()->create([
+            'client_id' => $client->getKey(),
+            'unit_id' => $unit->getKey(),
+        ])->getKey();
+    }
+
+    if (! array_key_exists('employee_ids', $overrides)) {
+        $employee = Employee::factory()->create([
+            'client_id' => $client->getKey(),
+            'user_id' => User::factory()->create()->getKey(),
+        ]);
+        $payload['employee_ids'] = [$employee->getKey()];
+    }
+
+    return array_replace($payload, $overrides);
+}
+
 it('shows the realization create page instead of a modal', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
@@ -38,6 +77,21 @@ it('shows the realization create page instead of a modal', function () {
     $response->assertViewIs('realizations.create');
     $response->assertViewHas('employees');
     $response->assertSee('Tambah Realisasi');
+    $response->assertSee('data-realization-wizard', false);
+    $response->assertSee('data-wizard-step="1"', false);
+    $response->assertSee('data-wizard-step="2"', false);
+    $response->assertSee('data-wizard-step="3"', false);
+    $response->assertSee('role="tablist"', false);
+    $response->assertSee('role="tab"', false);
+    $response->assertSee('Produk</button>', false);
+    $response->assertSee('Foto</button>', false);
+    $response->assertSee('Assign</button>', false);
+    $response->assertSee('Lengkapi semua data pada tab Produk dan Assign. Foto bersifat opsional.');
+    $response->assertSee('Tanggal borongan <span class="text-rose-600" aria-hidden="true">*</span>', false);
+    $response->assertSee('Assign karyawan <span class="text-rose-600" aria-hidden="true">*</span>', false);
+    $response->assertSee('Upload foto (opsional)');
+    $response->assertSee('data-wizard-next', false);
+    $response->assertSee('data-wizard-submit', false);
     $response->assertSee('data-tom-select-placeholder="Cari group..."', false);
     $response->assertSee('w-80 max-w-full', false);
     $response->assertSee('name="total_output"', false);
@@ -58,6 +112,31 @@ it('shows the realization create page instead of a modal', function () {
     $response->assertSee('Format otomatis dan increment: B-yyyymmdd-0001', false);
 });
 
+it('shows only assignment groups that belong to the active client', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $clientGroup = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Client Aktif']);
+    $otherGroup = Group::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Group Client Lain']);
+    Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+        'group_id' => $clientGroup->getKey(),
+    ]);
+    Employee::factory()->create([
+        'client_id' => $otherClient->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+        'group_id' => $otherGroup->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.create'))
+        ->assertOk()
+        ->assertSee('Group Client Aktif')
+        ->assertDontSee('Group Client Lain');
+});
+
 it('autofills and persists the realization batch number', function () {
     test()->travelTo('2026-09-29 08:00:00');
     $superAdmin = User::factory()->superAdmin()->create();
@@ -71,10 +150,10 @@ it('autofills and persists the realization batch number', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), [
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'work_date' => '2026-09-29',
             'batch_no' => 'B-20260929-0001',
-        ]);
+        ]));
 
     $response->assertCreated();
     $realization = WorkRealization::query()->where('client_id', $client->getKey())->firstOrFail();
@@ -89,17 +168,17 @@ it('autofills and persists the realization batch number', function () {
 
     $secondResponse = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), [
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'work_date' => '2026-09-29',
             'batch_no' => 'B-20260929-0001',
-        ]);
+        ]));
 
     $secondResponse->assertCreated();
     $secondBatch = Batch::query()->where('client_id', $client->getKey())->where('batch_no', 'B-20260929-0002')->firstOrFail();
     expect($secondBatch->getKey())->not->toBe($batch->getKey());
 });
 
-it('lets an employee open the realization form with assignment controls', function () {
+it('lets an employee open the realization form with required assignment controls', function () {
     $user = User::factory()->create();
     $client = Client::factory()->create();
     $role = realizationEmployeeRole();
@@ -111,27 +190,23 @@ it('lets an employee open the realization form with assignment controls', functi
 
     $response->assertOk()
         ->assertViewIs('realizations.create')
-        ->assertSee('Assign karyawan (opsional)')
+        ->assertSee('Assign karyawan')
         ->assertSee('data-assignment-section', false)
         ->assertSee('data-assignment-group', false)
         ->assertSee('data-assignment-employee', false);
 });
 
-it('automatically assigns an employee-created realization to its creator', function () {
+it('requires an employee assignment when an employee creates a realization', function () {
     $user = User::factory()->create();
     $client = Client::factory()->create();
     $role = realizationEmployeeRole();
     $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
-    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $user->getKey()]);
-
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), []);
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, ['employee_ids' => []]));
 
-    $response->assertCreated();
-    $realization = WorkRealization::query()->where('created_by', $user->getKey())->firstOrFail();
-    $this->assertDatabaseHas('work_realizations', ['id' => $realization->getKey()]);
-    $this->assertDatabaseHas('realization_employees', ['work_realization_id' => $realization->getKey(), 'employee_id' => $employee->getKey()]);
+    $response->assertJsonValidationErrors('employee_ids');
+    expect(WorkRealization::query()->where('created_by', $user->getKey())->exists())->toBeFalse();
 });
 
 it('lets an employee assign a realization to selected employees', function () {
@@ -146,7 +221,7 @@ it('lets an employee assign a realization to selected employees', function () {
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), ['employee_ids' => [$employee->getKey(), $otherEmployee->getKey()]]);
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, ['employee_ids' => [$employee->getKey(), $otherEmployee->getKey()]]));
 
     $response->assertCreated();
     $realization = WorkRealization::query()->where('created_by', $user->getKey())->firstOrFail();
@@ -161,12 +236,12 @@ it('lets the employee who created a realization assign another employee later', 
     $role = realizationEmployeeRole();
     $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
     $otherUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
-    Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $user->getKey()]);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $user->getKey()]);
     $otherEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $otherUser->getKey()]);
 
     $createResponse = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), []);
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, ['employee_ids' => [$employee->getKey()]]));
     $realization = WorkRealization::query()->where('created_by', $user->getKey())->firstOrFail();
 
     $assignResponse = $this->actingAs($user)
@@ -221,14 +296,14 @@ it('lets a superadmin create an assignment for a linked employee', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), [
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'work_date' => '2026-09-09',
             'shift_id' => $shift->getKey(),
             'batch_id' => $batchId,
             'product_id' => $productId,
             'total_output' => 10,
             'employee_ids' => [$employee->getKey()],
-        ]);
+        ]));
 
     $response->assertCreated();
     $realizationId = DB::table('work_realizations')->where('created_by', $superAdmin->getKey())->value('id');
@@ -263,14 +338,14 @@ it('uses one product rate for employees from every rate category', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), [
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'work_date' => '2026-09-09',
             'shift_id' => $shift->getKey(),
             'batch_id' => $batch->getKey(),
             'product_id' => $product->getKey(),
             'total_output' => 10,
             'employee_ids' => [$newEmployee->getKey(), $oldEmployee->getKey()],
-        ]);
+        ]));
 
     $response->assertCreated();
     $realizationId = WorkRealization::query()->where('created_by', $superAdmin->getKey())->value('id');
@@ -310,13 +385,13 @@ it('splits a realization total among three assigned employees', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), [
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'work_date' => '2026-09-09',
             'shift_id' => $shift->getKey(),
             'product_id' => $product->getKey(),
             'total_output' => 1000,
             'employee_ids' => $employees->pluck('id')->all(),
-        ]);
+        ]));
 
     $response->assertCreated();
     $amounts = DB::table('realization_employees')
@@ -367,12 +442,12 @@ it('stores result fields entered on the realization form', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), [
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'total_output' => 42,
             'start_time' => '08:00',
             'end_time' => '16:30',
             'report' => 'Hasil pekerjaan tercatat dari form realisasi.',
-        ]);
+        ]));
 
     $response->assertCreated();
     $realization = WorkRealization::query()->where('client_id', $client->getKey())->firstOrFail();
@@ -389,9 +464,9 @@ it('stores a result image uploaded while creating a realization', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->post(route('realizations.store'), [
+        ->post(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'result_image' => UploadedFile::fake()->image('hasil.jpg')->size(1024),
-        ]);
+        ]));
 
     $response->assertCreated();
     $realization = WorkRealization::query()->where('client_id', $client->getKey())->firstOrFail();
@@ -406,9 +481,9 @@ it('rejects a result image larger than 3 MB while creating a realization', funct
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->post(route('realizations.store'), [
+        ->post(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'result_image' => UploadedFile::fake()->image('hasil.jpg')->size(3073),
-        ]);
+        ]));
 
     $response->assertSessionHasErrors('result_image');
     expect(WorkRealization::query()->where('client_id', $client->getKey())->count())->toBe(0);
@@ -421,15 +496,15 @@ it('rejects a non-image result file while creating a realization', function () {
 
     $response = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->post(route('realizations.store'), [
+        ->post(route('realizations.store'), realizationRequiredPayloadForClient($client, [
             'result_image' => UploadedFile::fake()->create('hasil.pdf', 100, 'application/pdf'),
-        ]);
+        ]));
 
     $response->assertSessionHasErrors('result_image');
     expect(WorkRealization::query()->where('client_id', $client->getKey())->count())->toBe(0);
 });
 
-it('lets a superadmin save a realization without any form values or assignment', function () {
+it('rejects an empty realization when required product and assignment data is missing', function () {
     $superAdmin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -437,10 +512,20 @@ it('lets a superadmin save a realization without any form values or assignment',
         ->withSession(['current_client_id' => $client->getKey()])
         ->postJson(route('realizations.store'), []);
 
-    $response->assertCreated();
-    $realization = WorkRealization::query()->where('client_id', $client->getKey())->firstOrFail();
-    $this->assertDatabaseHas('work_realizations', ['id' => $realization->getKey()]);
-    expect($realization->employeeAssignments()->count())->toBe(0);
+    $response->assertJsonValidationErrors([
+        'work_date',
+        'shift_id',
+        'batch_no',
+        'product_id',
+        'total_output',
+        'start_time',
+        'end_time',
+        'report',
+        'employee_ids',
+    ]);
+    $response->assertJsonPath('errors.work_date.0', 'Tanggal borongan wajib diisi.');
+    $response->assertJsonPath('errors.employee_ids.0', 'Pilih minimal satu karyawan pada tab Assign.');
+    expect(WorkRealization::query()->where('client_id', $client->getKey())->exists())->toBeFalse();
 });
 
 it('lets a superadmin assign an employee after saving a realization', function () {
@@ -450,10 +535,11 @@ it('lets a superadmin assign an employee after saving a realization', function (
     $role = realizationEmployeeRole();
     $employeeUser->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
     $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $employeeUser->getKey()]);
+    $initialEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => User::factory()->create()->getKey()]);
 
     $realizationResponse = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), []);
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, ['employee_ids' => [$initialEmployee->getKey()]]));
     $realizationId = WorkRealization::query()->where('client_id', $client->getKey())->value('id');
 
     $response = $this->actingAs($superAdmin)
@@ -491,7 +577,7 @@ it('hides the realization assignment button from the action column', function ()
 
     $storeResponse = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), []);
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client));
     $storeResponse->assertCreated();
 
     $response = $this->actingAs($user)
@@ -514,7 +600,7 @@ it('hides existing employee assignment controls from the action column', functio
 
     $storeResponse = $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), ['employee_ids' => [$employee->getKey()]]);
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, ['employee_ids' => [$employee->getKey()]]));
     $storeResponse->assertCreated();
 
     $response = $this->actingAs($superAdmin)

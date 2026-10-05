@@ -152,6 +152,8 @@ it('renders unified role form and reset password modal on settings/access', func
         ->assertSee('data-tom-select-remote="'.route('settings.access.employee-options').'"', false)
         ->assertSee('data-user-default-password-toggle', false)
         ->assertSee('name="use_default_password"', false)
+        ->assertSee('Setelah memilih karyawan, password otomatis memakai tanggal lahir (DDMMYYYY, contoh 02011990).')
+        ->assertSee('Atur password manual')
         ->assertSee('Jika karyawan sudah memiliki akun, pilihannya akan memunculkan peringatan dan tidak dapat dibuat ulang.')
         ->assertSee('name="client_id"', false)
         ->assertSee('data-tom-select-remote="'.route('settings.access.client-options').'"', false)

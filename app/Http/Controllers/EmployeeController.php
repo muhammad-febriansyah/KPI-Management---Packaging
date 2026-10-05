@@ -258,7 +258,8 @@ class EmployeeController extends Controller
         }
 
         $user->save();
-        $roleId = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan'])->getKey();
+        $roleId = $clientUser?->pivot?->role_id
+            ?? Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan'])->getKey();
         $user->clients()->syncWithoutDetaching([$clientId => ['role_id' => $roleId, 'is_default' => true, 'status' => $clientUserStatus]]);
         $employee->update(['user_id' => $user->getKey()]);
 

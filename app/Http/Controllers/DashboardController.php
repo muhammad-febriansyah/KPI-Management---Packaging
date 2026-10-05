@@ -66,9 +66,15 @@ class DashboardController extends Controller
 
     private function leaderDashboard(User $user, mixed $currentClient, mixed $availableClients, PayrollReportBuilder $payrollBuilder): View
     {
-        $own = $this->ownedRealizations($user, $currentClient->id);
+        $leaderEmployee = Employee::query()
+            ->where('client_id', $currentClient->id)
+            ->where('user_id', $user->id)
+            ->with('group:id,client_id,name')
+            ->first();
+        $areaGroupId = $leaderEmployee?->group_id;
+        $areaRealizations = $this->areaRealizations($user, $currentClient->id, $areaGroupId);
         $today = today()->toDateString();
-        $todayRealizationIds = (clone $own)->whereDate('work_date', $today)->select('id');
+        $todayRealizationIds = (clone $areaRealizations)->whereDate('work_date', $today)->select('id');
         $payroll = $this->payrollForUser($user, $currentClient->id, $payrollBuilder);
         $payrollSummary = $this->payrollSummary($payroll);
 
@@ -76,26 +82,32 @@ class DashboardController extends Controller
             'availableClients' => $availableClients,
             'currentClient' => $currentClient,
             'user' => $user,
+            'areaGroupName' => $leaderEmployee?->group?->name,
             'metrics' => [
-                'realizationsToday' => (clone $own)->whereDate('work_date', $today)->count(),
-                'outputToday' => (clone $own)->whereDate('work_date', $today)->sum('total_output'),
-                'activeBatches' => Batch::query()->where('client_id', $currentClient->id)->where('status', 'active')->count(),
-                'unassignedToday' => (clone $own)->whereDate('work_date', $today)->whereDoesntHave('employeeAssignments')->count(),
+                'realizationsToday' => (clone $areaRealizations)->whereDate('work_date', $today)->count(),
+                'outputToday' => (clone $areaRealizations)->whereDate('work_date', $today)->sum('total_output'),
+                'activeBatches' => $areaGroupId === null ? 0 : Batch::query()
+                    ->where('client_id', $currentClient->id)
+                    ->where('status', 'active')
+                    ->whereHas('product', fn ($query) => $query->where('group_id', $areaGroupId))
+                    ->count(),
+                'unassignedToday' => (clone $areaRealizations)->whereDate('work_date', $today)->whereDoesntHave('employeeAssignments')->count(),
                 'assignedEmployeesToday' => RealizationEmployee::query()
                     ->where('client_id', $currentClient->id)
                     ->whereIn('work_realization_id', $todayRealizationIds)
+                    ->whereHas('employee', fn ($query) => $query->where('group_id', $areaGroupId))
                     ->distinct('employee_id')
                     ->count('employee_id'),
-                'complaintsToday' => (clone $own)->whereDate('work_date', $today)->where('is_complaint', true)->count(),
+                'complaintsToday' => (clone $areaRealizations)->whereDate('work_date', $today)->where('is_complaint', true)->count(),
             ],
-            'recentRealizations' => (clone $own)
+            'recentRealizations' => (clone $areaRealizations)
                 ->with(['shift:id,client_id,name', 'batch:id,client_id,batch_no', 'product:id,client_id,sku,name'])
                 ->withCount('employeeAssignments')
                 ->latest('work_date')
                 ->latest('id')
                 ->limit(8)
                 ->get(),
-            'shiftSummaries' => (clone $own)
+            'shiftSummaries' => (clone $areaRealizations)
                 ->select('shift_id')
                 ->selectRaw('COUNT(*) AS realizations_count')
                 ->selectRaw('COALESCE(SUM(total_output), 0) AS total_output')
@@ -106,7 +118,7 @@ class DashboardController extends Controller
             'payroll' => $payroll,
             'payrollNet' => $payrollSummary['net'],
             'payrollSummary' => $payrollSummary,
-            'outputTrend' => $this->outputTrend($own),
+            'outputTrend' => $this->outputTrend($areaRealizations),
         ]);
     }
 
@@ -149,6 +161,28 @@ class DashboardController extends Controller
                 $query->where('created_by', $user->id)
                     ->orWhereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('user_id', $user->id));
             });
+    }
+
+    private function areaRealizations(User $user, int $clientId, ?int $groupId): Builder
+    {
+        $query = WorkRealization::query()->where('client_id', $clientId);
+
+        if ($groupId === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($query) use ($user, $groupId): void {
+            $query->where(function ($query) use ($groupId): void {
+                $query->whereHas('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where('employees.group_id', $groupId))
+                    ->whereDoesntHave('employeeAssignments.employee', fn ($employeeQuery) => $employeeQuery->where(function ($employeeQuery) use ($groupId): void {
+                        $employeeQuery->where('employees.group_id', '<>', $groupId)
+                            ->orWhereNull('employees.group_id');
+                    }));
+            })->orWhere(function ($query) use ($user): void {
+                $query->where('created_by', $user->id)
+                    ->whereDoesntHave('employeeAssignments');
+            });
+        });
     }
 
     private function payrollForUser(User $user, int $clientId, PayrollReportBuilder $payrollBuilder): ?Employee
@@ -240,8 +274,8 @@ class DashboardController extends Controller
     }
 
     /**
-     * This employee's total output per day for the last 7 days, zero-filled
-     * for days with no realization, for the "Tren output" mini chart.
+     * Total output per day for the last 7 days, zero-filled for days with no
+     * realization, for the dashboard output chart.
      *
      * @return array<int, array{label: string, value: float}>
      */

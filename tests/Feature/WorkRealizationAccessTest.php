@@ -28,6 +28,13 @@ function attachEmployeeRole(User $user, Client $client): void
     $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
 }
 
+function attachAdminRole(User $user, Client $client): void
+{
+    $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+    grantMenu($role, 'realizations');
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+}
+
 function attachClientRole(User $user, Client $client): void
 {
     $role = Role::query()->firstOrCreate(['code' => 'client'], ['name' => 'Client']);
@@ -203,9 +210,11 @@ it('lets an employee view their own realization detail', function () {
         ->assertSee('heroicons.svg#photo', false);
 });
 
-it('allows only a super admin to edit realization master data', function () {
+it('allows super admins and client admins to edit realization master data', function () {
     $client = Client::factory()->create();
     $superAdmin = User::factory()->superAdmin()->create();
+    $adminUser = User::factory()->create();
+    attachAdminRole($adminUser, $client);
     $employeeUser = User::factory()->create();
     attachEmployeeRole($employeeUser, $client);
     $realizationId = createRealization($client, $employeeUser, '2026-08-01');
@@ -217,8 +226,50 @@ it('allows only a super admin to edit realization master data', function () {
         ->get(route('realizations.edit', $realization))
         ->assertOk()
         ->assertSee('Edit Hasil Realisasi')
+        ->assertSee('data-realization-wizard', false)
+        ->assertSee('data-wizard-optional="true"', false)
+        ->assertSee('data-wizard-step="1"', false)
+        ->assertSee('data-wizard-step="2"', false)
+        ->assertSee('data-wizard-step="3"', false)
+        ->assertDontSee('aria-required="true"', false)
         ->assertDontSee('name="work_date"', false)
         ->assertSee('name="total_output"', false);
+
+    $this->actingAs($adminUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.show', $realization))
+        ->assertOk()
+        ->assertSee('Edit data');
+
+    $this->actingAs($adminUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.edit', $realization))
+        ->assertOk()
+        ->assertSee('Edit Data Realisasi')
+        ->assertSee('name="work_date"', false)
+        ->assertSee('data-assignment-section', false);
+
+    $adminList = $this->actingAs($adminUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('realizations.index').'?draw=1&start=0&length=10');
+    $adminList->assertOk();
+    expect($adminList->json('data.0.action'))->toContain('>Edit</a>')->not->toContain('Edit hasil');
+
+    $adminUpdate = $this->actingAs($adminUser)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('realizations.admin-update', $realization), [
+            'work_date' => '2026-08-04',
+            'shift_id' => $realization->shift_id,
+            'batch_no' => $realization->batch?->batch_no,
+            'product_id' => $realization->product_id,
+            'total_output' => 11,
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'report' => 'Data diperbaiki Admin.',
+            'employee_ids' => [$assignedEmployee->getKey()],
+        ]);
+    $adminUpdate->assertOk();
+    $this->assertDatabaseHas('work_realizations', ['id' => $realizationId, 'report' => 'Data diperbaiki Admin.']);
 
     $this->actingAs($superAdmin)
         ->withSession(['current_client_id' => $client->getKey()])
@@ -226,6 +277,12 @@ it('allows only a super admin to edit realization master data', function () {
         ->assertOk()
         ->assertViewIs('realizations.edit')
         ->assertSee('Edit Data Realisasi')
+        ->assertSee('data-realization-wizard', false)
+        ->assertSee('data-wizard-optional="true"', false)
+        ->assertSee('data-wizard-step="1"', false)
+        ->assertSee('data-wizard-step="2"', false)
+        ->assertSee('data-wizard-step="3"', false)
+        ->assertDontSee('aria-required="true"', false)
         ->assertSee('data-assignment-section', false)
         ->assertSee($assignedEmployee->full_name);
 

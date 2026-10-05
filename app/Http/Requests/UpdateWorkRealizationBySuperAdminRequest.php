@@ -35,9 +35,9 @@ class UpdateWorkRealizationBySuperAdminRequest extends FormRequest
         $client = app(CurrentClientService::class);
 
         return $user?->status === 'active'
-            && $user->is_super_admin
             && $client->isResolved()
-            && $this->route('realization') instanceof WorkRealization;
+            && $this->route('realization') instanceof WorkRealization
+            && ($user->is_super_admin || $user->roleCodeFor($client->get()) === 'admin');
     }
 
     /**

@@ -191,6 +191,38 @@ it('updates an employee with sim id, email, and marital status', function () {
     $this->assertDatabaseHas('users', ['id' => $employee->fresh()->user_id, 'name' => 'Ananda Julian', 'email' => 'ananda@example.com']);
 });
 
+it('preserves leader role when employee group changes', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $leader = User::factory()->create();
+    $leaderRole = Role::query()->firstOrCreate(['code' => 'leader'], ['name' => 'Leader']);
+    $leader->clients()->attach($client, ['role_id' => $leaderRole->getKey(), 'is_default' => true, 'status' => 'active']);
+    $oldGroup = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Lama']);
+    $newGroup = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Baru']);
+    $employee = Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => $leader->getKey(),
+        'group_id' => $oldGroup->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload(['group_id' => $newGroup->getKey()]))
+        ->assertOk();
+
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $client->getKey(),
+        'user_id' => $leader->getKey(),
+        'role_id' => $leaderRole->getKey(),
+    ]);
+
+    $this->actingAs($leader)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('dashboard'))
+        ->assertViewIs('dashboard-leader')
+        ->assertSee('Lingkup data: Group Baru');
+});
+
 it('preserves a disabled employee account when employee details are updated', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();

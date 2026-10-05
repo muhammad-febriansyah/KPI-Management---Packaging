@@ -54,7 +54,7 @@
         ]],
         ['key' => 'settings-group', 'label' => 'Setting', 'icon' => 'shield-check', 'children' => [
             ['key' => 'settings', 'label' => 'User', 'route' => 'settings.access'],
-            ['key' => 'audit', 'label' => 'Audit Log', 'route' => 'audit.index', 'hidden' => true],
+            ['key' => 'audit', 'label' => 'Audit Log', 'route' => 'audit.index', 'hidden' => ! $user?->is_super_admin],
         ]],
     ];
 @endphp

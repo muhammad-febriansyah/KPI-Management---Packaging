@@ -3,11 +3,11 @@
     $payrollDeduction = $payrollSummary['deductions'];
     $shiftChart = $shiftSummaries->map(fn (object $summary): array => ['label' => $summary->shift?->name ?? 'Tanpa shift', 'value' => (float) $summary->total_output])->values()->all();
     $kpis = [
-        ['label' => 'Realisasi saya hari ini', 'value' => number_format($metrics['realizationsToday'], 0, ',', '.'), 'helper' => 'Dibuat atau ditugaskan ke saya', 'icon' => 'clipboard-document-list'],
-        ['label' => 'Output hari ini', 'value' => number_format($metrics['outputToday'], 3, ',', '.'), 'helper' => 'Total output realisasi saya', 'icon' => 'cube'],
-        ['label' => 'Batch aktif', 'value' => number_format($metrics['activeBatches'], 0, ',', '.'), 'helper' => 'Pada client aktif', 'icon' => 'document-chart-bar'],
-        ['label' => 'Karyawan terlibat', 'value' => number_format($metrics['assignedEmployeesToday'], 0, ',', '.'), 'helper' => 'Assignment hari ini', 'icon' => 'users'],
-        ['label' => 'Belum di-assign', 'value' => number_format($metrics['unassignedToday'], 0, ',', '.'), 'helper' => 'Realisasi hari ini', 'icon' => 'bell'],
+        ['label' => 'Realisasi area hari ini', 'value' => number_format($metrics['realizationsToday'], 0, ',', '.'), 'helper' => 'Group yang menjadi lingkup Anda', 'icon' => 'clipboard-document-list'],
+        ['label' => 'Output area hari ini', 'value' => number_format($metrics['outputToday'], 3, ',', '.'), 'helper' => 'Total output group Anda', 'icon' => 'cube'],
+        ['label' => 'Batch aktif area', 'value' => number_format($metrics['activeBatches'], 0, ',', '.'), 'helper' => 'Produk pada group Anda', 'icon' => 'document-chart-bar'],
+        ['label' => 'Karyawan terlibat', 'value' => number_format($metrics['assignedEmployeesToday'], 0, ',', '.'), 'helper' => 'Assignment group hari ini', 'icon' => 'users'],
+        ['label' => 'Belum di-assign', 'value' => number_format($metrics['unassignedToday'], 0, ',', '.'), 'helper' => 'Realisasi area hari ini', 'icon' => 'bell'],
     ];
 @endphp
 
@@ -26,7 +26,12 @@
                 <span>Dashboard Leader</span>
             </div>
             <h1 class="text-[clamp(1.65rem,2.2vw,2rem)] font-semibold leading-tight tracking-[-0.035em] text-slate-950">Ringkasan operasional</h1>
-            <p class="mt-1.5 text-sm text-slate-500">Pantau realisasi dan assignment pekerjaan pada client aktif.</p>
+            <p class="mt-1.5 text-sm text-slate-500">Pantau realisasi dan assignment pada area kerja Anda.</p>
+            @if ($areaGroupName)
+                <p class="mt-1 text-xs font-medium text-primary-700">Lingkup data: {{ $areaGroupName }}</p>
+            @else
+                <p class="mt-1 text-xs font-medium text-amber-700">Group belum ditetapkan pada profil Anda. Data area belum tersedia.</p>
+            @endif
         </div>
         <div class="flex flex-wrap gap-2">
             <a href="{{ route('realizations.create') }}" class="inline-flex h-10 items-center gap-2 rounded-lg bg-primary-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-primary-700"><x-icon name="plus" size="size-4" /> Tambah realisasi</a>
@@ -49,15 +54,15 @@
 
     <section class="mt-3 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]" aria-label="Grafik operasional">
         <x-card class="min-w-0" :padding="false">
-            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Tren output saya</h2><p class="mt-0.5 text-[11px] text-slate-500">7 hari terakhir</p></div><span class="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">{{ number_format(collect($outputTrend)->sum('value'), 3, ',', '.') }} total</span></div>
-            <div class="p-4 sm:p-5"><div data-dashboard-output-chart data-values='@json($outputTrend)' class="min-h-[230px]" role="img" aria-label="Grafik tren output leader tujuh hari terakhir"></div><div class="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] text-slate-400">@foreach ($outputTrend as $point)<span><strong class="block font-semibold text-slate-600">{{ number_format($point['value'], 0, ',', '.') }}</strong>{{ $point['label'] }}</span>@endforeach</div></div>
+            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Tren output area</h2><p class="mt-0.5 text-[11px] text-slate-500">7 hari terakhir</p></div><span class="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">{{ number_format(collect($outputTrend)->sum('value'), 3, ',', '.') }} total</span></div>
+            <div class="p-4 sm:p-5"><div data-dashboard-output-chart data-values='@json($outputTrend)' class="min-h-[230px]" role="img" aria-label="Grafik tren output area tujuh hari terakhir"></div><div class="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] text-slate-400">@foreach ($outputTrend as $point)<span><strong class="block font-semibold text-slate-600">{{ number_format($point['value'], 0, ',', '.') }}</strong>{{ $point['label'] }}</span>@endforeach</div></div>
         </x-card>
         <x-card class="min-w-0" :padding="false">
-            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Output per shift</h2><p class="mt-0.5 text-[11px] text-slate-500">Distribusi pekerjaan Anda</p></div><x-icon name="chart-bar" size="size-5" class="text-primary-600" /></div>
+            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Output area per shift</h2><p class="mt-0.5 text-[11px] text-slate-500">Distribusi output group Anda</p></div><x-icon name="chart-bar" size="size-5" class="text-primary-600" /></div>
             @if ($shiftSummaries->isEmpty())
-                <p class="px-4 py-12 text-center text-sm text-slate-500 sm:px-5">Belum ada ringkasan shift.</p>
+                <p class="px-4 py-12 text-center text-sm text-slate-500 sm:px-5">Belum ada data shift pada area ini.</p>
             @else
-                <div class="p-4 sm:p-5"><div data-dashboard-shift-chart data-values='@json($shiftChart)' class="min-h-[230px]" role="img" aria-label="Grafik output berdasarkan shift"></div></div>
+                <div class="p-4 sm:p-5"><div data-dashboard-shift-chart data-values='@json($shiftChart)' class="min-h-[230px]" role="img" aria-label="Grafik output area berdasarkan shift"></div></div>
             @endif
         </x-card>
     </section>
@@ -65,11 +70,11 @@
     <section class="mt-3 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <x-card class="min-w-0" :padding="false">
             <div class="flex min-h-[55px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5">
-                <h2 class="text-sm font-semibold text-slate-900">Realisasi terbaru saya</h2>
+                <h2 class="text-sm font-semibold text-slate-900">Realisasi terbaru area</h2>
                 <a href="{{ route('realizations.index') }}" class="text-xs font-semibold text-primary-600">Lihat semua →</a>
             </div>
             @if ($recentRealizations->isEmpty())
-                <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-5">Belum ada realisasi yang dibuat atau ditugaskan kepada Anda.</p>
+                <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-5">Belum ada realisasi pada area ini.</p>
             @else
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[680px] border-collapse text-left text-xs">
@@ -104,7 +109,7 @@
                         <div class="rounded-lg border border-line px-3 py-3">
                             <div class="flex items-center justify-between gap-3"><span class="text-xs font-semibold text-slate-700">{{ $summary->shift?->name ?? 'Tanpa shift' }}</span><span class="text-[11px] text-slate-500">{{ $summary->realizations_count }} realisasi</span></div>
                             <p class="mt-1 text-lg font-semibold text-slate-950">{{ number_format($summary->total_output, 3, ',', '.') }}</p>
-                            <p class="text-[11px] text-slate-500">Total output dari realisasi Anda</p>
+                            <p class="text-[11px] text-slate-500">Total output group Anda</p>
                         </div>
                     @endforeach
                 </div>

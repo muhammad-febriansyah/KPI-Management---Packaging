@@ -3,6 +3,7 @@
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\Shift;
 use App\Models\Unit;
@@ -28,6 +29,25 @@ function notifiableEmployeeUser(Client $client): array
     return [$employeeUser, $employee];
 }
 
+function notificationRequiredRealizationPayload(Client $client, array $employeeIds): array
+{
+    $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    $product = Product::factory()->create(['client_id' => $client->getKey(), 'unit_id' => $unit->getKey()]);
+
+    return [
+        'work_date' => '2026-09-09',
+        'batch_no' => 'B-20260909-0001',
+        'shift_id' => $shift->getKey(),
+        'product_id' => $product->getKey(),
+        'total_output' => 10,
+        'start_time' => '08:00',
+        'end_time' => '16:00',
+        'report' => 'Catatan pekerjaan.',
+        'employee_ids' => $employeeIds,
+    ];
+}
+
 it('notifies the employee when assigned to a realization via store', function () {
     Notification::fake();
     $admin = User::factory()->superAdmin()->create();
@@ -35,7 +55,7 @@ it('notifies the employee when assigned to a realization via store', function ()
     [$employeeUser, $employee] = notifiableEmployeeUser($client);
 
     $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), ['employee_ids' => [$employee->getKey()]]);
+        ->postJson(route('realizations.store'), notificationRequiredRealizationPayload($client, [$employee->getKey()]));
 
     Notification::assertSentTo($employeeUser, RealizationAssigned::class);
 });
@@ -45,9 +65,10 @@ it('notifies the employee when assigned to an existing realization via the assig
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     [$employeeUser, $employee] = notifiableEmployeeUser($client);
+    $otherEmployee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => User::factory()->create()->getKey()]);
 
     $storeResponse = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), []);
+        ->postJson(route('realizations.store'), notificationRequiredRealizationPayload($client, [$otherEmployee->getKey()]));
     $realizationId = $storeResponse->json('id') ?? DB::table('work_realizations')->where('client_id', $client->getKey())->value('id');
 
     $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
@@ -63,7 +84,7 @@ it('does not re-notify an employee already assigned when assign is called again'
     [$employeeUser, $employee] = notifiableEmployeeUser($client);
 
     $storeResponse = $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
-        ->postJson(route('realizations.store'), []);
+        ->postJson(route('realizations.store'), notificationRequiredRealizationPayload($client, [$employee->getKey()]));
     $realizationId = DB::table('work_realizations')->where('client_id', $client->getKey())->value('id');
 
     $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])->postJson(route('realizations.assign', $realizationId), ['employee_ids' => [$employee->getKey()]]);

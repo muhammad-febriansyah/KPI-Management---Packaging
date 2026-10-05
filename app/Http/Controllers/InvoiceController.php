@@ -17,6 +17,8 @@ use Yajra\DataTables\Facades\DataTables;
 
 class InvoiceController extends Controller
 {
+    private const OPTION_PAGE_SIZE = 30;
+
     public function index(Request $request, CurrentClientService $client, InvoiceBoronganQuery $invoiceQuery): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('invoices', $client->get()), 403);
@@ -60,8 +62,52 @@ class InvoiceController extends Controller
             'currentClient' => $client->get(),
             'user' => $request->user(),
             'period' => $filters[0] ?? now()->format('Y-m'),
-            'shifts' => Shift::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('name')->get(['id', 'name']),
-            'costCenters' => CostCenter::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    public function shiftOptions(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('invoices', $client->get()), 403);
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:10000'],
+        ]);
+        $page = $validated['page'] ?? 1;
+        $shifts = Shift::query()
+            ->where('client_id', $client->id())
+            ->where('status', 'active')
+            ->when(trim($validated['q'] ?? '') !== '', fn ($query) => $query->where('name', 'like', '%'.trim($validated['q']).'%'))
+            ->orderBy('name')
+            ->offset(($page - 1) * self::OPTION_PAGE_SIZE)
+            ->limit(self::OPTION_PAGE_SIZE + 1)
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'results' => $shifts->take(self::OPTION_PAGE_SIZE)->map(fn (Shift $shift): array => ['id' => $shift->id, 'text' => $shift->name])->values(),
+            'pagination' => ['more' => $shifts->count() > self::OPTION_PAGE_SIZE],
+        ]);
+    }
+
+    public function costCenterOptions(Request $request, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('invoices', $client->get()), 403);
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:10000'],
+        ]);
+        $page = $validated['page'] ?? 1;
+        $costCenters = CostCenter::query()
+            ->where('client_id', $client->id())
+            ->where('status', 'active')
+            ->when(trim($validated['q'] ?? '') !== '', fn ($query) => $query->where('name', 'like', '%'.trim($validated['q']).'%'))
+            ->orderBy('name')
+            ->offset(($page - 1) * self::OPTION_PAGE_SIZE)
+            ->limit(self::OPTION_PAGE_SIZE + 1)
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'results' => $costCenters->take(self::OPTION_PAGE_SIZE)->map(fn (CostCenter $costCenter): array => ['id' => $costCenter->id, 'text' => $costCenter->name])->values(),
+            'pagination' => ['more' => $costCenters->count() > self::OPTION_PAGE_SIZE],
         ]);
     }
 

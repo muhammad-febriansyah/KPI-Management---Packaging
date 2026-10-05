@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateWorkRealizationBySuperAdminRequest;
 use App\Http\Requests\UpdateWorkRealizationRequest;
 use App\Models\Batch;
 use App\Models\Employee;
+use App\Models\Group;
 use App\Models\Product;
 use App\Models\Shift;
 use App\Models\User;
@@ -79,11 +80,12 @@ class WorkRealizationController extends Controller
             });
         }
         if ($request->has('draw') || $request->expectsJson()) {
+            $canEditMasterData = $request->user()->is_super_admin || $request->user()->roleCodeFor($client->get()) === 'admin';
             $canEditResult = in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true);
 
-            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($request, $canEditResult): string {
+            return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($canEditMasterData, $canEditResult): string {
                 $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
-                $editAction = $request->user()->is_super_admin
+                $editAction = $canEditMasterData
                     ? ' <a href="'.route('realizations.edit', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</a>'
                     : ($canEditResult ? ' <a href="'.route('realizations.edit', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit hasil</a>' : '');
 
@@ -177,19 +179,26 @@ class WorkRealizationController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('create', WorkRealization::class);
+        $employees = Employee::query()
+            ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
+            ->where('client_id', $client->id())
+            ->where('status', 'active')
+            ->whereNotNull('user_id')
+            ->with('group:id,client_id,name')
+            ->orderBy('full_name')
+            ->get();
+        $groups = $employees->pluck('group')
+            ->filter(fn (?Group $group): bool => $group !== null && (int) $group->client_id === $client->id())
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
 
         return view('realizations.create', [
             'currentClient' => $client->get(),
             'user' => $request->user(),
             'defaultBatchNumber' => $this->generateNextBatchNumber($client->id()),
-            'employees' => Employee::query()
-                ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
-                ->where('client_id', $client->id())
-                ->where('status', 'active')
-                ->whereNotNull('user_id')
-                ->with('group:id,client_id,name')
-                ->orderBy('full_name')
-                ->get(),
+            'employees' => $employees,
+            'groups' => $groups,
         ]);
     }
 
@@ -206,17 +215,31 @@ class WorkRealizationController extends Controller
     {
         abort_unless($realization->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
-        $isSuperAdmin = $request->user()->is_super_admin;
-        Gate::authorize($isSuperAdmin ? 'adminUpdate' : 'update', $realization);
+        $canEditMasterData = $request->user()->isAdminFor($client->get());
+        Gate::authorize($canEditMasterData ? 'adminUpdate' : 'update', $realization);
+        $employees = $canEditMasterData
+            ? Employee::query()
+                ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
+                ->where('client_id', $client->id())
+                ->where('status', 'active')
+                ->whereNotNull('user_id')
+                ->with('group:id,client_id,name')
+                ->orderBy('full_name')
+                ->get()
+            : collect();
+        $groups = $employees->pluck('group')
+            ->filter(fn (?Group $group): bool => $group !== null && (int) $group->client_id === $client->id())
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
 
         return view('realizations.edit', [
             'realization' => $realization->load(['shift', 'batch', 'product.unit', 'employeeAssignments.employee']),
             'currentClient' => $client->get(),
             'user' => $request->user(),
-            'isSuperAdmin' => $isSuperAdmin,
-            'employees' => $isSuperAdmin
-                ? Employee::query()->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])->where('client_id', $client->id())->where('status', 'active')->whereNotNull('user_id')->with('group:id,client_id,name')->orderBy('full_name')->get()
-                : collect(),
+            'canEditMasterData' => $canEditMasterData,
+            'employees' => $employees,
+            'groups' => $groups,
         ]);
     }
 
@@ -288,14 +311,6 @@ class WorkRealizationController extends Controller
             ? Product::query()->where('client_id', $client->id())->findOrFail($data['product_id'])
             : null;
         $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
-        if ($employeeIds === [] && in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true)) {
-            $employeeIds = [Employee::query()
-                ->where('client_id', $client->id())
-                ->where('user_id', $request->user()->id)
-                ->where('status', 'active')
-                ->firstOrFail()
-                ->getKey()];
-        }
         unset($data['employee_ids']);
 
         $hasBatchNumber = filled($data['batch_no'] ?? null);
@@ -376,7 +391,6 @@ class WorkRealizationController extends Controller
     {
         abort_unless($realization->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
-        abort_unless($request->user()->is_super_admin, 403);
         Gate::authorize('adminUpdate', $realization);
 
         $data = $request->validated();

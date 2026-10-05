@@ -101,6 +101,8 @@ Route::middleware('auth')->group(function (): void {
     Route::put('/realizations/{realization}/admin-update', [WorkRealizationController::class, 'adminUpdate'])->name('realizations.admin-update')->middleware('client');
     Route::post('/realizations/{realization}/assign', [WorkRealizationController::class, 'assign'])->name('realizations.assign')->middleware('client');
     Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index')->middleware('client');
+    Route::get('/invoices/shifts/options', [InvoiceController::class, 'shiftOptions'])->name('invoices.shifts.options')->middleware('client');
+    Route::get('/invoices/cost-centers/options', [InvoiceController::class, 'costCenterOptions'])->name('invoices.cost-centers.options')->middleware('client');
     Route::get('/invoices/export/excel', [InvoiceController::class, 'exportExcel'])->name('invoices.export.excel')->middleware('client');
     Route::get('/deductions', [DeductionController::class, 'index'])->name('deductions.index')->middleware('client');
     Route::get('/deductions/create', [DeductionController::class, 'create'])->name('deductions.create')->middleware('client');

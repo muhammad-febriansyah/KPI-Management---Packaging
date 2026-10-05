@@ -23,15 +23,21 @@ function validRealizationPayload(array $overrides = []): array
     $product = Product::create(['client_id' => $client->id, 'sku' => 'SKU-'.fake()->unique()->numerify('####'), 'name' => 'Produk Uji', 'unit_id' => $unit->id]);
     $batch = Batch::create(['client_id' => $client->id, 'batch_no' => 'BATCH-'.fake()->unique()->numerify('####'), 'product_id' => $product->id]);
     $shift = Shift::factory()->create(['client_id' => $client->id]);
+    if (! array_key_exists('employee_ids', $overrides)) {
+        $employee = Employee::factory()->create(['client_id' => $client->id, 'user_id' => User::factory()->create()->getKey()]);
+        $overrides['employee_ids'] = [$employee->getKey()];
+    }
 
     return array_merge([
         'work_date' => now()->toDateString(),
+        'batch_no' => 'B-20260909-0001',
         'shift_id' => $shift->id,
         'batch_id' => $batch->id,
         'product_id' => $product->id,
         'total_output' => 100,
         'start_time' => '08:00',
         'end_time' => '17:00',
+        'report' => 'Catatan hasil pekerjaan.',
     ], $overrides);
 }
 

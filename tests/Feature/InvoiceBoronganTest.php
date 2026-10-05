@@ -5,6 +5,7 @@ use App\Models\Client;
 use App\Models\CostCenter;
 use App\Models\Employee;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\Shift;
 use App\Models\Unit;
 use App\Models\User;
@@ -89,7 +90,58 @@ it('renders invoice borongan page with client filters', function () {
         ->get(route('invoices.index'))
         ->assertOk()
         ->assertSee('Invoice Borongan')
-        ->assertSee('data-invoice-filters', false);
+        ->assertSee('data-invoice-filters', false)
+        ->assertSee('Filter invoice')
+        ->assertSee('data-select2-remote=', false)
+        ->assertSee(route('invoices.shifts.options'), false)
+        ->assertSee(route('invoices.cost-centers.options'), false);
+});
+
+it('returns searchable invoice filter options in pages scoped to the active client', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    Shift::factory()->count(31)->create(['client_id' => $client->getKey(), 'name' => 'Shift Packing']);
+    CostCenter::factory()->count(31)->create(['client_id' => $client->getKey(), 'name' => 'Packing Line']);
+    $otherShift = Shift::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Other Tenant Packing']);
+    $otherCostCenter = CostCenter::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Other Tenant Packing']);
+
+    $this->actingAs($admin)->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('invoices.shifts.options', ['q' => 'Packing']))
+        ->assertOk()
+        ->assertJsonCount(30, 'results')
+        ->assertJsonPath('pagination.more', true)
+        ->assertJsonMissing(['id' => $otherShift->getKey(), 'text' => 'Other Tenant Packing']);
+
+    $this->getJson(route('invoices.shifts.options', ['q' => 'Packing', 'page' => 2]))
+        ->assertOk()
+        ->assertJsonCount(1, 'results')
+        ->assertJsonPath('pagination.more', false);
+
+    $this->getJson(route('invoices.cost-centers.options', ['q' => 'Packing']))
+        ->assertOk()
+        ->assertJsonCount(30, 'results')
+        ->assertJsonPath('pagination.more', true)
+        ->assertJsonMissing(['id' => $otherCostCenter->getKey(), 'text' => 'Other Tenant Packing']);
+
+    $this->getJson(route('invoices.cost-centers.options', ['q' => 'Packing', 'page' => 2]))
+        ->assertOk()
+        ->assertJsonCount(1, 'results')
+        ->assertJsonPath('pagination.more', false);
+});
+
+it('forbids users without invoice access from searching invoice filter options', function () {
+    $client = Client::factory()->create();
+    $role = Role::query()->create(['code' => 'invoice-filter-guest', 'name' => 'Invoice Filter Guest']);
+    $user = User::factory()->create();
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('invoices.shifts.options'))
+        ->assertForbidden();
+
+    $this->getJson(route('invoices.cost-centers.options'))
+        ->assertForbidden();
 });
 
 it('keeps invoice borongan data within selected client', function () {

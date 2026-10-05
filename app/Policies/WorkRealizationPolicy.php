@@ -67,7 +67,12 @@ class WorkRealizationPolicy
      */
     public function adminUpdate(User $user, WorkRealization $workRealization): bool
     {
-        return $user->status === 'active' && $user->is_super_admin;
+        $client = app(CurrentClientService::class);
+
+        return $user->status === 'active'
+            && $client->isResolved()
+            && $workRealization->client_id === $client->id()
+            && ($user->is_super_admin || $user->roleCodeFor($client->get()) === 'admin');
     }
 
     /**

@@ -785,6 +785,7 @@ const initializeUserCreateModal = () => {
     const manualPasswordFields = employeeSection?.querySelector('[data-user-manual-password-fields]');
     const manualPasswordInputs = manualPasswordFields?.querySelectorAll('input[name="password"], input[name="password_confirmation"]') ?? [];
     const selectedEmployee = () => employeeSelect?.tomselect?.options?.[employeeSelect.value] ?? null;
+    let manualPasswordSelected = false;
     const setPasswordMode = (useDefault) => {
         if (!defaultPasswordValue || !manualPasswordFields || !defaultPasswordStatus || !defaultPasswordToggle) return;
         defaultPasswordValue.value = useDefault ? '1' : '0';
@@ -794,14 +795,24 @@ const initializeUserCreateModal = () => {
             input.required = !useDefault;
             if (useDefault) input.value = '';
         });
-        defaultPasswordToggle.textContent = useDefault ? 'Gunakan password manual' : 'Gunakan password default';
-        defaultPasswordStatus.textContent = useDefault ? 'Password otomatis memakai tanggal lahir dengan format ddmmyyyy.' : 'Password manual. Bisa diganti ke default tanggal lahir.';
+        defaultPasswordToggle.textContent = useDefault ? 'Atur password manual' : 'Gunakan tanggal lahir';
+        defaultPasswordStatus.textContent = useDefault
+            ? 'Password awal otomatis memakai tanggal lahir karyawan dengan format DDMMYYYY, contoh 02011990.'
+            : selectedEmployee()
+                ? selectedEmployee().birth_date
+                    ? 'Password manual dipakai sebagai password awal akun.'
+                    : 'Tanggal lahir karyawan belum tercatat. Isi password manual atau lengkapi data karyawan.'
+                : 'Setelah memilih karyawan, password otomatis memakai tanggal lahir (DDMMYYYY, contoh 02011990). Anda bisa mengatur password manual.';
     };
     const syncDefaultPasswordToggle = () => {
         const employee = selectedEmployee();
         const hasBirthDate = Boolean(employee?.birth_date);
         if (defaultPasswordToggle) defaultPasswordToggle.disabled = !hasBirthDate;
-        if (!hasBirthDate && defaultPasswordValue?.value === '1') setPasswordMode(false);
+        if (hasBirthDate && !manualPasswordSelected) {
+            setPasswordMode(true);
+        } else if (!hasBirthDate) {
+            setPasswordMode(false);
+        }
     };
     const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
     const setRole = (role) => {
@@ -818,6 +829,7 @@ const initializeUserCreateModal = () => {
     };
     const open = () => {
         form.reset();
+        manualPasswordSelected = false;
         form.action = '';
         form.elements._method.value = 'POST';
         form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.clear(true));
@@ -848,6 +860,7 @@ const initializeUserCreateModal = () => {
         }
 
         form.reset();
+        manualPasswordSelected = false;
         form.action = button.dataset.url;
         form.elements._method.value = 'PUT';
         const role = ['admin', 'leader', 'employee'].includes(item.role) ? item.role : 'employee';
@@ -899,14 +912,19 @@ const initializeUserCreateModal = () => {
     modal.querySelectorAll('[data-user-create-close]').forEach((button) => button.addEventListener('click', close));
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     form.querySelectorAll('input[name="create_role"]').forEach((input) => input.addEventListener('change', () => setRole(input.value)));
-    employeeSelect?.addEventListener('change', syncDefaultPasswordToggle);
+    employeeSelect?.addEventListener('change', () => {
+        manualPasswordSelected = false;
+        syncDefaultPasswordToggle();
+    });
     defaultPasswordToggle?.addEventListener('click', () => {
         if (!selectedEmployee()?.birth_date) {
             Swal.fire({ title: 'Tanggal lahir belum tersedia', text: 'Pilih karyawan yang memiliki tanggal lahir terlebih dahulu.', icon: 'info' });
             return;
         }
 
-        setPasswordMode(defaultPasswordValue?.value !== '1');
+        const useDefault = defaultPasswordValue?.value !== '1';
+        manualPasswordSelected = !useDefault;
+        setPasswordMode(useDefault);
     });
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -1308,6 +1326,7 @@ const initializeDatepickers = () => {
             locale: Indonesian,
             mode: input.dataset.datepickerMode ?? 'single',
             dateFormat: input.type === 'month' ? 'Y-m' : 'Y-m-d',
+            plugins: input.type === 'month' ? [monthSelectPlugin({ dateFormat: 'Y-m', altFormat: 'F Y' })] : [],
             altInput: true,
             altFormat: input.type === 'month' ? 'F Y' : 'j F Y',
             allowInput: true,
@@ -1846,19 +1865,156 @@ const initializeRealizationAssignments = () => {
     refreshButtons();
 };
 
+const initializeRealizationWizard = () => {
+    const form = document.querySelector('[data-realization-wizard]');
+    if (!form) return;
+
+    const panels = [...form.querySelectorAll('[data-wizard-step]')];
+    const tabs = [...form.querySelectorAll('[data-wizard-tab]')];
+    const backButton = form.querySelector('[data-wizard-back]');
+    const nextButton = form.querySelector('[data-wizard-next]');
+    const submitButton = form.querySelector('[data-wizard-submit]');
+    const currentLabel = form.querySelector('[data-wizard-current-label]');
+    const title = form.querySelector('[data-wizard-title]');
+    const description = form.querySelector('[data-wizard-description]');
+    const steps = [
+        { title: 'Produk', description: 'Isi informasi produk, tanggal, shift, output, dan waktu pengerjaan.' },
+        { title: 'Foto', description: 'Tambahkan foto hasil pekerjaan bila diperlukan.' },
+        { title: 'Assign', description: 'Pilih karyawan yang ditugaskan, atau lewati bila belum diperlukan.' },
+    ];
+
+    if (panels.length === 0 || !backButton || !nextButton || !submitButton) return;
+
+    let currentStep = 1;
+    const showStep = (step, moveFocus = false) => {
+        currentStep = Math.min(Math.max(step, 1), panels.length);
+        panels.forEach((panel) => {
+            const isActive = Number(panel.dataset.wizardStep) === currentStep;
+            panel.classList.toggle('hidden', !isActive);
+            panel.setAttribute('aria-hidden', String(!isActive));
+        });
+        currentLabel.textContent = String(currentStep);
+        title.textContent = steps[currentStep - 1]?.title ?? `Langkah ${currentStep}`;
+        description.textContent = steps[currentStep - 1]?.description ?? '';
+        tabs.forEach((tab) => {
+            const isActive = Number(tab.dataset.wizardTab) === currentStep;
+            const icon = tab.querySelector('[data-wizard-tab-icon]');
+            tab.setAttribute('aria-selected', String(isActive));
+            tab.tabIndex = isActive ? 0 : -1;
+            tab.classList.toggle('bg-white', isActive);
+            tab.classList.toggle('text-primary-700', isActive);
+            tab.classList.toggle('text-slate-600', !isActive);
+            tab.classList.toggle('shadow-sm', isActive);
+            tab.classList.toggle('ring-1', isActive);
+            tab.classList.toggle('ring-primary-100', isActive);
+            icon?.classList.toggle('bg-primary-50', isActive);
+            icon?.classList.toggle('text-primary-600', isActive);
+            icon?.classList.toggle('text-slate-500', !isActive);
+        });
+        backButton.classList.toggle('hidden', currentStep === 1);
+        backButton.classList.toggle('inline-flex', currentStep !== 1);
+        const isLastStep = currentStep === panels.length;
+        nextButton.classList.toggle('hidden', isLastStep);
+        nextButton.classList.toggle('inline-flex', !isLastStep);
+        submitButton.classList.toggle('hidden', !isLastStep);
+        submitButton.classList.toggle('inline-flex', isLastStep);
+
+        if (moveFocus) {
+            title.focus();
+            window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        }
+    };
+
+    const missingFieldsForPanel = (panel) => {
+        if (form.dataset.wizardOptional === 'true') return [];
+
+        const missingControls = [...panel.querySelectorAll('[data-wizard-required]')].filter((field) => {
+            const value = field.tomselect?.getValue() ?? field.value;
+            return !String(value ?? '').trim();
+        });
+        const missing = missingControls.map((field) => ({ label: field.dataset.wizardRequired, field }));
+        const assignmentSection = panel.querySelector('[data-assignment-section]');
+        if (assignmentSection) {
+            const employeeSelects = [...assignmentSection.querySelectorAll('[data-assignment-employee]')];
+            if (!employeeSelects.some((select) => Boolean(select.tomselect?.getValue() ?? select.value))) {
+                missing.push({ label: 'Pilih minimal satu karyawan', field: employeeSelects[0] });
+            }
+        }
+
+        return missing;
+    };
+    const showMissingFields = async (panel, missing) => {
+        showStep(Number(panel.dataset.wizardStep), true);
+        const firstField = missing[0]?.field;
+        const focusTarget = firstField?.tomselect?.control ?? firstField?._flatpickr?.altInput ?? firstField;
+        focusTarget?.focus();
+        await Swal.fire({
+            title: 'Data wajib belum lengkap',
+            text: `Lengkapi: ${missing.map(({ label }) => label).join(', ')}.`,
+            icon: 'warning',
+        });
+    };
+    const validatePanel = async (panel) => {
+        const missing = missingFieldsForPanel(panel);
+        if (missing.length === 0) return true;
+        await showMissingFields(panel, missing);
+        return false;
+    };
+
+    form._realizationWizardValidate = async () => {
+        for (const panel of panels) {
+            if (!(await validatePanel(panel))) return false;
+        }
+
+        return true;
+    };
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => showStep(Number(tab.dataset.wizardTab)));
+        tab.addEventListener('keydown', (event) => {
+            let nextIndex = index;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            showStep(Number(tabs[nextIndex].dataset.wizardTab));
+            tabs[nextIndex].focus();
+        });
+    });
+    backButton.addEventListener('click', () => showStep(currentStep - 1, true));
+    nextButton.addEventListener('click', async () => {
+        const panel = panels.find((item) => Number(item.dataset.wizardStep) === currentStep);
+        if (panel && !(await validatePanel(panel))) return;
+        showStep(currentStep + 1, true);
+    });
+    form._realizationWizardShowError = (fieldName) => {
+        const baseName = fieldName.split('.')[0];
+        const field = form.querySelector(`[name="${CSS.escape(baseName)}"], [name="${CSS.escape(baseName)}[]"]`);
+        const panel = field?.closest('[data-wizard-step]');
+        if (panel) showStep(Number(panel.dataset.wizardStep), true);
+    };
+
+    showStep(currentStep);
+};
+
 const initializeRealizationCreatePage = () => {
     const form = document.querySelector('[data-realization-form]');
     if (!form) return;
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const result = await Swal.fire({ title: 'Simpan realisasi?', text: 'Assignment karyawan dapat diisi sekarang atau nanti.', icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
+        if (form._realizationWizardValidate && !(await form._realizationWizardValidate())) return;
+        const result = await Swal.fire({ title: 'Simpan realisasi?', text: 'Data produk dan minimal satu karyawan akan disimpan.', icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
         if (!result.isConfirmed) return;
         try {
-            await $.ajax({ url: form.action, type: 'POST', data: $(form).serialize(), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            await $.ajax({ url: form.action, type: 'POST', data: new FormData(form), processData: false, contentType: false, headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             await Swal.fire({ title: 'Berhasil', text: 'Realisasi berhasil disimpan.', icon: 'success' });
             window.location.href = form.dataset.redirect;
         } catch (error) {
-            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            const errors = error.responseJSON?.errors ?? {};
+            const firstErrorField = Object.keys(errors)[0];
+            if (firstErrorField) form._realizationWizardShowError?.(firstErrorField);
+            const validation = Object.values(errors).flat().join('\n');
             await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data tidak valid.', icon: 'error' });
         }
     });
@@ -1879,7 +2035,10 @@ const initializeRealizationEditPage = () => {
             await Swal.fire({ title: 'Berhasil', text: 'Data realisasi berhasil diperbarui.', icon: 'success' });
             window.location.href = form.dataset.redirect;
         } catch (error) {
-            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            const errors = error.responseJSON?.errors ?? {};
+            const firstErrorField = Object.keys(errors)[0];
+            if (firstErrorField) form._realizationWizardShowError?.(firstErrorField);
+            const validation = Object.values(errors).flat().join('\n');
             await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data tidak valid.', icon: 'error' });
         }
     });
@@ -2377,6 +2536,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRealizationBatchNumber();
     initializeRealizationPricePreview();
     initializeRealizationAssignments();
+    initializeRealizationWizard();
     initializeRealizationCreatePage();
     initializeRealizationEditPage();
     initializeRealizationSubmitPage();
@@ -2400,6 +2560,8 @@ import 'datatables.net-dt/css/dataTables.dataTables.css';
 import Swal from 'sweetalert2';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
+import monthSelectPlugin from 'flatpickr/dist/plugins/monthSelect/index.js';
+import 'flatpickr/dist/plugins/monthSelect/style.css';
 import { Indonesian } from 'flatpickr/dist/l10n/id.js';
 import TomSelect from 'tom-select';
 import 'tom-select/dist/css/tom-select.css';
