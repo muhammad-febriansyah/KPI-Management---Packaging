@@ -9,6 +9,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\CurrentClientService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +49,30 @@ class AccessController extends Controller
             ->orderBy('users.name');
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
+                ->filterColumn('role_name', function (Builder $query, string $keyword): void {
+                    $normalizedKeyword = mb_strtolower($keyword);
+                    $roleLabels = [
+                        'admin' => 'Admin',
+                        'leader' => 'Leader',
+                        'employee' => 'Karyawan',
+                        'client' => 'Client',
+                    ];
+
+                    $query->where(function (Builder $query) use ($keyword, $normalizedKeyword, $roleLabels): void {
+                        $query->where('roles.name', 'like', "%{$keyword}%")
+                            ->orWhere('roles.code', 'like', "%{$keyword}%");
+
+                        foreach ($roleLabels as $roleCode => $label) {
+                            if (str_contains(mb_strtolower($label), $normalizedKeyword)) {
+                                $query->orWhere('roles.code', $roleCode);
+                            }
+                        }
+
+                        if (str_contains(mb_strtolower('Super Admin'), $normalizedKeyword)) {
+                            $query->orWhere('users.is_super_admin', true);
+                        }
+                    });
+                })
                 ->editColumn('status', function (User $user): string {
                     $status = $user->is_super_admin ? $user->status : ($user->client_user_status ?? $user->status);
 

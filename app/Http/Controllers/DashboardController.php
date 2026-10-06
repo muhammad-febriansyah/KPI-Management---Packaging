@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Batch;
 use App\Models\Employee;
-use App\Models\Product;
 use App\Models\RealizationEmployee;
 use App\Models\User;
 use App\Models\WorkRealization;
@@ -40,6 +39,8 @@ class DashboardController extends Controller
 
         $roleCode = $currentClient !== null ? $user->roleCodeFor($currentClient) : null;
 
+        abort_unless($user->canAccessMenu('dashboard', $currentClient), 403);
+
         if ($currentClient !== null && $roleCode === 'leader') {
             return $this->leaderDashboard($user, $currentClient, $availableClients, $payrollBuilder);
         }
@@ -48,19 +49,37 @@ class DashboardController extends Controller
             return $this->employeeDashboard($user, $currentClient, $availableClients, $payrollBuilder);
         }
 
+        $monthStart = today()->startOfMonth()->toDateString();
+        $monthEnd = today()->endOfMonth()->toDateString();
+        $monthRealizations = $currentClient
+            ? WorkRealization::query()
+                ->where('client_id', $currentClient->getKey())
+                ->whereBetween('work_date', [$monthStart, $monthEnd])
+            : WorkRealization::query()->whereRaw('1 = 0');
+        $outputThisMonth = (clone $monthRealizations)->sum('total_output');
+        $targetThisMonth = $this->monthlyProductionTarget($currentClient?->getKey());
+
         return view('dashboard', [
             'availableClients' => $availableClients,
             'currentClient' => $currentClient,
             'user' => $user,
             'metrics' => [
-                'employees' => $currentClient ? Employee::where('client_id', $currentClient->id)->where('status', 'active')->count() : 0,
-                'products' => $currentClient ? Product::where('client_id', $currentClient->id)->where('status', 'active')->count() : 0,
-                'realizations' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->where('work_date', today()->toDateString())->count() : 0,
-                'output' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->where('work_date', today()->toDateString())->sum('total_output') : 0,
-                'complaints' => $currentClient ? WorkRealization::where('client_id', $currentClient->id)->where('is_complaint', true)->count() : 0,
+                'output' => $currentClient ? WorkRealization::query()->where('client_id', $currentClient->getKey())->whereDate('work_date', today())->sum('total_output') : 0,
+                'outputThisMonth' => $outputThisMonth,
+                'targetThisMonth' => $targetThisMonth,
+                'targetAchievement' => $targetThisMonth > 0 ? round(((float) $outputThisMonth / $targetThisMonth) * 100) : null,
             ],
             'outputTrend' => $currentClient ? $this->monthlyOutputTrend($currentClient->id) : [],
             'shiftTrend' => $currentClient ? $this->monthlyShiftOutput($currentClient->id) : [],
+            'recentRealizations' => $currentClient
+                ? WorkRealization::query()
+                    ->where('client_id', $currentClient->getKey())
+                    ->with(['shift:id,client_id,name', 'product:id,client_id,sku,name'])
+                    ->latest('work_date')
+                    ->latest('id')
+                    ->limit(8)
+                    ->get()
+                : collect(),
         ]);
     }
 
@@ -220,7 +239,7 @@ class DashboardController extends Controller
             ->whereBetween('work_date', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()])
             ->select('shift_id')
             ->selectRaw('COALESCE(SUM(total_output), 0) AS total_output')
-            ->with('shift:id,name')
+            ->with('shift:id,client_id,name')
             ->groupBy('shift_id')
             ->orderByDesc('total_output')
             ->get()
@@ -228,6 +247,34 @@ class DashboardController extends Controller
                 'label' => $realization->shift?->name ?? 'Tanpa shift',
                 'value' => (float) $realization->total_output,
             ])->values()->all();
+    }
+
+    private function monthlyProductionTarget(?int $clientId): float
+    {
+        if ($clientId === null) {
+            return 0.0;
+        }
+
+        return WorkRealization::query()
+            ->where('client_id', $clientId)
+            ->whereBetween('work_date', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()])
+            ->with('product:id,client_id,estimated_output_per_hour')
+            ->get(['id', 'client_id', 'product_id', 'start_time', 'end_time'])
+            ->sum(function (WorkRealization $realization): float {
+                if ($realization->product?->estimated_output_per_hour === null || $realization->start_time === null || $realization->end_time === null) {
+                    return 0.0;
+                }
+
+                $start = Carbon::parse((string) $realization->start_time);
+                $end = Carbon::parse((string) $realization->end_time);
+                $minutes = $start->diffInMinutes($end, false);
+
+                if ($minutes < 0) {
+                    $minutes += 24 * 60;
+                }
+
+                return (float) $realization->product->estimated_output_per_hour * ($minutes / 60);
+            });
     }
 
     /**

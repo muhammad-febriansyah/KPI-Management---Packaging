@@ -75,12 +75,23 @@ class User extends Authenticatable
             return [];
         }
 
-        return Role::query()->whereKey($roleId)->first()
-            ?->permissions()
+        $role = Role::query()->whereKey($roleId)->first();
+
+        if (! $role) {
+            return [];
+        }
+
+        $menuKeys = $role->permissions()
             ->where('code', 'like', 'menu.%')
             ->pluck('code')
             ->map(fn (string $code): string => substr($code, 5))
-            ->all() ?? [];
+            ->all();
+
+        if ($role->code === 'client') {
+            return array_values(array_diff($menuKeys, ['reports']));
+        }
+
+        return $menuKeys;
     }
 
     /**

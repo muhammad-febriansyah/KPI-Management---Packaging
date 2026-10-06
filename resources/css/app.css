@@ -305,7 +305,7 @@
     }
 
     .select2-container .select2-selection--single {
-        height: 2.75rem;
+        height: 2.75rem !important;
         border: 1px solid var(--color-line);
         border-radius: 0.5rem;
         background: var(--color-surface);
@@ -319,7 +319,7 @@
 
     .select2-container .select2-selection--single .select2-selection__rendered {
         padding: 0 2.25rem 0 0.75rem;
-        line-height: 2.65rem;
+        line-height: 2.65rem !important;
         color: var(--color-ink);
     }
 
@@ -328,7 +328,7 @@
     }
 
     .select2-container--default .select2-selection--single .select2-selection__arrow {
-        height: 2.65rem;
+        height: 2.65rem !important;
         right: 0.5rem;
     }
 

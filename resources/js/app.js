@@ -782,6 +782,7 @@ const initializeUserCreateModal = () => {
     const defaultPasswordToggle = employeeSection?.querySelector('[data-user-default-password-toggle]');
     const defaultPasswordValue = employeeSection?.querySelector('[name="use_default_password"]');
     const defaultPasswordStatus = employeeSection?.querySelector('[data-user-default-password-status]');
+    const defaultPasswordPanel = employeeSection?.querySelector('[data-user-default-password-panel]');
     const manualPasswordFields = employeeSection?.querySelector('[data-user-manual-password-fields]');
     const manualPasswordInputs = manualPasswordFields?.querySelectorAll('input[name="password"], input[name="password_confirmation"]') ?? [];
     const selectedEmployee = () => employeeSelect?.tomselect?.options?.[employeeSelect.value] ?? null;
@@ -829,6 +830,7 @@ const initializeUserCreateModal = () => {
     };
     const open = () => {
         form.reset();
+        defaultPasswordPanel?.classList.remove('hidden');
         manualPasswordSelected = false;
         form.action = '';
         form.elements._method.value = 'POST';
@@ -868,6 +870,7 @@ const initializeUserCreateModal = () => {
         if (!roleInput) return;
         roleInput.checked = true;
         setRole(role);
+        defaultPasswordPanel?.classList.add('hidden');
         form.querySelectorAll('input[name="create_role"]').forEach((input) => { input.disabled = true; });
         const activeSection = form.querySelector(`[data-user-create-section="${role === 'leader' ? 'employee' : role}"]`);
 
@@ -1849,7 +1852,7 @@ const initializeRealizationAssignments = () => {
             return;
         }
         const selected = new Set([...rows.querySelectorAll('[data-assignment-employee]')].map((select) => select.value).filter(Boolean));
-        const toAdd = [...document.querySelectorAll('[data-assignment-employee] option[data-employee-group]')]
+        const toAdd = [...pristineRow.querySelectorAll('option[data-employee-group]')]
             .filter((option) => option.dataset.employeeGroup === groupId && !selected.has(option.value));
         if (toAdd.length === 0) {
             Swal.fire({ title: 'Tidak ada karyawan ditambahkan', text: 'Group ini tidak memiliki karyawan aktif, atau semua anggotanya sudah ada di daftar.', icon: 'info' });

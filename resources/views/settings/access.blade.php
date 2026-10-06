@@ -11,7 +11,12 @@
 @if ($user->is_super_admin && $availableClients->count() > 1)
 <div class="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
 <div><p class="text-sm font-semibold text-slate-900">Filter client</p><p class="mt-1 text-xs text-slate-500">Kosongkan untuk menampilkan user dari semua client.</p></div>
-<form method="GET" action="{{ route('settings.access') }}" class="w-full shrink-0 sm:w-80"><label class="sr-only" for="access-client-selector">Filter client</label><select id="access-client-selector" name="client_filter" data-client-filter data-select2-select data-select2-placeholder="Cari kode atau nama client..."><option value="">Semua client</option>@foreach ($availableClients as $clientOption)<option value="{{ $clientOption->getKey() }}" @selected($clientOption->getKey() === $selectedClientId)>{{ $clientOption->code }} — {{ $clientOption->name }}</option>@endforeach</select></form>
+<div class="flex w-full shrink-0 gap-2 sm:w-auto">
+    <form method="GET" action="{{ route('settings.access') }}" class="min-w-0 flex-1 sm:w-80 sm:flex-none"><label class="sr-only" for="access-client-selector">Filter client</label><select id="access-client-selector" name="client_filter" data-client-filter data-select2-select data-select2-placeholder="Cari kode atau nama client..."><option value="">Semua client</option>@foreach ($availableClients as $clientOption)<option value="{{ $clientOption->getKey() }}" @selected($clientOption->getKey() === $selectedClientId)>{{ $clientOption->code }} — {{ $clientOption->name }}</option>@endforeach</select></form>
+    @if ($selectedClientId !== null)
+        <a href="{{ route('settings.access') }}" aria-label="Reset filter client" class="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-orange-600 bg-orange-500 px-3 text-xs font-semibold text-white transition hover:bg-orange-600"><x-icon name="x-mark" size="size-4" /> Reset filter</a>
+    @endif
+</div>
 </div>
 @endif
 <x-card :padding="false"><div class="overflow-x-auto"><table data-server-table class="min-w-[1120px] w-full text-left text-sm"><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Client</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div></x-card>
