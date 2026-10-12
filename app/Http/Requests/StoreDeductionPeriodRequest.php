@@ -56,6 +56,7 @@ class StoreDeductionPeriodRequest extends FormRequest
             'correction_plus' => ['nullable', 'numeric', 'min:0'],
             'employee_ids' => ['nullable', 'array'],
             'employee_ids.*' => ['integer', 'distinct', Rule::exists('employees', 'id')->where(fn ($q) => $q->where('client_id', $clientId)->where('status', 'active'))],
+            'notes' => ['nullable', 'string'],
         ];
     }
 

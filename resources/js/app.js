@@ -589,10 +589,10 @@ const initializeServerTables = () => {
                 { data: 'invoice' }, { data: 'period' }, { data: 'shift' }, { data: 'sku' }, { data: 'cost_center' }, { data: 'batch' }, { data: 'qty' }, { data: 'unit' }, { data: 'manpower' }, { data: 'po_price' }, { data: 'amount_po' },
             ] : resource === 'reports/payroll' ? [
                 { data: 'employee_no' }, { data: 'sim_id', defaultContent: '—' }, { data: 'full_name' }, { data: 'gender' }, { data: 'attendance_days' },
-                { data: 'net_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'net_salary', orderable: false, searchable: false, render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'gross_salary', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
-                { data: 'bpjs_health', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
-                { data: 'bpjs_employment', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'bpjs_health', orderable: false, searchable: false, render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
+                { data: 'bpjs_employment', orderable: false, searchable: false, render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'uniform_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'equipment_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
                 { data: 'meal_amount', render: (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}` },
@@ -2285,26 +2285,140 @@ const initializeRealizationFillModal = () => {
 const initializeDeductionCreatePage = () => {
     const form = document.querySelector('[data-deduction-create-form]');
     if (!form) return;
+    const panels = [...form.querySelectorAll('[data-wizard-step]')];
+    const tabs = [...form.querySelectorAll('[data-wizard-tab]')];
+    const backButton = form.querySelector('[data-wizard-back]');
+    const nextButton = form.querySelector('[data-wizard-next]');
+    const submitButton = form.querySelector('[data-wizard-submit]');
+    const currentLabel = form.querySelector('[data-wizard-current-label]');
+    const title = form.querySelector('[data-wizard-title]');
+    const description = form.querySelector('[data-wizard-description]');
+    const steps = [
+        { title: 'Periode', description: 'Pilih client, bulan, dan minggu potongan gaji.' },
+        { title: 'Komponen', description: 'Isi komponen potongan dan catatan bila diperlukan.' },
+        { title: 'Karyawan', description: 'Cari lalu pilih karyawan yang dikenakan potongan.' },
+    ];
+    let currentStep = 1;
+    const showStep = (step, moveFocus = false) => {
+        currentStep = Math.min(Math.max(step, 1), panels.length);
+        panels.forEach((panel) => {
+            const isActive = Number(panel.dataset.wizardStep) === currentStep;
+            panel.classList.toggle('hidden', !isActive);
+            panel.setAttribute('aria-hidden', String(!isActive));
+        });
+        if (currentLabel) currentLabel.textContent = String(currentStep);
+        if (title) title.textContent = steps[currentStep - 1]?.title ?? `Langkah ${currentStep}`;
+        if (description) description.textContent = steps[currentStep - 1]?.description ?? '';
+        tabs.forEach((tab) => {
+            const isActive = Number(tab.dataset.wizardTab) === currentStep;
+            tab.setAttribute('aria-selected', String(isActive));
+            tab.tabIndex = isActive ? 0 : -1;
+            tab.classList.toggle('bg-white', isActive);
+            tab.classList.toggle('text-primary-700', isActive);
+            tab.classList.toggle('text-slate-600', !isActive);
+            tab.classList.toggle('shadow-sm', isActive);
+            tab.classList.toggle('ring-1', isActive);
+            tab.classList.toggle('ring-primary-100', isActive);
+        });
+        backButton?.classList.toggle('hidden', currentStep === 1);
+        backButton?.classList.toggle('inline-flex', currentStep !== 1);
+        const isLastStep = currentStep === panels.length;
+        nextButton?.classList.toggle('hidden', isLastStep);
+        nextButton?.classList.toggle('inline-flex', !isLastStep);
+        submitButton?.classList.toggle('hidden', !isLastStep);
+        submitButton?.classList.toggle('inline-flex', isLastStep);
+        if (currentStep === 3) employeeTable?.columns.adjust().draw(false);
+        if (moveFocus) {
+            title?.focus();
+            window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        }
+    };
+    const missingFieldsForPanel = (panel) => [...panel.querySelectorAll('[data-wizard-required]')]
+        .filter((field) => !String(field.tomselect?.getValue() ?? field.value ?? '').trim())
+        .map((field) => ({ field, label: field.dataset.wizardRequired }));
+    const validatePanel = async (panel) => {
+        const missing = missingFieldsForPanel(panel);
+        if (missing.length === 0) return true;
+        showStep(Number(panel.dataset.wizardStep), true);
+        const firstField = missing[0].field;
+        (firstField.tomselect?.control ?? firstField._flatpickr?.altInput ?? firstField).focus();
+        await Swal.fire({ title: 'Data wajib belum lengkap', text: `Lengkapi: ${missing.map(({ label }) => label).join(', ')}.`, icon: 'warning' });
+        return false;
+    };
+    form._deductionWizardValidate = async () => {
+        for (const panel of panels) {
+            if (!(await validatePanel(panel))) return false;
+        }
+        return true;
+    };
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => showStep(Number(tab.dataset.wizardTab)));
+        tab.addEventListener('keydown', (event) => {
+            let nextIndex = index;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            showStep(Number(tabs[nextIndex].dataset.wizardTab));
+            tabs[nextIndex].focus();
+        });
+    });
+    backButton?.addEventListener('click', () => showStep(currentStep - 1, true));
+    nextButton?.addEventListener('click', async () => {
+        const panel = panels.find((item) => Number(item.dataset.wizardStep) === currentStep);
+        if (panel && !(await validatePanel(panel))) return;
+        showStep(currentStep + 1, true);
+    });
     const selectAll = form.querySelector('[data-deduction-select-all]');
     const employeeList = form.querySelector('[data-deduction-employees]');
     const employeeCount = form.querySelector('[data-deduction-employee-count]');
     const clientSelect = form.querySelector('[data-deduction-client]');
-    const employees = () => [...form.querySelectorAll('[data-deduction-employee]')];
+    const employeeTable = employeeList ? new DataTable(employeeList, {
+        autoWidth: false,
+        pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+        order: [[1, 'asc']],
+        columns: [{ orderable: false, searchable: false }, { orderable: true, searchable: true }],
+        language: {
+            search: '',
+            searchPlaceholder: 'Cari nama atau nomor karyawan...',
+            lengthMenu: 'Tampilkan _MENU_ karyawan',
+            info: 'Menampilkan _START_–_END_ dari _TOTAL_ karyawan',
+            infoEmpty: 'Tidak ada karyawan',
+            infoFiltered: '(disaring dari _MAX_ karyawan)',
+            zeroRecords: 'Karyawan tidak ditemukan.',
+            emptyTable: 'Tidak ada karyawan aktif pada client ini.',
+            paginate: { next: 'Berikutnya', previous: 'Sebelumnya' },
+        },
+    }) : null;
+    showStep(1);
+    const employees = () => employeeTable
+        ? employeeTable.rows().nodes().toArray().flatMap((row) => [...row.querySelectorAll('[data-deduction-employee]')])
+        : [...form.querySelectorAll('[data-deduction-employee]')];
     const syncSelectAll = () => {
         const items = employees();
         if (selectAll) selectAll.checked = items.length > 0 && items.every((item) => item.checked);
     };
 
-    selectAll?.addEventListener('change', () => employees().forEach((checkbox) => { checkbox.checked = selectAll.checked; }));
+    selectAll?.addEventListener('change', () => employeeTable?.rows().nodes().toArray().forEach((row) => {
+        const checkbox = row.querySelector('[data-deduction-employee]');
+        if (checkbox) checkbox.checked = selectAll.checked;
+    }));
     employeeList?.addEventListener('change', (event) => {
         if (event.target.matches('[data-deduction-employee]')) syncSelectAll();
     });
+    employeeTable?.on('draw', syncSelectAll);
 
     const renderEmployees = (items) => {
-        if (!employeeList) return;
-        employeeList.innerHTML = items.length > 0
-            ? items.map((item) => `<label class="flex min-w-0 items-center gap-2 rounded-md border border-transparent px-2 py-1 text-xs hover:border-line hover:bg-slate-50"><input type="checkbox" name="employee_ids[]" value="${escapeHtml(item.id)}" class="size-4 shrink-0 rounded border-line text-primary-600" data-deduction-employee><span class="truncate font-medium text-slate-800">${escapeHtml(item.text)}</span></label>`).join('')
-            : '<p class="col-span-full rounded-lg border border-dashed border-line p-4 text-center text-xs text-slate-500">Tidak ada karyawan aktif pada client ini.</p>';
+        if (!employeeTable) return;
+        employeeTable.clear();
+        employeeTable.rows.add(items.map((item) => [
+            `<input type="checkbox" value="${escapeHtml(item.id)}" class="size-4 rounded border-line text-primary-600" data-deduction-employee aria-label="Pilih ${escapeHtml(item.text)}">`,
+            escapeHtml(item.text),
+        ]));
+        employeeTable.draw();
         if (employeeCount) employeeCount.textContent = `${items.length} karyawan aktif`;
         syncSelectAll();
     };
@@ -2324,17 +2438,105 @@ const initializeDeductionCreatePage = () => {
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
+        if (form._deductionWizardValidate && !(await form._deductionWizardValidate())) return;
         const result = await Swal.fire({ title: 'Simpan potongan gaji?', icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal' });
         if (!result.isConfirmed) return;
         try {
-            await $.ajax({ url: form.action, type: 'POST', data: $(form).serialize(), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
+            const formData = $(form).serializeArray();
+            employeeTable?.rows().nodes().toArray().forEach((row) => {
+                const checkbox = row.querySelector('[data-deduction-employee]');
+                if (checkbox?.checked) formData.push({ name: 'employee_ids[]', value: checkbox.value });
+            });
+            await $.ajax({ url: form.action, type: 'POST', data: $.param(formData), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content }, dataType: 'json' });
             await Swal.fire({ title: 'Berhasil', text: 'Potongan gaji berhasil disimpan.', icon: 'success' });
             window.location.href = form.dataset.redirect;
         } catch (error) {
-            const validation = Object.values(error.responseJSON?.errors ?? {}).flat().join('\n');
+            const errors = error.responseJSON?.errors ?? {};
+            const firstError = Object.keys(errors)[0];
+            if (firstError === 'employee_ids' || firstError?.startsWith('employee_ids.')) {
+                showStep(3, true);
+            } else if (firstError) {
+                const field = form.querySelector(`[name="${CSS.escape(firstError.split('.')[0])}"]`);
+                const panel = field?.closest('[data-wizard-step]');
+                if (panel) showStep(Number(panel.dataset.wizardStep), true);
+            }
+            const validation = Object.values(errors).flat().join('\n');
             await Swal.fire({ title: 'Gagal', text: validation || error.responseJSON?.message || 'Data tidak valid.', icon: 'error' });
         }
     });
+};
+
+const initializeDeductionEditWizard = () => {
+    const form = document.querySelector('[data-deduction-edit-wizard]');
+    if (!form) return;
+    const panels = [...form.querySelectorAll('[data-edit-wizard-step]')];
+    const tabs = [...form.querySelectorAll('[data-edit-wizard-tab]')];
+    const backButton = form.querySelector('[data-edit-wizard-back]');
+    const nextButton = form.querySelector('[data-edit-wizard-next]');
+    const submitButton = form.querySelector('[data-edit-wizard-submit]');
+    const currentLabel = form.querySelector('[data-edit-wizard-current-label]');
+    const title = form.querySelector('[data-edit-wizard-title]');
+    const description = form.querySelector('[data-edit-wizard-description]');
+    const steps = [
+        { title: 'Periode', description: 'Lihat client dan periode potongan gaji.' },
+        { title: 'Komponen', description: 'Perbarui komponen potongan dan catatan. Nilai tersimpan sudah dimuat.' },
+        { title: 'Karyawan', description: 'Tinjau karyawan yang menerima potongan ini.' },
+    ];
+    let currentStep = 1;
+    const showStep = (step, moveFocus = false) => {
+        currentStep = Math.min(Math.max(step, 1), panels.length);
+        panels.forEach((panel) => {
+            const isActive = Number(panel.dataset.editWizardStep) === currentStep;
+            panel.classList.toggle('hidden', !isActive);
+            panel.setAttribute('aria-hidden', String(!isActive));
+        });
+        if (currentLabel) currentLabel.textContent = String(currentStep);
+        if (title) title.textContent = steps[currentStep - 1]?.title ?? `Langkah ${currentStep}`;
+        if (description) description.textContent = steps[currentStep - 1]?.description ?? '';
+        tabs.forEach((tab) => {
+            const isActive = Number(tab.dataset.editWizardTab) === currentStep;
+            const icon = tab.querySelector('[data-edit-wizard-tab-icon]');
+            tab.setAttribute('aria-selected', String(isActive));
+            tab.tabIndex = isActive ? 0 : -1;
+            tab.classList.toggle('bg-white', isActive);
+            tab.classList.toggle('text-primary-700', isActive);
+            tab.classList.toggle('text-slate-600', !isActive);
+            tab.classList.toggle('shadow-sm', isActive);
+            tab.classList.toggle('ring-1', isActive);
+            tab.classList.toggle('ring-primary-100', isActive);
+            icon?.classList.toggle('bg-primary-50', isActive);
+            icon?.classList.toggle('text-primary-600', isActive);
+            icon?.classList.toggle('text-slate-500', !isActive);
+        });
+        backButton?.classList.toggle('hidden', currentStep === 1);
+        backButton?.classList.toggle('inline-flex', currentStep !== 1);
+        const isLastStep = currentStep === panels.length;
+        nextButton?.classList.toggle('hidden', isLastStep);
+        nextButton?.classList.toggle('inline-flex', !isLastStep);
+        submitButton?.classList.toggle('hidden', !isLastStep);
+        submitButton?.classList.toggle('inline-flex', isLastStep);
+        if (moveFocus) {
+            title?.focus();
+            window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        }
+    };
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => showStep(Number(tab.dataset.editWizardTab)));
+        tab.addEventListener('keydown', (event) => {
+            let nextIndex = index;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            showStep(Number(tabs[nextIndex].dataset.editWizardTab));
+            tabs[nextIndex].focus();
+        });
+    });
+    backButton?.addEventListener('click', () => showStep(currentStep - 1, true));
+    nextButton?.addEventListener('click', () => showStep(currentStep + 1, true));
+    showStep(Number(form.dataset.initialStep) || 1);
 };
 
 const initializeSalaryAdvanceFields = () => {
@@ -2481,17 +2683,17 @@ const initializeDashboardCharts = async () => {
     if (shiftElement) {
         const shifts = readChartData(shiftElement);
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const formatOutput = (value) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(value);
 
         new ApexCharts(shiftElement, {
-            chart: { type: 'bar', height: Math.max(250, shifts.length * 38), toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: !reducedMotion } },
-            series: [{ name: 'Output', data: shifts.map((shift) => shift.value) }],
-            colors: ['#3155f5'],
-            plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: '55%' } },
-            dataLabels: { enabled: false },
-            grid: { borderColor: '#e8ebf2', strokeDashArray: 4, padding: { left: 8, right: 8 } },
-            xaxis: { categories: shifts.map((shift) => shift.label), labels: { style: { colors: '#94a3b8', fontSize: '11px' }, formatter: (value) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(value) }, axisBorder: { show: false }, axisTicks: { show: false } },
-            yaxis: { labels: { style: { colors: '#64748b', fontSize: '11px' }, maxWidth: 180 } },
-            tooltip: { y: { formatter: (value) => `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(value)} output` } },
+            chart: { type: 'pie', height: 300, toolbar: { show: false }, animations: { enabled: !reducedMotion } },
+            series: shifts.map((shift) => Number(shift.value) || 0),
+            labels: shifts.map((shift) => shift.label),
+            colors: ['#3155f5', '#18a999', '#f59e0b', '#8b5cf6', '#ef6682', '#0ea5e9'],
+            dataLabels: { enabled: shifts.length > 0, formatter: (percentage) => `${Math.round(percentage)}%`, style: { colors: ['#ffffff'], fontSize: '12px', fontWeight: 600 }, dropShadow: { enabled: false } },
+            plotOptions: { pie: { expandOnClick: false } },
+            legend: { position: 'bottom', horizontalAlign: 'center', fontSize: '12px', labels: { colors: '#64748b' }, markers: { offsetX: -3 }, itemMargin: { horizontal: 10, vertical: 6 }, formatter: (label, options) => `${label} — ${formatOutput(options.w.globals.series[options.seriesIndex])}` },
+            tooltip: { y: { formatter: (value) => `${formatOutput(value)} output` } },
         }).render();
     }
 };
@@ -2547,8 +2749,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRealizationAssignModal();
     initializeRealizationFillModal();
     initializeDeductionCreatePage();
+    initializeDeductionEditWizard();
     initializeSalaryAdvanceFields();
-    initializeMasterModal({ name: 'deduction-row', plural: 'deductions', fields: ['uniform_amount', 'equipment_amount', 'meal_amount', 'bpjs_health_percent', 'bpjs_employment_percent', 'salary_advance_type', 'salary_advance_value', 'correction_minus', 'correction_plus', 'notes'], confirmTitle: 'potongan gaji', successCreate: 'Potongan gaji berhasil diperbarui.', successUpdate: 'Potongan gaji berhasil diperbarui.' });
     initializeDeductionImport();
     initializeProductImport();
     initializeMasterImport({ name: 'employee' });

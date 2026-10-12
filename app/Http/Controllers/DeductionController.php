@@ -44,7 +44,7 @@ class DeductionController extends Controller
                 ->addColumn('salary_advance_type', fn (EmployeeDeduction $deduction): string => $this->formatSalaryAdvanceType($deduction->salary_advance_type))
                 ->addColumn('salary_advance_value', fn (EmployeeDeduction $deduction): float => (float) $deduction->salary_advance_value)
                 ->addColumn('notes', fn (EmployeeDeduction $deduction): string => $deduction->notes ?: '—')
-                ->addColumn('action', fn (EmployeeDeduction $deduction): string => '<div class="flex justify-end gap-2"><button type="button" data-deduction-row-edit data-url="'.route('deductions.update', $deduction).'" data-deduction-row="'.e($deduction->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button><form method="POST" action="'.route('deductions.destroy', $deduction).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form></div>')
+                ->addColumn('action', fn (EmployeeDeduction $deduction): string => '<div class="flex justify-end gap-2"><a href="'.route('deductions.edit', $deduction).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</a><form method="POST" action="'.route('deductions.destroy', $deduction).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form></div>')
                 ->rawColumns(['action'])
                 ->toJson();
         }
@@ -60,6 +60,19 @@ class DeductionController extends Controller
             'currentClient' => $client->get(),
             'user' => $request->user(),
             'employees' => Employee::query()->where('client_id', $client->id())->where('status', 'active')->orderBy('full_name')->get(),
+        ]);
+    }
+
+    public function edit(Request $request, EmployeeDeduction $deduction, CurrentClientService $client): View
+    {
+        abort_unless($deduction->client_id === $client->id(), 404);
+        abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
+        $deduction->load(['employee', 'deductionPeriod']);
+
+        return view('deductions.edit', [
+            'currentClient' => $client->get(),
+            'user' => $request->user(),
+            'deduction' => $deduction,
         ]);
     }
 
@@ -144,13 +157,17 @@ class DeductionController extends Controller
         return to_route('deductions.index')->with('status', 'Potongan gaji berhasil disimpan.');
     }
 
-    public function update(UpdateEmployeeDeductionRequest $request, EmployeeDeduction $deduction, CurrentClientService $client): JsonResponse
+    public function update(UpdateEmployeeDeductionRequest $request, EmployeeDeduction $deduction, CurrentClientService $client): RedirectResponse|JsonResponse
     {
         abort_unless($deduction->client_id === $client->id(), 404);
         abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
         $deduction->update($request->validated());
 
-        return response()->json(['message' => 'Potongan gaji berhasil diperbarui.']);
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['message' => 'Potongan gaji berhasil diperbarui.']);
+        }
+
+        return to_route('deductions.index')->with('status', 'Potongan gaji berhasil diperbarui.');
     }
 
     public function destroy(Request $request, EmployeeDeduction $deduction, CurrentClientService $client): JsonResponse

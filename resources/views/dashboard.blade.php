@@ -61,7 +61,11 @@
                 <h2 class="text-sm font-semibold text-slate-900">Output per shift bulan ini</h2>
             </div>
             <div class="p-4 sm:p-5">
-                <div data-dashboard-shift-chart data-values='@json($shiftTrend)' class="min-h-[250px]" role="img" aria-label="Grafik output per shift bulan ini"></div>
+                @if ($shiftTrend !== [])
+                    <div data-dashboard-shift-chart data-values='@json($shiftTrend)' class="h-[300px]" role="img" aria-label="Diagram pie kontribusi output per shift bulan ini"></div>
+                @else
+                    <p class="py-8 text-center text-sm text-slate-500">Belum ada output per shift bulan ini.</p>
+                @endif
             </div>
         </x-card>
     </section>

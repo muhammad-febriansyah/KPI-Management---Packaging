@@ -111,6 +111,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/deductions/template', [DeductionController::class, 'template'])->name('deductions.template')->middleware('client');
     Route::post('/deductions/import', [DeductionController::class, 'import'])->name('deductions.import')->middleware('client');
     Route::post('/deductions', [DeductionController::class, 'store'])->name('deductions.store')->middleware('client');
+    Route::get('/deductions/{deduction}/edit', [DeductionController::class, 'edit'])->name('deductions.edit')->middleware('client');
     Route::put('/deductions/{deduction}', [DeductionController::class, 'update'])->name('deductions.update')->middleware('client');
     Route::delete('/deductions/{deduction}', [DeductionController::class, 'destroy'])->name('deductions.destroy')->middleware('client');
     Route::get('/reports/payroll', PayrollReportController::class)->name('reports.payroll')->middleware('client');

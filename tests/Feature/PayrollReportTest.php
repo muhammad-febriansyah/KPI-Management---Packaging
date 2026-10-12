@@ -150,8 +150,14 @@ it('searches the payroll report by employee name', function () {
     makePayrollReportFixture($client, $user);
     $columns = array_map(
         fn (string $column): array => ['data' => $column, 'searchable' => 'true', 'orderable' => 'true', 'search' => ['value' => '', 'regex' => 'false']],
-        ['employee_no', 'full_name', 'gender', 'attendance_days', 'net_salary', 'gross_salary', 'bpjs_health', 'bpjs_employment', 'uniform_amount', 'equipment_amount', 'meal_amount', 'salary_advance_value', 'correction_minus', 'correction_plus'],
+        ['employee_no', 'sim_id', 'full_name', 'gender', 'attendance_days', 'net_salary', 'gross_salary', 'bpjs_health', 'bpjs_employment', 'uniform_amount', 'equipment_amount', 'meal_amount', 'salary_advance_value', 'correction_minus', 'correction_plus'],
     );
+    $columns[5]['searchable'] = 'false';
+    $columns[5]['orderable'] = 'false';
+    $columns[7]['searchable'] = 'false';
+    $columns[7]['orderable'] = 'false';
+    $columns[8]['searchable'] = 'false';
+    $columns[8]['orderable'] = 'false';
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
