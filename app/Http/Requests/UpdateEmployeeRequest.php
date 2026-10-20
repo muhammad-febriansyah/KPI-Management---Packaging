@@ -34,6 +34,7 @@ class UpdateEmployeeRequest extends FormRequest
 
         $employee = $this->route('employee');
         $userId = $employee instanceof Employee ? $employee->user_id : null;
+        $currentGroupId = $employee instanceof Employee ? $employee->group_id : null;
 
         return [
             'client_id' => $this->user()?->is_super_admin
@@ -48,7 +49,16 @@ class UpdateEmployeeRequest extends FormRequest
             'gender' => ['required', Rule::in(['male', 'female'])],
             'employee_status' => ['required', Rule::in(['permanent', 'contract', 'daily'])],
             'marital_status' => ['required', Rule::in(['single', 'married', 'divorced', 'widowed'])],
-            'group_id' => ['nullable', 'integer', Rule::exists('groups', 'id')->where(fn ($query) => $query->where('client_id', $clientId)->where('status', 'active'))],
+            'group_id' => ['nullable', 'integer', Rule::exists('groups', 'id')->where(function ($query) use ($clientId, $currentGroupId): void {
+                $query->where('client_id', $clientId)
+                    ->where(function ($query) use ($currentGroupId): void {
+                        $query->where('status', 'active');
+
+                        if ($currentGroupId !== null) {
+                            $query->orWhere('id', $currentGroupId);
+                        }
+                    });
+            })],
             'password' => ['nullable', 'string', 'min:8', 'max:255'],
         ];
     }

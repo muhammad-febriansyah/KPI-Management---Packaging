@@ -326,13 +326,35 @@ it('keeps an inactive employee group available while editing employees', functio
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $group = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Nonaktif', 'status' => 'inactive']);
-    Employee::factory()->create(['client_id' => $client->getKey(), 'group_id' => $group->getKey()]);
+    $otherInactiveGroup = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Nonaktif Lain', 'status' => 'inactive']);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'group_id' => $group->getKey()]);
 
     $response = $this->actingAs($admin)
         ->withSession(['current_client_id' => $client->getKey()])
         ->get(route('employees.index'));
 
     $response->assertOk()->assertSee('Group Nonaktif');
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload([
+            'birth_date' => '1995-04-23',
+            'group_id' => $group->getKey(),
+        ]))
+        ->assertOk();
+
+    $this->assertDatabaseHas('employees', [
+        'id' => $employee->getKey(),
+        'birth_date' => '1995-04-23',
+        'group_id' => $group->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload([
+            'group_id' => $otherInactiveGroup->getKey(),
+        ]))
+        ->assertInvalid(['group_id']);
 });
 
 it('includes humanized labels in the detail payload for the datatable', function () {
