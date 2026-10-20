@@ -33,7 +33,7 @@ it('keeps the product index responsive on narrow screens', function () {
         ->assertDontSee('data-manage-modal-open="cost-center"', false);
 });
 
-it('includes related names and rates in the detail payload for the datatable', function () {
+it('includes related names and rates in detail and edit payloads for the datatable', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $unit = Unit::factory()->create(['client_id' => $client->id, 'name' => 'Karton']);
@@ -62,8 +62,6 @@ it('includes related names and rates in the detail payload for the datatable', f
 
     expect($html)
         ->toContain('data-product-detail=')
-        ->toContain('&quot;client_code&quot;:&quot;'.$client->code.'&quot;')
-        ->toContain('&quot;client_name&quot;:&quot;'.$client->name.'&quot;')
         ->toContain('&quot;client_status&quot;:&quot;active&quot;')
         ->toContain('&quot;unit_name&quot;:&quot;Karton&quot;')
         ->toContain('&quot;group_name&quot;:&quot;Group A&quot;')
@@ -71,6 +69,11 @@ it('includes related names and rates in the detail payload for the datatable', f
         ->toContain('data-product=')
         ->toContain('&quot;po_price&quot;:&quot;15000.500&quot;')
         ->toContain('&quot;employee_rate&quot;:&quot;550.750&quot;');
+
+    expect(substr_count($html, '&quot;client_code&quot;:&quot;'.$client->code.'&quot;'))
+        ->toBe(2)
+        ->and(substr_count($html, '&quot;client_name&quot;:&quot;'.$client->name.'&quot;'))
+        ->toBe(2);
 
     expect(substr_count($html, '&quot;unit_name&quot;:&quot;Karton&quot;'))->toBe(2)
         ->and(substr_count($html, '&quot;group_name&quot;:&quot;Group A&quot;'))->toBe(2)

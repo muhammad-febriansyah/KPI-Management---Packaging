@@ -72,13 +72,17 @@ class EmployeeController extends Controller
                     'group_name' => $employee->group?->name,
                     'status' => $employee->status,
                 ]));
+                $edit = $employee->toArray();
+                $edit['join_date'] = $employee->join_date ? date('Y-m-d', strtotime((string) $employee->join_date)) : null;
+                $edit['birth_date'] = $employee->birth_date ? date('Y-m-d', strtotime((string) $employee->birth_date)) : null;
 
-                return '<button type="button" data-employee-detail="'.$detail.'" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-employee-edit data-url="'.route('employees.update', $employee).'" data-employee="'.e($employee->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('employees.destroy', $employee).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
+                return '<button type="button" data-employee-detail="'.$detail.'" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-employee-edit data-url="'.route('employees.update', $employee).'" data-employee="'.e(json_encode($edit)).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('employees.destroy', $employee).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
             })->rawColumns(['action', 'status'])->toJson();
         }
 
         $groups = Group::query()
             ->withoutGlobalScopes()
+            ->where('client_id', $client->id())
             ->where(function ($query) use ($client): void {
                 $query->where('status', 'active')
                     ->orWhereIn('id', Employee::query()
@@ -96,7 +100,18 @@ class EmployeeController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('viewAny', Group::class);
-        $groups = Group::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get();
+        $targetClientId = $client->id();
+        if ($request->user()->is_super_admin && $request->filled('client_id')) {
+            $selectedClientId = $request->integer('client_id');
+            $allowedClientIds = $client->availableFor($request->user())->modelKeys();
+            if (! in_array($selectedClientId, $allowedClientIds, true)) {
+                return response()->json(['results' => []]);
+            }
+
+            $targetClientId = $selectedClientId;
+        }
+
+        $groups = Group::query()->withoutGlobalScopes()->where('client_id', $targetClientId)->where('status', 'active')->orderBy('name')->get();
 
         return response()->json(['results' => $groups->map(fn (Group $group): array => ['id' => $group->id, 'text' => $group->name])]);
     }
@@ -200,11 +215,25 @@ class EmployeeController extends Controller
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         Gate::authorize('update', $employee);
         $data = $request->validated();
+        $oldClientId = $employee->client_id;
+        $targetClientId = $request->user()->is_super_admin && filled($data['client_id'] ?? null)
+            ? (int) $data['client_id']
+            : $oldClientId;
+        $targetClient = $client->availableFor($request->user())->firstWhere('id', $targetClientId);
+        abort_unless($targetClient !== null, 404);
+        unset($data['client_id']);
         $password = $data['password'] ?? null;
         unset($data['password']);
-        DB::transaction(function () use ($data, $employee, $password): void {
-            $employee->update($data);
-            $this->syncEmployeeUser($employee->fresh(), $employee->client_id, $password);
+        $client->runAs($targetClient, function () use ($data, $employee, $password, $oldClientId, $targetClientId): void {
+            DB::transaction(function () use ($data, $employee, $password, $oldClientId, $targetClientId): void {
+                if ($oldClientId !== $targetClientId && $employee->user) {
+                    $employee->user->clients()->updateExistingPivot($oldClientId, ['status' => 'inactive', 'is_default' => false]);
+                    $employee->user->clients()->updateExistingPivot($targetClientId, ['status' => 'active', 'is_default' => true]);
+                }
+
+                $employee->update($data + ['client_id' => $targetClientId]);
+                $this->syncEmployeeUser($employee->fresh(), $targetClientId, $password);
+            });
         });
 
         return response()->json(['message' => 'Karyawan berhasil diperbarui.']);

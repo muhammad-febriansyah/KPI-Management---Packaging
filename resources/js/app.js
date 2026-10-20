@@ -1514,8 +1514,21 @@ const initializeSelect2 = () => {
         if (!clientSelect) return;
 
         $(clientSelect).on('change', (_event, options = {}) => {
-            if (form.matches('[data-product-form]') || form.matches('[data-employee-form]')) {
+            if (form.matches('[data-product-form]')) {
                 refreshMasterSelectOptions();
+                return;
+            }
+
+            if (form.matches('[data-employee-form]')) {
+                if (!options.preserveMasterSelections) {
+                    form.querySelectorAll('select[data-tom-select][data-tom-select-depends-on="client_id"]').forEach((select) => {
+                        const tomSelect = select.tomselect;
+                        tomSelect?.clear(true);
+                        tomSelect?.clearOptions();
+                        tomSelect?.addOption({ value: '', text: 'Tanpa group' });
+                        tomSelect?.setValue('', true);
+                    });
+                }
                 return;
             }
 
@@ -1641,12 +1654,18 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         });
         form.querySelectorAll('[data-select2-select]').forEach((select) => {
             const value = item ? String(item[select.name] ?? '') : '';
-            if (value && !Array.from(select.options).some((option) => option.value === value)) {
-                const client = item.client;
-                const label = client?.code && client?.name ? `${client.code} — ${client.name}` : (client?.name ?? value);
-                const option = new Option(label, value, true, true);
+            const client = item?.client;
+            const clientCode = client?.code ?? item?.client_code;
+            const clientName = client?.name ?? item?.client_name;
+            const filterOption = Array.from(document.querySelectorAll('[data-product-client-filter] option')).find((option) => option.value === value);
+            const label = clientCode && clientName ? `${clientCode} — ${clientName}` : (clientName ?? filterOption?.textContent?.trim());
+            let option = Array.from(select.options).find((existingOption) => existingOption.value === value);
+            if (value && !option) {
+                option = new Option(label ?? value, value, true, true);
                 option.dataset.prefilled = 'true';
                 select.add(option);
+            } else if (value && label && option.textContent !== label) {
+                option.textContent = label;
             }
             $(select).val(value).trigger('change', [{ preserveMasterSelections: Boolean(item) }]);
         });

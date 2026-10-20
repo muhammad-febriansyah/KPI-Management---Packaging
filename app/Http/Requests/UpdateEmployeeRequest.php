@@ -25,11 +25,31 @@ class UpdateEmployeeRequest extends FormRequest
      */
     public function rules(): array
     {
-        $clientId = app(CurrentClientService::class)->id();
+        $clientService = app(CurrentClientService::class);
+        $currentClientId = $clientService->id();
+        $allowedClientIds = $clientService->availableFor($this->user())->modelKeys();
+        $clientId = $this->user()?->is_super_admin && $this->filled('client_id')
+            ? $this->integer('client_id')
+            : $currentClientId;
 
         $employee = $this->route('employee');
         $userId = $employee instanceof Employee ? $employee->user_id : null;
 
-        return ['sim_id' => ['nullable', 'string', 'max:100'], 'full_name' => ['required', 'string', 'max:150'], 'email' => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId)], 'phone' => ['required', 'string', 'max:30'], 'join_date' => ['required', 'date'], 'birth_date' => ['nullable', 'date', 'before:today'], 'gender' => ['required', Rule::in(['male', 'female'])], 'employee_status' => ['required', Rule::in(['permanent', 'contract', 'daily'])], 'marital_status' => ['required', Rule::in(['single', 'married', 'divorced', 'widowed'])], 'group_id' => ['nullable', 'integer', Rule::exists('groups', 'id')->where(fn ($query) => $query->where('status', 'active'))], 'password' => ['nullable', 'string', 'min:8', 'max:255']];
+        return [
+            'client_id' => $this->user()?->is_super_admin
+                ? ['sometimes', 'nullable', 'integer', Rule::in($allowedClientIds)]
+                : ['nullable', 'integer', Rule::in([$currentClientId])],
+            'sim_id' => ['nullable', 'string', 'max:100'],
+            'full_name' => ['required', 'string', 'max:150'],
+            'email' => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId)],
+            'phone' => ['required', 'string', 'max:30'],
+            'join_date' => ['required', 'date'],
+            'birth_date' => ['nullable', 'date', 'before:today'],
+            'gender' => ['required', Rule::in(['male', 'female'])],
+            'employee_status' => ['required', Rule::in(['permanent', 'contract', 'daily'])],
+            'marital_status' => ['required', Rule::in(['single', 'married', 'divorced', 'widowed'])],
+            'group_id' => ['nullable', 'integer', Rule::exists('groups', 'id')->where(fn ($query) => $query->where('client_id', $clientId)->where('status', 'active'))],
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
+        ];
     }
 }

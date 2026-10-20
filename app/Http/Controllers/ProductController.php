@@ -64,6 +64,8 @@ class ProductController extends Controller
                 $edit = e(json_encode([
                     'id' => $p->id,
                     'client_id' => $p->client_id,
+                    'client_code' => $p->client?->code,
+                    'client_name' => $p->client?->name,
                     'sku' => $p->sku,
                     'name' => $p->name,
                     'unit_id' => $p->unit_id,

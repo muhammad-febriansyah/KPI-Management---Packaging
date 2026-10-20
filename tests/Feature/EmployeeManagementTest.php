@@ -78,10 +78,32 @@ it('shows a searchable client selector for super admins', function () {
     $response->assertOk()
         ->assertSee('name="client_id"', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
+        ->assertDontSee('data-disabled-on-edit', false)
         ->assertSee('data-select2-placeholder=', false)
         ->assertSee('data-employee-client-filter', false)
         ->assertSee('data-select2-placeholder="Semua client"', false)
         ->assertSee('Pilih client', false);
+});
+
+it('includes the employee birth date in the edit payload using the datepicker format', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'birth_date' => '1995-04-23',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
+
+    $response->assertOk();
+    $editPayload = $response->json('data.0.action');
+
+    expect($editPayload)
+        ->toContain('&quot;birth_date&quot;:&quot;1995-04-23&quot;')
+        ->toContain('&quot;client_id&quot;:'.$client->getKey())
+        ->toContain('&quot;client&quot;:');
 });
 
 it('shows and filters employees from all clients for super admins', function () {
@@ -113,24 +135,26 @@ it('stores an employee under the selected client', function () {
     $currentClient = Client::factory()->create();
     $selectedClient = Client::factory()->create();
     $group = Group::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Packing']);
+    $selectedGroup = Group::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Selected Packing']);
 
     $this->actingAs($user)
         ->withSession(['current_client_id' => $currentClient->getKey()])
         ->getJson(route('employees.group-options', ['client_id' => $selectedClient->getKey()]))
         ->assertOk()
-        ->assertJsonPath('results.0.id', $group->getKey());
+        ->assertJsonPath('results.0.id', $selectedGroup->getKey())
+        ->assertJsonMissing(['id' => $group->getKey(), 'text' => $group->name]);
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $currentClient->getKey()])
         ->postJson(route('employees.store'), validEmployeePayload([
             'client_id' => $selectedClient->getKey(),
-            'group_id' => $group->getKey(),
+            'group_id' => $selectedGroup->getKey(),
         ]));
 
     $response->assertCreated();
     $this->assertDatabaseHas('employees', [
         'client_id' => $selectedClient->getKey(),
-        'group_id' => $group->getKey(),
+        'group_id' => $selectedGroup->getKey(),
         'full_name' => 'Ananda Julian',
     ]);
 });
@@ -189,6 +213,64 @@ it('updates an employee with sim id, email, and marital status', function () {
     $response->assertOk();
     $this->assertDatabaseHas('employees', ['id' => $employee->getKey(), 'employee_no' => $employee->employee_no, 'marital_status' => 'divorced', 'sim_id' => 'PEG1234']);
     $this->assertDatabaseHas('users', ['id' => $employee->fresh()->user_id, 'name' => 'Ananda Julian', 'email' => 'ananda@example.com']);
+});
+
+it('lets super admins move an employee to another client and moves account access with it', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $oldClient = Client::factory()->create();
+    $newClient = Client::factory()->create();
+    $employeeRole = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan']);
+    $account = User::factory()->create();
+    $account->clients()->attach($oldClient, ['role_id' => $employeeRole->getKey(), 'is_default' => true, 'status' => 'active']);
+    $oldGroup = Group::factory()->create(['client_id' => $oldClient->getKey()]);
+    $newGroup = Group::factory()->create(['client_id' => $newClient->getKey()]);
+    $employee = Employee::factory()->create([
+        'client_id' => $oldClient->getKey(),
+        'user_id' => $account->getKey(),
+        'group_id' => $oldGroup->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $oldClient->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload([
+            'client_id' => $newClient->getKey(),
+            'group_id' => $newGroup->getKey(),
+        ]))
+        ->assertOk();
+
+    $this->assertDatabaseHas('employees', [
+        'id' => $employee->getKey(),
+        'client_id' => $newClient->getKey(),
+        'group_id' => $newGroup->getKey(),
+    ]);
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $oldClient->getKey(),
+        'user_id' => $account->getKey(),
+        'status' => 'inactive',
+        'is_default' => false,
+    ]);
+    $this->assertDatabaseHas('client_user', [
+        'client_id' => $newClient->getKey(),
+        'user_id' => $account->getKey(),
+        'status' => 'active',
+        'is_default' => true,
+    ]);
+});
+
+it('rejects a group from a different client when editing an employee', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $otherGroup = Group::factory()->create(['client_id' => $otherClient->getKey()]);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload([
+            'client_id' => $client->getKey(),
+            'group_id' => $otherGroup->getKey(),
+        ]))
+        ->assertInvalid(['group_id']);
 });
 
 it('preserves leader role when employee group changes', function () {

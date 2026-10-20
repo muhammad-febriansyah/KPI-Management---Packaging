@@ -21,8 +21,6 @@
         default => 'Administrator',
     };
     $allowedNavigation = $user?->allowedMenuKeys($currentClient);
-    // Client has no notification triggers yet (see WorkRealizationController), so the bell
-    // stays hidden for them — skip the queries too, not just the UI.
     $recentNotifications = $user && $roleCode !== 'client' ? $user->notifications()->latest()->limit(8)->get() : collect();
     $unreadNotificationsCount = $user && $roleCode !== 'client' ? $user->unreadNotifications()->count() : 0;
     $userInitials = collect(explode(' ', trim($resolvedUserName)))
