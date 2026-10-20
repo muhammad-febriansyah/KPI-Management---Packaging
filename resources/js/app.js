@@ -557,7 +557,7 @@ const initializeServerTables = () => {
         const dataTable = new DataTable(table, {
             processing: true,
             serverSide: true,
-            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.period = payrollFilters.querySelector('[data-payroll-period]')?.value; } if (invoiceFilters) { params.period = invoiceFilters.querySelector('[data-invoice-period]')?.value; params.shift_id = invoiceFilters.querySelector('[data-invoice-shift]')?.value; params.cost_center_id = invoiceFilters.querySelector('[data-invoice-cost-center]')?.value; params.sku = invoiceFilters.querySelector('[data-invoice-sku]')?.value; params.batch_no = invoiceFilters.querySelector('[data-invoice-batch]')?.value; } if (productFilters) { params.client_id = productFilters.querySelector('[data-product-client-filter]')?.value ?? ''; } if (employeeFilters) { params.client_id = employeeFilters.querySelector('[data-employee-client-filter]')?.value ?? ''; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } } },
+            ajax: { url: `/${resource}`, dataSrc: 'data', data: (params) => { if (auditFilters) { params.date_from = auditFilters.querySelector('[data-audit-date-from]')?.value; params.date_to = auditFilters.querySelector('[data-audit-date-to]')?.value; params.action = auditFilters.querySelector('[data-audit-action]')?.value; } if (workFilters) { params.date_from = workFilters.querySelector('[data-work-date-from]')?.value; params.date_to = workFilters.querySelector('[data-work-date-to]')?.value; } if (payrollFilters) { params.period = payrollFilters.querySelector('[data-payroll-period]')?.value; } if (invoiceFilters) { params.period = invoiceFilters.querySelector('[data-invoice-period]')?.value; params.shift_id = invoiceFilters.querySelector('[data-invoice-shift]')?.value; params.cost_center_id = invoiceFilters.querySelector('[data-invoice-cost-center]')?.value; params.sku = invoiceFilters.querySelector('[data-invoice-sku]')?.value; params.batch_no = invoiceFilters.querySelector('[data-invoice-batch]')?.value; } if (productFilters) { params.client_id = productFilters.querySelector('[data-product-client-filter]')?.value ?? ''; } if (employeeFilters) { params.client_id = employeeFilters.querySelector('[data-employee-client-filter]')?.value ?? ''; } if (resource === 'settings/access') { params.client_filter = new URLSearchParams(window.location.search).get('client_filter') ?? ''; } return params; } },
             pageLength: 10,
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
@@ -636,11 +636,29 @@ const initializeServerTables = () => {
         });
         const productClientFilter = productFilters?.querySelector('[data-product-client-filter]');
         if (productClientFilter) {
-            $(productClientFilter).on('change', () => dataTable.ajax.reload(null, true));
+            let reloadQueued = false;
+            const reload = () => {
+                if (reloadQueued) return;
+                reloadQueued = true;
+                queueMicrotask(() => {
+                    reloadQueued = false;
+                    dataTable.ajax.reload(null, true);
+                });
+            };
+            $(productClientFilter).on('change select2:select select2:clear', reload);
         }
         const employeeClientFilter = employeeFilters?.querySelector('[data-employee-client-filter]');
         if (employeeClientFilter) {
-            $(employeeClientFilter).on('change', () => dataTable.ajax.reload(null, true));
+            let reloadQueued = false;
+            const reload = () => {
+                if (reloadQueued) return;
+                reloadQueued = true;
+                queueMicrotask(() => {
+                    reloadQueued = false;
+                    dataTable.ajax.reload(null, true);
+                });
+            };
+            $(employeeClientFilter).on('change select2:select select2:clear', reload);
         }
         table._dataTable = dataTable;
         if (hasRealizationBulkDelete) initializeRealizationBulkDelete(table, dataTable);
