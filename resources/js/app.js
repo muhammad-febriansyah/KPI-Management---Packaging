@@ -1356,9 +1356,8 @@ const initializeTomSelect = () => {
         }
 
         const remoteUrl = select.dataset.tomSelectRemote;
-        const isGlobalMasterSelect = ['unit_id', 'group_id', 'cost_center_id'].includes(select.name);
-        const dependsOnParam = isGlobalMasterSelect ? null : select.dataset.tomSelectDependsOn;
-        const dependsOnSelector = isGlobalMasterSelect ? null : select.dataset.tomSelectDependsOnSelector;
+        const dependsOnParam = select.dataset.tomSelectDependsOn;
+        const dependsOnSelector = select.dataset.tomSelectDependsOnSelector;
 
         const tomSelect = new TomSelect(select, {
             placeholder: select.dataset.tomSelectPlaceholder ?? 'Pilih...',

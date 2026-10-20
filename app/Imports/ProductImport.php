@@ -90,9 +90,10 @@ class ProductImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 }
                 $seenProducts[$productKey] = $rowNumber;
 
-                $unit = $units[$client->id.'|'.mb_strtolower($data['unit_code'])] ?? null;
+                $unitCode = mb_strtolower($data['unit_code']);
+                $unit = $units[$client->id.'|'.$unitCode] ?? $units['*|'.$unitCode] ?? null;
                 if (! $unit) {
-                    $this->addFailure($rowNumber, [sprintf('Kode satuan "%s" tidak ditemukan atau nonaktif pada client %s.', $data['unit_code'], $client->code)]);
+                    $this->addFailure($rowNumber, [sprintf('Kode satuan "%s" tidak ditemukan atau nonaktif.', $data['unit_code'])]);
 
                     continue;
                 }
@@ -139,12 +140,26 @@ class ProductImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
     /** @param class-string<Unit|Group|CostCenter> $model */
     private function masterMap(string $model): array
     {
-        return $model::query()
+        $query = $model::query()
             ->withoutGlobalScope(ClientScope::class)
-            ->active()
-            ->whereIn('client_id', $this->allowedClientIds)
+            ->active();
+
+        if ($model !== Unit::class) {
+            $query->whereIn('client_id', $this->allowedClientIds);
+        }
+
+        return $query
             ->get()
-            ->mapWithKeys(fn (Unit|Group|CostCenter $master): array => [$master->client_id.'|'.mb_strtolower((string) $master->code) => $master])
+            ->mapWithKeys(function (Unit|Group|CostCenter $master) use ($model): array {
+                $code = mb_strtolower((string) $master->code);
+                $keys = [$master->client_id.'|'.$code => $master];
+
+                if ($model === Unit::class) {
+                    $keys['*|'.$code] = $master;
+                }
+
+                return $keys;
+            })
             ->all();
     }
 

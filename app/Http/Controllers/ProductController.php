@@ -86,9 +86,9 @@ class ProductController extends Controller
             'currentClient' => $currentClient,
             'user' => $request->user(),
             'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(),
-            'units' => Unit::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
-            'groups' => Group::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
-            'costCenters' => CostCenter::query()->withoutGlobalScopes()->where('status', 'active')->orderBy('name')->get(),
+            'units' => Unit::query()->where('status', 'active')->orderBy('name')->get(),
+            'groups' => Group::query()->where('status', 'active')->orderBy('name')->get(),
+            'costCenters' => CostCenter::query()->where('status', 'active')->orderBy('name')->get(),
         ]);
     }
 

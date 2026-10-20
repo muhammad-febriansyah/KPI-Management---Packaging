@@ -1,6 +1,7 @@
 <?php
 
 use App\Exports\ProductTemplateExport;
+use App\Imports\ProductImport;
 use App\Models\Client;
 use App\Models\CostCenter;
 use App\Models\Group;
@@ -80,6 +81,54 @@ it('imports products by resolving client and master codes', function () {
         'group_id' => $group->getKey(),
         'cost_center_id' => $costCenter->getKey(),
         'employee_rate' => 550.750,
+    ]);
+});
+
+it('imports a product using an active unit from another client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $currentClient = Client::factory()->create(['code' => 'CL-CURRENT']);
+    $targetClient = Client::factory()->create(['code' => 'CST236']);
+    $sharedUnit = Unit::factory()->create([
+        'client_id' => $currentClient->getKey(),
+        'code' => 'KRT',
+        'name' => 'Karton',
+    ]);
+    $file = buildProductImportFile([
+        [$targetClient->code, 'SKU-SHARED-UNIT', 'Produk Karton', 'KRT', '', '', 0, 0, 0, 'active'],
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $currentClient->getKey()])
+        ->post(route('products.import'), ['file' => $file]);
+
+    $response->assertOk()->assertJson(['message' => '1 baris produk berhasil diimpor.']);
+    $this->assertDatabaseHas('products', [
+        'client_id' => $targetClient->getKey(),
+        'sku' => 'SKU-SHARED-UNIT',
+        'unit_id' => $sharedUnit->getKey(),
+    ]);
+});
+
+it('resolves shared units outside the import user client list', function () {
+    $targetClient = Client::factory()->create(['code' => 'CST236']);
+    $unitOwnerClient = Client::factory()->create();
+    $sharedUnit = Unit::factory()->create([
+        'client_id' => $unitOwnerClient->getKey(),
+        'code' => 'KRT',
+        'name' => 'Karton',
+    ]);
+    $file = buildProductImportFile([
+        [$targetClient->code, 'SKU-SHARED-UNIT-RESTRICTED', 'Produk Karton', 'KRT', '', '', 0, 0, 0, 'active'],
+    ]);
+    $import = new ProductImport($targetClient->getKey(), [$targetClient->getKey()]);
+
+    Excel::import($import, $file);
+
+    expect($import->failures)->toBe([]);
+    $this->assertDatabaseHas('products', [
+        'client_id' => $targetClient->getKey(),
+        'sku' => 'SKU-SHARED-UNIT-RESTRICTED',
+        'unit_id' => $sharedUnit->getKey(),
     ]);
 });
 

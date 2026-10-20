@@ -169,6 +169,9 @@ it('loads product master options for the selected client', function () {
     $user = User::factory()->superAdmin()->create();
     $currentClient = Client::factory()->create();
     $selectedClient = Client::factory()->create();
+    $otherUnit = Unit::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Other Unit']);
+    $otherGroup = Group::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Other Group']);
+    $otherCostCenter = CostCenter::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Other Cost Center']);
     $unit = Unit::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Box']);
     $group = Group::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Produksi']);
     $costCenter = CostCenter::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Packing']);
@@ -177,13 +180,27 @@ it('loads product master options for the selected client', function () {
 
     $this->getJson(route('units.options', ['client_id' => $selectedClient->getKey()]))
         ->assertOk()
-        ->assertJsonPath('results.0.id', $unit->getKey());
+        ->assertJsonFragment(['id' => $unit->getKey(), 'text' => 'Box'])
+        ->assertJsonFragment(['id' => $otherUnit->getKey(), 'text' => 'Other Unit']);
     $this->getJson(route('groups.options', ['client_id' => $selectedClient->getKey()]))
         ->assertOk()
-        ->assertJsonPath('results.0.id', $group->getKey());
+        ->assertJsonFragment(['id' => $group->getKey(), 'text' => 'Produksi'])
+        ->assertJsonMissing(['id' => $otherGroup->getKey(), 'text' => 'Other Group']);
     $this->getJson(route('cost-centers.options', ['client_id' => $selectedClient->getKey()]))
         ->assertOk()
-        ->assertJsonPath('results.0.id', $costCenter->getKey());
+        ->assertJsonFragment(['id' => $costCenter->getKey(), 'text' => 'Packing'])
+        ->assertJsonMissing(['id' => $otherCostCenter->getKey(), 'text' => 'Other Cost Center']);
+});
+
+it('rejects product master options for an inactive client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $inactiveClient = Client::factory()->inactive()->create();
+
+    $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()]);
+
+    $this->getJson(route('groups.options', ['client_id' => $inactiveClient->getKey()]))->assertForbidden();
+    $this->getJson(route('cost-centers.options', ['client_id' => $inactiveClient->getKey()]))->assertForbidden();
 });
 
 it('rejects an inactive unit when storing a product', function () {
