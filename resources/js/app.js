@@ -1591,6 +1591,7 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         tomSelect.setValue(normalizedValue, true);
     };
     const open = (item = null, url = `/${plural}`) => {
+        form.querySelectorAll('[data-select2-select] option[data-prefilled]').forEach((option) => option.remove());
         form.reset();
         form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.clear(true));
         form.querySelectorAll('[data-rupiah-field] [data-rupiah-raw]').forEach((input) => input.dispatchEvent(new Event('input', { bubbles: true })));
@@ -1638,7 +1639,17 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
             const field = select.name;
             setTomSelectValue(select, select.value, item, field);
         });
-        form.querySelectorAll('[data-select2-select]').forEach((select) => $(select).val(item ? select.value : '').trigger('change', [{ preserveMasterSelections: Boolean(item) }]));
+        form.querySelectorAll('[data-select2-select]').forEach((select) => {
+            const value = item ? String(item[select.name] ?? '') : '';
+            if (value && !Array.from(select.options).some((option) => option.value === value)) {
+                const client = item.client;
+                const label = client?.code && client?.name ? `${client.code} — ${client.name}` : (client?.name ?? value);
+                const option = new Option(label, value, true, true);
+                option.dataset.prefilled = 'true';
+                select.add(option);
+            }
+            $(select).val(value).trigger('change', [{ preserveMasterSelections: Boolean(item) }]);
+        });
         form.querySelectorAll('[data-disabled-on-edit]').forEach((input) => {
             const disabled = Boolean(item);
             input.disabled = disabled;
@@ -2750,7 +2761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
-    initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });
+    initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'birth_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });
     initializeMasterModal({ name: 'client-master', plural: 'clients', fields: ['code', 'name', 'status'], confirmTitle: 'client', successCreate: 'Client berhasil ditambahkan.', successUpdate: 'Client berhasil diperbarui.' });
     initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
     initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'account_name', 'login_username', 'login_email', 'password', 'password_confirmation', 'status'], confirmTitle: 'client', successCreate: 'Client dan akun login berhasil ditambahkan.', successUpdate: 'Client dan akun login berhasil diperbarui.' });
