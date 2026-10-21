@@ -29,13 +29,18 @@ it('rejects duplicate group codes within the same client', function () {
 
 it('keeps groups isolated by client', function () {
     $user = User::factory()->superAdmin()->create();
-    $client = Client::factory()->create();
-    $otherGroup = Group::factory()->create(['name' => 'Rahasia']);
+    $client = Client::factory()->create(['code' => 'CST001', 'name' => 'Client Aktif']);
+    $otherClient = Client::factory()->create(['code' => 'CST002', 'name' => 'Client Lain']);
+    Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Terlihat']);
+    $otherGroup = Group::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Rahasia']);
 
     $response = $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('groups.index', ['draw' => 1, 'start' => 0, 'length' => 10]));
 
-    $response->assertOk()->assertJsonMissing(['name' => $otherGroup->name]);
+    $response->assertOk()
+        ->assertJsonPath('data.0.client_name', 'CST001 — Client Aktif')
+        ->assertJsonMissing(['name' => $otherGroup->name])
+        ->assertJsonMissing(['client_name' => 'CST002 — Client Lain']);
 });
 
 it('lists active groups from every client as select options', function () {

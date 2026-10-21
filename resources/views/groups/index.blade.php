@@ -6,12 +6,13 @@
             data-server-table
             data-search-placeholder="Cari kode atau nama group"
             data-empty-message="Belum ada group pada client ini."
-            class="w-full min-w-[560px] text-left text-sm"
+            class="w-full min-w-[680px] text-left text-sm"
         >
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                     <th class="px-5 py-3">Kode</th>
                     <th class="px-5 py-3">Nama group</th>
+                    <th class="px-5 py-3">Client</th>
                     <th class="px-5 py-3">Status</th>
                     <th class="px-5 py-3 text-right">Aksi</th>
                 </tr>

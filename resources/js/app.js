@@ -562,7 +562,9 @@ const initializeServerTables = () => {
             pagingType: 'simple_numbers',
             order: [[1, 'asc']],
             search: { search: initialSearch },
-            columns: [{ data: null, orderable: false, searchable: false, className: hasRealizationBulkDelete ? 'w-24 px-3 py-4 text-slate-500' : 'w-14 px-5 py-4 text-slate-500', render: (_data, _type, row, meta) => { const number = Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1; return hasRealizationBulkDelete ? `<div class="flex items-center gap-3"><input type="checkbox" data-realization-select value="${row.id}" class="size-4 rounded border-line accent-primary-600" aria-label="Pilih realisasi"><span>${number}</span></div>` : number; } }, ...(resource === 'shifts' ? [
+            columns: [{ data: null, orderable: false, searchable: false, className: hasRealizationBulkDelete ? 'w-24 px-3 py-4 text-slate-500' : 'w-14 px-5 py-4 text-slate-500', render: (_data, _type, row, meta) => { const number = Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1; return hasRealizationBulkDelete ? `<div class="flex items-center gap-3"><input type="checkbox" data-realization-select value="${row.id}" class="size-4 rounded border-line accent-primary-600" aria-label="Pilih realisasi"><span>${number}</span></div>` : number; } }, ...(resource === 'groups' ? [
+                { data: 'code' }, { data: 'name' }, { data: 'client_name', orderable: false, searchable: false }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+            ] : resource === 'shifts' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'start_time' }, { data: 'end_time' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'employees' ? [
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'client_name' }, { data: 'group_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
