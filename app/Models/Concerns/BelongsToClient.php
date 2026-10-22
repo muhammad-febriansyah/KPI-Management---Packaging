@@ -11,7 +11,7 @@ use RuntimeException;
 
 /**
  * Marks a model as owned by one client, and keeps that ownership out of the caller's hands:
- * reads are restricted to the active client by ClientScope, and a write made during a request
+ * regular-user reads are restricted to the active client by ClientScope, and a write made during a request
  * either takes its client_id from the active client or has to match it.
  *
  * Console code — seeders, commands, queued jobs — runs with no active client and keeps setting

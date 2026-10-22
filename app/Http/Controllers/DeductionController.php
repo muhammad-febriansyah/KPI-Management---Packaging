@@ -25,7 +25,11 @@ class DeductionController extends Controller
     public function index(Request $request, CurrentClientService $client): View|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('deductions', $client->get()), 403);
-        $query = EmployeeDeduction::query()->where('client_id', $client->id())->with(['employee', 'deductionPeriod'])->latest('created_at');
+        $query = $client->scopeVisibleTo(
+            EmployeeDeduction::query(),
+            $request->user(),
+            $request->filled('client_id') ? $request->integer('client_id') : null,
+        )->with(['employee', 'deductionPeriod'])->latest('created_at');
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)
                 ->editColumn('created_at', fn (EmployeeDeduction $deduction): string => $deduction->created_at?->format('d/m/Y') ?? '—')

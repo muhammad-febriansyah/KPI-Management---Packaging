@@ -21,12 +21,16 @@ class ShiftController extends Controller
     {
         abort_unless($request->user()->isAdminFor($client->get()), 403);
         Gate::authorize('viewAny', Shift::class);
-        $query = Shift::query()->where('client_id', $client->id())->orderBy('name');
+        $query = $client->scopeVisibleTo(
+            Shift::query(),
+            $request->user(),
+            $request->filled('client_id') ? $request->integer('client_id') : null,
+        )->orderBy('name');
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)->editColumn('status', fn (Shift $shift): string => view('components.badge', [
                 'variant' => $shift->status === 'active' ? 'success' : 'neutral',
                 'slot' => $shift->status === 'active' ? 'Aktif' : 'Nonaktif',
-            ])->render())->addColumn('action', fn (Shift $shift): string => '<button type="button" data-shift-edit data-url="'.route('shifts.update', $shift).'" data-shift="'.e($shift->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('shifts.destroy', $shift).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')->rawColumns(['action', 'status'])->toJson();
+            ])->render())->addColumn('action', fn (Shift $shift): string => '<button type="button" data-shift-edit data-url="'.route('shifts.update', ['shift' => $shift, 'client_id' => $shift->client_id]).'" data-shift="'.e($shift->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('shifts.destroy', ['shift' => $shift, 'client_id' => $shift->client_id]).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')->rawColumns(['action', 'status'])->toJson();
         }
 
         return view('shifts.index', ['currentClient' => $client->get(), 'user' => $request->user()]);

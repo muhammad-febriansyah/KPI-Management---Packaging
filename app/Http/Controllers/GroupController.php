@@ -26,12 +26,16 @@ class GroupController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('viewAny', Group::class);
-        $query = Group::query()->with('client:id,code,name')->where('client_id', $currentClient->id())->orderBy('name');
+        $query = $currentClient->scopeVisibleTo(
+            Group::query()->with('client:id,code,name'),
+            $request->user(),
+            $request->filled('client_id') ? $request->integer('client_id') : null,
+        )->orderBy('name');
 
         if ($request->expectsJson() || $request->has('draw')) {
             return DataTables::eloquent($query)
                 ->addColumn('client_name', fn (Group $group): string => $group->client ? $group->client->code.' — '.$group->client->name : '—')
-                ->addColumn('action', fn (Group $group): string => '<button type="button" data-group-edit data-url="'.route('groups.update', $group).'" data-group="'.e($group->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('groups.destroy', $group).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')
+                ->addColumn('action', fn (Group $group): string => '<button type="button" data-group-edit data-url="'.route('groups.update', ['group' => $group, 'client_id' => $group->client_id]).'" data-group="'.e($group->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('groups.destroy', ['group' => $group, 'client_id' => $group->client_id]).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')
                 ->editColumn('status', fn (Group $group): string => view('components.badge', [
                     'variant' => $group->status === 'active' ? 'success' : 'neutral',
                     'slot' => $group->status === 'active' ? 'Aktif' : 'Nonaktif',

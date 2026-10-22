@@ -22,12 +22,16 @@ class CostCenterController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('viewAny', CostCenter::class);
-        $query = CostCenter::query()->where('client_id', $client->id())->orderBy('name');
+        $query = $client->scopeVisibleTo(
+            CostCenter::query(),
+            $request->user(),
+            $request->filled('client_id') ? $request->integer('client_id') : null,
+        )->orderBy('name');
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)->editColumn('status', fn (CostCenter $item): string => view('components.badge', [
                 'variant' => $item->status === 'active' ? 'success' : 'neutral',
                 'slot' => $item->status === 'active' ? 'Aktif' : 'Nonaktif',
-            ])->render())->addColumn('action', fn (CostCenter $item): string => '<button type="button" data-cost-center-edit data-url="'.route('cost-centers.update', $item).'" data-cost-center="'.e($item->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('cost-centers.destroy', $item).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')->rawColumns(['action', 'status'])->toJson();
+            ])->render())->addColumn('action', fn (CostCenter $item): string => '<button type="button" data-cost-center-edit data-url="'.route('cost-centers.update', ['cost_center' => $item, 'client_id' => $item->client_id]).'" data-cost-center="'.e($item->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('cost-centers.destroy', ['cost_center' => $item, 'client_id' => $item->client_id]).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')->rawColumns(['action', 'status'])->toJson();
         }
 
         return view('cost-centers.index', ['currentClient' => $client->get(), 'user' => $request->user()]);

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 
 /**
- * Restricts every query on a tenant model to the client resolved for the current request.
+ * Restricts regular users to the client resolved for the current request; super admins can query across clients.
  *
  * Outside a request the current client is unresolved — console commands, queued jobs,
  * seeders — and the scope stays out of the way rather than silently filtering on a
@@ -20,6 +20,10 @@ class ClientScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
+        if (auth()->user()?->is_super_admin) {
+            return;
+        }
+
         $currentClient = app(CurrentClientService::class);
 
         if (! $currentClient->isResolved()) {

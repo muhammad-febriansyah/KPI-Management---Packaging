@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Client;
 use App\Models\User;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 
@@ -54,13 +55,37 @@ class CurrentClientService
     }
 
     /**
+     * Scope list queries to one client for regular users, or all accessible clients for super admins.
+     * A selected client is an optional list filter and never changes the session.
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    public function scopeVisibleTo(Builder $query, User $user, ?int $selectedClientId = null): Builder
+    {
+        if (! $user->is_super_admin) {
+            return $query->where($query->getModel()->qualifyColumn('client_id'), $this->id());
+        }
+
+        $availableClientIds = Client::query()->pluck('id')->all();
+
+        if ($selectedClientId !== null) {
+            return $query->whereIn($query->getModel()->qualifyColumn('client_id'), $availableClientIds)
+                ->where($query->getModel()->qualifyColumn('client_id'), $selectedClientId);
+        }
+
+        return $query->whereIn($query->getModel()->qualifyColumn('client_id'), $availableClientIds);
+    }
+
+    /**
      * @return Collection<int, Client>
      */
     public function availableFor(User $user): Collection
     {
         if ($user->is_super_admin) {
             return Client::query()
-                ->active()
                 ->orderBy('name')
                 ->get();
         }

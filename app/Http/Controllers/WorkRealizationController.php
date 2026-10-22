@@ -64,7 +64,9 @@ class WorkRealizationController extends Controller
         Gate::authorize('viewAny', WorkRealization::class);
         $query = WorkRealization::query()
             ->select(['id', 'client_id', 'created_by', 'work_date', 'shift_id', 'batch_id', 'product_id', 'sku_snapshot', 'product_name_snapshot', 'total_output'])
-            ->where('client_id', $client->id())
+            ->when($request->user()->is_super_admin, fn ($query) => $query->whereIn('work_realizations.client_id', $client->availableFor($request->user())->modelKeys()))
+            ->when($request->user()->is_super_admin && $request->filled('client_id'), fn ($query) => $query->where('work_realizations.client_id', $request->integer('client_id')))
+            ->when(! $request->user()->is_super_admin, fn ($query) => $query->where('work_realizations.client_id', $client->id()))
             ->with([
                 'shift:id,client_id,name',
                 'batch:id,client_id,batch_no',
@@ -84,10 +86,11 @@ class WorkRealizationController extends Controller
             $canEditResult = in_array($request->user()->roleCodeFor($client->get()), ['leader', 'employee'], true);
 
             return DataTables::eloquent($query)->editColumn('work_date', fn (WorkRealization $i): string => $i->work_date?->format('d/m/Y') ?? '—')->editColumn('total_output', fn (WorkRealization $i): string => $this->formatQuantity($i->total_output))->addColumn('shift_name', fn (WorkRealization $i): string => $i->shift?->name ?? '—')->addColumn('batch_label', fn (WorkRealization $i): string => $i->batch?->batch_no ?? '—')->addColumn('product_label', fn (WorkRealization $i): string => $i->product_name_snapshot ?? '—')->addColumn('total_price', fn (WorkRealization $i): string => 'Rp '.number_format($this->totalPrice($i), 0, ',', '.'))->addColumn('assignment_count', fn (WorkRealization $i): int => $i->employee_assignments_count)->addColumn('action', function (WorkRealization $i) use ($canEditMasterData, $canEditResult): string {
-                $detailAction = '<a href="'.route('realizations.show', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
+                $routeParameters = ['realization' => $i, 'client_id' => $i->client_id];
+                $detailAction = '<a href="'.route('realizations.show', $routeParameters).'" class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</a>';
                 $editAction = $canEditMasterData
-                    ? ' <a href="'.route('realizations.edit', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</a>'
-                    : ($canEditResult ? ' <a href="'.route('realizations.edit', $i).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit hasil</a>' : '');
+                    ? ' <a href="'.route('realizations.edit', $routeParameters).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</a>'
+                    : ($canEditResult ? ' <a href="'.route('realizations.edit', $routeParameters).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit hasil</a>' : '');
 
                 return $detailAction.$editAction;
             })->rawColumns(['action'])->toJson();

@@ -5,7 +5,7 @@
         <table
             data-server-table
             data-search-placeholder="Cari kode atau nama group"
-            data-empty-message="Belum ada group pada client ini."
+            data-empty-message="Belum ada group di seluruh client."
             class="w-full min-w-[680px] text-left text-sm"
         >
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">

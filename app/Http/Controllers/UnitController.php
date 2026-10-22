@@ -22,14 +22,18 @@ class UnitController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('viewAny', Unit::class);
-        $query = Unit::query()->where('client_id', $currentClient->id())->orderBy('name');
+        $query = $currentClient->scopeVisibleTo(
+            Unit::query(),
+            $request->user(),
+            $request->filled('client_id') ? $request->integer('client_id') : null,
+        )->orderBy('name');
 
         if ($request->expectsJson() || $request->has('draw')) {
             return DataTables::eloquent($query)
                 ->addColumn('action', fn (Unit $unit): string => view('components.table-actions', [
-                    'modalEditUrl' => route('units.edit', $unit),
-                    'modalUpdateUrl' => route('units.update', $unit),
-                    'deleteRoute' => route('units.destroy', $unit),
+                    'modalEditUrl' => route('units.edit', ['unit' => $unit, 'client_id' => $unit->client_id]),
+                    'modalUpdateUrl' => route('units.update', ['unit' => $unit, 'client_id' => $unit->client_id]),
+                    'deleteRoute' => route('units.destroy', ['unit' => $unit, 'client_id' => $unit->client_id]),
                 ])->render())
                 ->editColumn('status', fn (Unit $unit): string => view('components.badge', [
                     'variant' => $unit->status === 'active' ? 'success' : 'neutral',

@@ -30,8 +30,19 @@ class EnsureClientAccess
             abort(403, 'Client aktif tidak tersedia. Silakan pilih client yang dapat Anda akses.');
         }
 
+        if ($user->is_super_admin && $request->filled('client_id')) {
+            $requestedClient = Client::query()->find($request->integer('client_id'));
+
+            abort_unless($requestedClient instanceof Client, 403);
+
+            $this->currentClient->set($requestedClient);
+            Context::add('client_id', $requestedClient->getKey());
+
+            return $next($request);
+        }
+
         if (! is_int($clientId) && $user->is_super_admin) {
-            $firstClientId = Client::query()->active()->orderBy('name')->value('id');
+            $firstClientId = Client::query()->orderBy('name')->value('id');
 
             if ($firstClientId !== null) {
                 $clientId = (int) $firstClientId;
@@ -48,7 +59,7 @@ class EnsureClientAccess
         $client = $this->accessibleClient($user, $clientId);
 
         if (! $client instanceof Client && $user->is_super_admin) {
-            $client = Client::query()->active()->orderBy('name')->first();
+            $client = Client::query()->orderBy('name')->first();
 
             if ($client instanceof Client) {
                 $request->session()->put('current_client_id', $client->getKey());
@@ -70,7 +81,7 @@ class EnsureClientAccess
     private function accessibleClient(User $user, int $clientId): ?Client
     {
         if ($user->is_super_admin) {
-            return Client::query()->active()->find($clientId);
+            return Client::query()->find($clientId);
         }
 
         return $user->clients()
