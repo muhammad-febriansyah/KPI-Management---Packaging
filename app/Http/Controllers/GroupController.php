@@ -42,6 +42,7 @@ class GroupController extends Controller
 
         return view('groups.index', [
             'currentClient' => $currentClient->get(),
+            'availableClients' => $request->user()->is_super_admin ? $currentClient->availableFor($request->user()) : collect(),
             'user' => $request->user(),
         ]);
     }
