@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\CurrentClientService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\ServiceProvider;
 
