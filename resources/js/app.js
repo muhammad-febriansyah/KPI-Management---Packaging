@@ -1361,10 +1361,10 @@ const initializeDatepickers = () => {
     });
 };
 
-// Switching a client submits its form straight away. Use jQuery delegation because Select2
+// Page-level client filters submit after selection. Use jQuery delegation because Select2
 // emits its change event through jQuery, not only through the native DOM event path.
-const initializeClientSwitcher = () => {
-    $(document).on('change', '[data-client-switcher], [data-client-filter]', function () {
+const initializeClientFilters = () => {
+    $(document).on('change', '[data-client-filter]', function () {
         this.form?.submit();
     });
 };
@@ -2793,7 +2793,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAccessTabs();
     initializeDatepickers();
     initializeRupiahInputs();
-    initializeClientSwitcher();
+    initializeClientFilters();
     initializeTomSelect();
     initializeSelect2();
     initializeRichTextEditors();

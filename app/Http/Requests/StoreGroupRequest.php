@@ -24,13 +24,17 @@ class StoreGroupRequest extends FormRequest
      */
     public function rules(): array
     {
-        $clientId = app(CurrentClientService::class)->id();
+        $client = app(CurrentClientService::class);
+        $clientId = $this->integer('client_id') ?: $client->id();
+        $allowedClientIds = $this->user()?->is_super_admin
+            ? $client->availableFor($this->user())->modelKeys()
+            : [$client->id()];
 
-        return ['code' => ['nullable', 'string', 'max:50', Rule::unique('groups', 'code')->where(fn ($query) => $query->where('client_id', $clientId))], 'name' => ['required', 'string', 'max:100'], 'status' => ['required', Rule::in(['active', 'inactive'])]];
+        return ['client_id' => ['nullable', 'integer', Rule::in($allowedClientIds)], 'code' => ['nullable', 'string', 'max:50', Rule::unique('groups', 'code')->where(fn ($query) => $query->where('client_id', $clientId))], 'name' => ['required', 'string', 'max:100'], 'status' => ['required', Rule::in(['active', 'inactive'])]];
     }
 
     public function messages(): array
     {
-        return ['code.unique' => 'Kode group sudah digunakan pada client ini.', 'name.required' => 'Nama group wajib diisi.', 'status.in' => 'Status group tidak valid.'];
+        return ['client_id.in' => 'Client yang dipilih tidak valid.', 'code.unique' => 'Kode group sudah digunakan pada client ini.', 'name.required' => 'Nama group wajib diisi.', 'status.in' => 'Status group tidak valid.'];
     }
 }

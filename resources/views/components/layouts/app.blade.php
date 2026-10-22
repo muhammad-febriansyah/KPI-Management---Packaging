@@ -182,20 +182,6 @@
 
                 <div class="flex-1"></div>
 
-                @if ($user && $availableClients->count() > 1)
-                    <form method="POST" action="{{ route('current-client.update') }}" class="w-48 shrink-0 sm:w-64">
-                        @csrf
-                        @method('PUT')
-                        <label class="sr-only" for="current-client-switcher">Pilih client aktif</label>
-                        <select id="current-client-switcher" name="client_id" data-client-switcher data-select2-select data-select2-placeholder="Pilih client..." required class="w-full">
-                            <option value="" disabled>Pilih client...</option>
-                            @foreach ($availableClients as $clientOption)
-                                <option value="{{ $clientOption->getKey() }}" @selected($clientOption->getKey() === $currentClient?->getKey())>{{ $clientOption->code }} — {{ $clientOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </form>
-                @endif
-
                 @unless (in_array($roleCode, ['client', 'leader', 'employee'], true))
                 <div class="relative shrink-0">
                     <button type="button" data-dropdown-button="notifications-dropdown" class="relative grid size-[42px] shrink-0 cursor-pointer place-items-center rounded-lg text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-primary-600" aria-label="Notifikasi" aria-haspopup="true">

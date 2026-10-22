@@ -40,7 +40,11 @@ class GroupController extends Controller
                 ->toJson();
         }
 
-        return view('groups.index', ['currentClient' => $currentClient->get(), 'user' => $request->user()]);
+        return view('groups.index', [
+            'currentClient' => $currentClient->get(),
+            'availableClients' => $request->user()->is_super_admin ? $currentClient->availableFor($request->user()) : collect(),
+            'user' => $request->user(),
+        ]);
     }
 
     public function create(Request $request, CurrentClientService $currentClient): View
@@ -48,7 +52,11 @@ class GroupController extends Controller
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('create', Group::class);
 
-        return view('groups.create', ['currentClient' => $currentClient->get(), 'user' => $request->user()]);
+        return view('groups.create', [
+            'currentClient' => $currentClient->get(),
+            'availableClients' => $request->user()->is_super_admin ? $currentClient->availableFor($request->user()) : collect(),
+            'user' => $request->user(),
+        ]);
     }
 
     /**
@@ -97,7 +105,14 @@ class GroupController extends Controller
     public function store(StoreGroupRequest $request, CurrentClientService $currentClient): RedirectResponse|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
-        Group::query()->create([...$request->validated(), 'client_id' => $currentClient->id()]);
+        $data = $request->validated();
+        $targetClientId = (int) ($data['client_id'] ?? $currentClient->id());
+        $targetClient = $currentClient->availableFor($request->user())->firstWhere('id', $targetClientId);
+        abort_unless($targetClient !== null, 403);
+        unset($data['client_id']);
+        $currentClient->runAs($targetClient, fn (): Group => Group::query()->create([...$data, 'client_id' => $targetClientId]));
+        $request->session()->put('current_client_id', $targetClientId);
+        $currentClient->set($targetClient);
 
         return $request->expectsJson() || $request->ajax() ? response()->json(['message' => 'Group berhasil ditambahkan.']) : to_route('groups.index')->with('status', 'Group berhasil ditambahkan.');
     }
