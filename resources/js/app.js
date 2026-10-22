@@ -2619,6 +2619,29 @@ const initializeSalaryAdvanceFields = () => {
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
+const importErrorMessage = (error) => {
+    if (error.responseJSON?.message) return error.responseJSON.message;
+
+    switch (error.status) {
+        case 0:
+            return 'Koneksi terputus. Periksa internet lalu coba import kembali.';
+        case 401:
+        case 419:
+            return 'Sesi login sudah berakhir. Login kembali, lalu ulangi import.';
+        case 403:
+            return 'Anda tidak memiliki akses untuk mengimpor data pada client ini.';
+        case 413:
+            return 'Ukuran file terlalu besar. Kecilkan file atau import data secara bertahap.';
+        case 500:
+        case 502:
+        case 503:
+        case 504:
+            return 'Server gagal memproses file dan import dibatalkan. Coba lagi beberapa saat. Jika masih gagal, hubungi admin dengan waktu kejadian.';
+        default:
+            return 'File gagal diimpor. Pastikan format dan kolomnya sesuai template, lalu coba kembali.';
+    }
+};
+
 const initializeDeductionImport = () => {
     const modal = document.querySelector('[data-deduction-import-modal]');
     const form = modal?.querySelector('[data-deduction-import-form]');
@@ -2639,7 +2662,7 @@ const initializeDeductionImport = () => {
             await Swal.fire({ title: response.failures?.length ? 'Sebagian berhasil' : 'Berhasil', html: `<p class="text-sm">${escapeHtml(response.message)}</p>${response.failures?.length ? failuresHtml(response.failures) : ''}`, icon: response.failures?.length ? 'warning' : 'success' });
         } catch (error) {
             const failures = error.responseJSON?.failures ?? [];
-            await Swal.fire({ title: 'Gagal', html: `<p class="text-sm">${escapeHtml(error.responseJSON?.message ?? 'File tidak dapat diimpor.')}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
+            await Swal.fire({ title: 'Gagal mengimpor', html: `<p class="text-sm">${escapeHtml(importErrorMessage(error))}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
         }
     });
 };
@@ -2664,7 +2687,7 @@ const initializeProductImport = () => {
             await Swal.fire({ title: response.failures?.length ? 'Sebagian berhasil' : 'Berhasil', html: `<p class="text-sm">${escapeHtml(response.message)}</p>${response.failures?.length ? failuresHtml(response.failures) : ''}`, icon: response.failures?.length ? 'warning' : 'success' });
         } catch (error) {
             const failures = error.responseJSON?.failures ?? [];
-            await Swal.fire({ title: 'Gagal', html: `<p class="text-sm">${escapeHtml(error.responseJSON?.message ?? 'File tidak dapat diimpor.')}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
+            await Swal.fire({ title: 'Gagal mengimpor', html: `<p class="text-sm">${escapeHtml(importErrorMessage(error))}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
         }
     });
 };
@@ -2688,7 +2711,7 @@ const initializeMasterImport = ({ name }) => {
             await Swal.fire({ title: response.failures?.length ? 'Sebagian berhasil' : 'Berhasil', html: `<p class="text-sm">${escapeHtml(response.message)}</p>${response.failures?.length ? failuresHtml(response.failures) : ''}`, icon: response.failures?.length ? 'warning' : 'success' });
         } catch (error) {
             const failures = error.responseJSON?.failures ?? [];
-            await Swal.fire({ title: 'Gagal', html: `<p class="text-sm">${escapeHtml(error.responseJSON?.message ?? 'File tidak dapat diimpor.')}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
+            await Swal.fire({ title: 'Gagal mengimpor', html: `<p class="text-sm">${escapeHtml(importErrorMessage(error))}</p>${failures.length ? failuresHtml(failures) : ''}`, icon: 'error' });
         }
     });
 };
