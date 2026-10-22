@@ -42,7 +42,6 @@ class GroupController extends Controller
 
         return view('groups.index', [
             'currentClient' => $currentClient->get(),
-            'availableClients' => $request->user()->is_super_admin ? $currentClient->availableFor($request->user()) : collect(),
             'user' => $request->user(),
         ]);
     }
@@ -111,10 +110,12 @@ class GroupController extends Controller
         abort_unless($targetClient !== null, 403);
         unset($data['client_id']);
         $currentClient->runAs($targetClient, fn (): Group => Group::query()->create([...$data, 'client_id' => $targetClientId]));
-        $request->session()->put('current_client_id', $targetClientId);
-        $currentClient->set($targetClient);
 
-        return $request->expectsJson() || $request->ajax() ? response()->json(['message' => 'Group berhasil ditambahkan.']) : to_route('groups.index')->with('status', 'Group berhasil ditambahkan.');
+        $message = 'Group berhasil ditambahkan untuk '.$targetClient->code.' — '.$targetClient->name.'.';
+
+        return $request->expectsJson() || $request->ajax()
+            ? response()->json(['message' => $message])
+            : to_route('groups.index')->with('status', $message);
     }
 
     public function edit(Request $request, Group $group, CurrentClientService $currentClient): View
