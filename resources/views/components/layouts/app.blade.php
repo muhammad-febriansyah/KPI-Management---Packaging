@@ -23,6 +23,10 @@
     $allowedNavigation = $user?->allowedMenuKeys($currentClient);
     $recentNotifications = $user && $roleCode !== 'client' ? $user->notifications()->latest()->limit(8)->get() : collect();
     $unreadNotificationsCount = $user && $roleCode !== 'client' ? $user->unreadNotifications()->count() : 0;
+    $availableClients = collect($clients);
+    if ($user && $availableClients->isEmpty()) {
+        $availableClients = app(\App\Services\CurrentClientService::class)->availableFor($user);
+    }
     $userInitials = collect(explode(' ', trim($resolvedUserName)))
         ->filter()
         ->take(2)
@@ -181,6 +185,19 @@
                 @endif
 
                 <div class="flex-1"></div>
+
+                @if ($user && $currentClient && $availableClients->count() > 1)
+                    <form method="POST" action="{{ route('current-client.update') }}" class="hidden shrink-0 sm:block">
+                        @csrf
+                        @method('PUT')
+                        <label class="sr-only" for="current-client-selector">Client aktif</label>
+                        <select id="current-client-selector" name="client_id" data-select2-select data-select2-placeholder="Pilih client..." onchange="this.form.submit()" class="h-[42px] max-w-[300px] rounded-lg border border-line bg-white px-3 text-xs text-slate-700">
+                            @foreach ($availableClients as $clientOption)
+                                <option value="{{ $clientOption->getKey() }}" @selected($clientOption->is($currentClient))>{{ $clientOption->code }} — {{ $clientOption->name }}</option>
+                            @endforeach
+                        </select>
+                    </form>
+                @endif
 
                 @unless (in_array($roleCode, ['client', 'leader', 'employee'], true))
                 <div class="relative shrink-0">
