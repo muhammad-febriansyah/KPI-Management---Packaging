@@ -19,16 +19,19 @@ function switcherTestRole(): Role
     return $role;
 }
 
-it('hides the client switcher from the header', function () {
+it('shows the client switcher to a super admin with multiple clients', function () {
     $user = User::factory()->superAdmin()->create();
     $active = Client::factory()->create(['name' => 'PT Satu']);
-    Client::factory()->create(['name' => 'PT Dua']);
+    $other = Client::factory()->create(['name' => 'PT Dua']);
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $active->getKey()])
         ->get(route('products.index'));
 
-    $response->assertOk()->assertDontSee('data-client-switcher', false);
+    $response->assertOk()
+        ->assertSee('data-client-switcher', false)
+        ->assertSee('value="'.$active->getKey().'" selected', false)
+        ->assertSee('value="'.$other->getKey().'">'.$other->code.' — '.$other->name.'</option>', false);
 });
 
 it('hides the switcher when the user reaches only one client', function () {
@@ -46,12 +49,17 @@ it('hides the switcher when the user reaches only one client', function () {
 it('does not offer a client the user has no access to', function () {
     $user = User::factory()->create();
     $reachable = Client::factory()->create(['name' => 'PT Terjangkau']);
+    $alsoReachable = Client::factory()->create(['name' => 'PT Juga Terjangkau']);
     $otherClient = Client::factory()->create(['name' => 'PT Terlarang']);
     $user->clients()->attach($reachable, ['role_id' => switcherTestRole()->getKey(), 'status' => 'active']);
+    $user->clients()->attach($alsoReachable, ['role_id' => switcherTestRole()->getKey(), 'status' => 'active']);
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $reachable->getKey()])
         ->get(route('products.index'));
 
-    $response->assertOk()->assertDontSee($otherClient->name);
+    $response->assertOk()
+        ->assertSee('data-client-switcher', false)
+        ->assertSee($alsoReachable->name)
+        ->assertDontSee($otherClient->name);
 });
