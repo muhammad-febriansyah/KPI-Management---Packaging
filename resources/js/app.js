@@ -564,6 +564,8 @@ const initializeServerTables = () => {
             search: { search: initialSearch },
             columns: [{ data: null, orderable: false, searchable: false, className: hasRealizationBulkDelete ? 'w-24 px-3 py-4 text-slate-500' : 'w-14 px-5 py-4 text-slate-500', render: (_data, _type, row, meta) => { const number = Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1; return hasRealizationBulkDelete ? `<div class="flex items-center gap-3"><input type="checkbox" data-realization-select value="${row.id}" class="size-4 rounded border-line accent-primary-600" aria-label="Pilih realisasi"><span>${number}</span></div>` : number; } }, ...(resource === 'groups' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'client_name', orderable: false, searchable: false }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+            ] : resource === 'cost-centers' ? [
+                { data: 'code' }, { data: 'name' }, { data: 'client_name', orderable: false, searchable: false }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'shifts' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'start_time' }, { data: 'end_time' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'employees' ? [
@@ -1608,6 +1610,11 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
     const open = (item = null, url = `/${plural}`) => {
         form.querySelectorAll('[data-select2-select] option[data-prefilled]').forEach((option) => option.remove());
         form.reset();
+        const productClientSelect = document.querySelector('[data-product-form] [name="client_id"]');
+        const clientIdFromProduct = form.querySelector('[data-client-id-from-product]');
+        if (!item && clientIdFromProduct) {
+            clientIdFromProduct.value = productClientSelect?.value ?? '';
+        }
         form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.clear(true));
         form.querySelectorAll('[data-rupiah-field] [data-rupiah-raw]').forEach((input) => input.dispatchEvent(new Event('input', { bubbles: true })));
         form.querySelector('[data-product-name]')?.setAttribute('value', '');
@@ -2802,7 +2809,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeProductDetailModal();
     initializeEmployeeDetailModal();
     initializeClientDetailModal();
-    initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
+    initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['client_id', 'code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
     initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'birth_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });

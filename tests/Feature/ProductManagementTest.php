@@ -251,13 +251,13 @@ it('creates a product for the selected client', function () {
     ]);
 });
 
-it('uses active master data from any client for a selected product client', function () {
+it('uses global units and selected-client groups and cost centers when storing a product', function () {
     $user = User::factory()->superAdmin()->create();
     $currentClient = Client::factory()->create();
     $selectedClient = Client::factory()->create();
     $unit = Unit::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Global Box']);
-    $group = Group::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Global Produksi']);
-    $costCenter = CostCenter::factory()->create(['client_id' => $currentClient->getKey(), 'name' => 'Global Packing']);
+    $group = Group::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Produksi']);
+    $costCenter = CostCenter::factory()->create(['client_id' => $selectedClient->getKey(), 'name' => 'Packing']);
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $currentClient->getKey()])
@@ -266,17 +266,75 @@ it('uses active master data from any client for a selected product client', func
             'unit_id' => $unit->getKey(),
             'group_id' => $group->getKey(),
             'cost_center_id' => $costCenter->getKey(),
-            'sku' => 'SKU-GLOBAL-MASTER',
-            'name' => 'Produk Global Master',
+            'sku' => 'SKU-CLIENT-MASTER',
+            'name' => 'Produk Client Master',
             'status' => 'active',
         ]);
 
-    $response->assertCreated();
+    $response->assertCreated()->assertJsonPath('message', 'Produk berhasil ditambahkan.');
     $this->assertDatabaseHas('products', [
         'client_id' => $selectedClient->getKey(),
         'unit_id' => $unit->getKey(),
         'group_id' => $group->getKey(),
         'cost_center_id' => $costCenter->getKey(),
+    ]);
+});
+
+it('rejects another client group and cost center when storing a product', function () {
+    $user = User::factory()->superAdmin()->create();
+    $activeClient = Client::factory()->create();
+    $selectedClient = Client::factory()->create();
+    $foreignGroup = Group::factory()->create(['client_id' => $activeClient->getKey()]);
+    $foreignCostCenter = CostCenter::factory()->create(['client_id' => $activeClient->getKey()]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $activeClient->getKey()])
+        ->postJson(route('products.store'), [
+            'client_id' => $selectedClient->getKey(),
+            'group_id' => $foreignGroup->getKey(),
+            'cost_center_id' => $foreignCostCenter->getKey(),
+            'sku' => 'SKU-WRONG-CLIENT-MASTER',
+            'name' => 'Produk invalid',
+            'status' => 'active',
+        ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['group_id', 'cost_center_id'])
+        ->assertJsonPath('errors.group_id.0', 'Group yang dipilih tidak aktif atau bukan milik client ini.')
+        ->assertJsonPath('errors.cost_center_id.0', 'Cost center yang dipilih tidak aktif atau bukan milik client ini.');
+    $this->assertDatabaseMissing('products', ['sku' => 'SKU-WRONG-CLIENT-MASTER']);
+});
+
+it('rejects another client group and cost center when updating a product', function () {
+    $user = User::factory()->superAdmin()->create();
+    $activeClient = Client::factory()->create();
+    $selectedClient = Client::factory()->create();
+    $product = Product::factory()->create([
+        'client_id' => $activeClient->getKey(),
+        'sku' => 'SKU-UPDATE-CLIENT-MASTER',
+    ]);
+    $foreignGroup = Group::factory()->create(['client_id' => $activeClient->getKey()]);
+    $foreignCostCenter = CostCenter::factory()->create(['client_id' => $activeClient->getKey()]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $activeClient->getKey()])
+        ->putJson(route('products.update', $product), [
+            'client_id' => $selectedClient->getKey(),
+            'group_id' => $foreignGroup->getKey(),
+            'cost_center_id' => $foreignCostCenter->getKey(),
+            'sku' => 'SKU-UPDATE-CLIENT-MASTER',
+            'name' => 'Produk invalid',
+            'status' => 'active',
+        ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['group_id', 'cost_center_id'])
+        ->assertJsonPath('errors.group_id.0', 'Group yang dipilih tidak aktif atau bukan milik client ini.')
+        ->assertJsonPath('errors.cost_center_id.0', 'Cost center yang dipilih tidak aktif atau bukan milik client ini.');
+    $this->assertDatabaseHas('products', [
+        'id' => $product->getKey(),
+        'client_id' => $activeClient->getKey(),
+        'sku' => 'SKU-UPDATE-CLIENT-MASTER',
     ]);
 });
 

@@ -23,18 +23,27 @@ class CostCenterController extends Controller
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('viewAny', CostCenter::class);
         $query = $client->scopeVisibleTo(
-            CostCenter::query(),
+            CostCenter::query()->with('client:id,code,name'),
             $request->user(),
             $request->filled('client_id') ? $request->integer('client_id') : null,
         )->orderBy('name');
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->editColumn('status', fn (CostCenter $item): string => view('components.badge', [
-                'variant' => $item->status === 'active' ? 'success' : 'neutral',
-                'slot' => $item->status === 'active' ? 'Aktif' : 'Nonaktif',
-            ])->render())->addColumn('action', fn (CostCenter $item): string => '<button type="button" data-cost-center-edit data-url="'.route('cost-centers.update', ['cost_center' => $item, 'client_id' => $item->client_id]).'" data-cost-center="'.e($item->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('cost-centers.destroy', ['cost_center' => $item, 'client_id' => $item->client_id]).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')->rawColumns(['action', 'status'])->toJson();
+            return DataTables::eloquent($query)
+                ->addColumn('client_name', fn (CostCenter $item): string => $item->client ? $item->client->code.' — '.$item->client->name : '—')
+                ->editColumn('status', fn (CostCenter $item): string => view('components.badge', [
+                    'variant' => $item->status === 'active' ? 'success' : 'neutral',
+                    'slot' => $item->status === 'active' ? 'Aktif' : 'Nonaktif',
+                ])->render())
+                ->addColumn('action', fn (CostCenter $item): string => '<button type="button" data-cost-center-edit data-url="'.route('cost-centers.update', ['cost_center' => $item, 'client_id' => $item->client_id]).'" data-cost-center="'.e($item->toJson()).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('cost-centers.destroy', ['cost_center' => $item, 'client_id' => $item->client_id]).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>')
+                ->rawColumns(['action', 'status'])
+                ->toJson();
         }
 
-        return view('cost-centers.index', ['currentClient' => $client->get(), 'user' => $request->user()]);
+        return view('cost-centers.index', [
+            'currentClient' => $client->get(),
+            'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(),
+            'user' => $request->user(),
+        ]);
     }
 
     public function create(Request $request, CurrentClientService $client): View
@@ -42,7 +51,11 @@ class CostCenterController extends Controller
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('viewAny', CostCenter::class);
 
-        return view('cost-centers.create', ['currentClient' => $client->get(), 'user' => $request->user()]);
+        return view('cost-centers.create', [
+            'currentClient' => $client->get(),
+            'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(),
+            'user' => $request->user(),
+        ]);
     }
 
     /**
@@ -54,7 +67,8 @@ class CostCenterController extends Controller
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
         Gate::authorize('viewAny', CostCenter::class);
         $clientId = $request->user()->is_super_admin ? $request->integer('client_id', $client->id()) : $client->id();
-        abort_unless($client->availableFor($request->user())->contains('id', $clientId), 403);
+        $selectedClient = $client->availableFor($request->user())->firstWhere('id', $clientId);
+        abort_unless($selectedClient?->status === 'active', 403);
         $costCenters = CostCenter::query()->withoutGlobalScopes()->where('client_id', $clientId)->where('status', 'active')->orderBy('name')->get();
 
         return response()->json(['results' => $costCenters->map(fn (CostCenter $item): array => ['id' => $item->id, 'text' => $item->name])]);
@@ -63,9 +77,16 @@ class CostCenterController extends Controller
     public function store(StoreCostCenterRequest $request, CurrentClientService $client): RedirectResponse|JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('products', $client->get()), 403);
-        CostCenter::query()->create([...$request->validated(), 'client_id' => $client->id()]);
+        $data = $request->validated();
+        $targetClientId = (int) ($data['client_id'] ?? $client->id());
+        $targetClient = $client->availableFor($request->user())->firstWhere('id', $targetClientId);
+        abort_unless($targetClient !== null, 403);
+        unset($data['client_id']);
+        $client->runAs($targetClient, fn (): CostCenter => CostCenter::query()->create([...$data, 'client_id' => $targetClientId]));
 
-        return $request->expectsJson() || $request->ajax() ? response()->json(['message' => 'Cost center berhasil ditambahkan.']) : to_route('cost-centers.index')->with('status', 'Cost center berhasil ditambahkan.');
+        $message = 'Cost center berhasil ditambahkan untuk '.$targetClient->code.' — '.$targetClient->name.'.';
+
+        return $request->expectsJson() || $request->ajax() ? response()->json(['message' => $message]) : to_route('cost-centers.index')->with('status', $message);
     }
 
     public function edit(Request $request, CostCenter $costCenter, CurrentClientService $client): View

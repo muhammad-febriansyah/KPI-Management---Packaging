@@ -72,7 +72,8 @@ class GroupController extends Controller
         abort_unless($request->user()->canAccessMenu('products', $currentClient->get()), 403);
         Gate::authorize('viewAny', Group::class);
         $clientId = $request->user()->is_super_admin ? $request->integer('client_id', $currentClient->id()) : $currentClient->id();
-        abort_unless($currentClient->availableFor($request->user())->contains('id', $clientId), 403);
+        $selectedClient = $currentClient->availableFor($request->user())->firstWhere('id', $clientId);
+        abort_unless($selectedClient?->status === 'active', 403);
         $groups = Group::query()->withoutGlobalScopes()->where('client_id', $clientId)->where('status', 'active')->orderBy('name')->get();
 
         return response()->json(['results' => $groups->map(fn (Group $group): array => ['id' => $group->id, 'text' => $group->name])]);

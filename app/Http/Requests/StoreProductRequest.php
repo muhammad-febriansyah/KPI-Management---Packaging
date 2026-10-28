@@ -27,11 +27,19 @@ class StoreProductRequest extends FormRequest
         $client = app(CurrentClientService::class);
         $clientId = $this->integer('client_id') ?: $client->id();
         $allowedClientIds = $this->user()?->is_super_admin
-            ? $client->availableFor($this->user())->modelKeys()
+            ? $client->availableFor($this->user())->where('status', 'active')->modelKeys()
             : [$client->id()];
-        $foreign = fn ($table) => Rule::exists($table, 'id')->where(fn ($query) => $query->where('status', 'active'));
+        $clientScopedMaster = fn ($table) => Rule::exists($table, 'id')->where(fn ($query) => $query->where('status', 'active')->where('client_id', $clientId));
         $activeUnit = Rule::exists('units', 'id')->where(fn ($query) => $query->where('status', 'active'));
 
-        return ['client_id' => ['required', 'integer', Rule::in($allowedClientIds)], 'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->where(fn ($query) => $query->where('client_id', $clientId))], 'name' => ['nullable', 'string', 'max:180'], 'unit_id' => ['nullable', 'integer', $activeUnit], 'group_id' => ['nullable', 'integer', $foreign('groups')], 'cost_center_id' => ['nullable', 'integer', $foreign('cost_centers')], 'po_price' => ['nullable', 'numeric', 'min:0'], 'employee_rate' => ['nullable', 'numeric', 'min:0'], 'estimated_output_per_hour' => ['nullable', 'integer', 'min:0'], 'status' => ['nullable', Rule::in(['active', 'inactive'])]];
+        return ['client_id' => ['required', 'integer', Rule::in($allowedClientIds)], 'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->where(fn ($query) => $query->where('client_id', $clientId))], 'name' => ['nullable', 'string', 'max:180'], 'unit_id' => ['nullable', 'integer', $activeUnit], 'group_id' => ['nullable', 'integer', $clientScopedMaster('groups')], 'cost_center_id' => ['nullable', 'integer', $clientScopedMaster('cost_centers')], 'po_price' => ['nullable', 'numeric', 'min:0'], 'employee_rate' => ['nullable', 'numeric', 'min:0'], 'estimated_output_per_hour' => ['nullable', 'integer', 'min:0'], 'status' => ['nullable', Rule::in(['active', 'inactive'])]];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'group_id.exists' => 'Group yang dipilih tidak aktif atau bukan milik client ini.',
+            'cost_center_id.exists' => 'Cost center yang dipilih tidak aktif atau bukan milik client ini.',
+        ];
     }
 }
