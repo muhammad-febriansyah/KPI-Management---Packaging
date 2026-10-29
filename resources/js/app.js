@@ -1843,7 +1843,11 @@ const initializeRealizationProductPreview = () => {
         Object.entries(draft).forEach(([name, value]) => {
             const field = document.querySelector(`[data-realization-form] [name="${name}"]`);
             if (field && typeof value === 'string') {
-                field.value = value;
+                if (field._flatpickr) {
+                    field._flatpickr.setDate(value, false, field._flatpickr.config.dateFormat);
+                } else {
+                    field.value = value;
+                }
                 field.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
