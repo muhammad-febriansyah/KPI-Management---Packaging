@@ -5,11 +5,26 @@
             <h1 class="text-3xl font-semibold tracking-tight text-slate-950">Tambah Realisasi</h1>
             <p class="mt-2 text-sm text-slate-500">Lengkapi semua data pada tab Produk dan Assign. Foto bersifat opsional.</p>
         </div>
-        <a href="{{ route('realizations.index') }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><x-icon name="chevron-right" class="rotate-180" size="size-4"/> Kembali</a>
+        <a href="{{ route('realizations.index', ['client_id' => $currentClient->getKey()]) }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><x-icon name="chevron-right" class="rotate-180" size="size-4"/> Kembali</a>
     </div>
 
-    <form method="POST" enctype="multipart/form-data" data-realization-form data-realization-wizard action="{{ route('realizations.store') }}" data-redirect="{{ route('realizations.index') }}" class="grid gap-5">
+    @if($user->is_super_admin)
+        <form method="GET" action="{{ route('realizations.create') }}" class="mb-5 max-w-xl rounded-xl border border-line bg-white p-4 shadow-sm">
+            <label class="grid gap-2 text-sm font-semibold">
+                <span>Client <span class="text-rose-600" aria-hidden="true">*</span></span>
+                <select name="client_id" required data-client-filter class="h-11 rounded-lg border border-line bg-white px-3 font-normal">
+                    <option value="" disabled>Pilih client...</option>
+                    @foreach($availableClients as $availableClient)
+                        <option value="{{ $availableClient->getKey() }}" @selected($availableClient->is($currentClient))>{{ $availableClient->code }} — {{ $availableClient->name }}</option>
+                    @endforeach
+                </select>
+            </label>
+        </form>
+    @endif
+
+    <form method="POST" enctype="multipart/form-data" data-realization-form data-realization-wizard action="{{ route('realizations.store') }}" data-redirect="{{ route('realizations.index', ['client_id' => $currentClient->getKey()]) }}" class="grid gap-5">
         <input type="hidden" name="_method" value="POST">
+        <input type="hidden" name="client_id" value="{{ $currentClient->getKey() }}">
 
         <x-card>
             <div class="mb-4">
@@ -29,9 +44,9 @@
             <x-card>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <label class="grid gap-2 text-sm font-semibold"><span>Tanggal borongan <span class="text-rose-600" aria-hidden="true">*</span></span><input type="text" name="work_date" data-wizard-required="Tanggal borongan" aria-required="true" data-datepicker autocomplete="off" placeholder="Pilih tanggal" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
-                    <label class="grid gap-2 text-sm font-semibold"><span>Shift <span class="text-rose-600" aria-hidden="true">*</span></span><select name="shift_id" data-wizard-required="Shift" aria-required="true" data-tom-select data-tom-select-remote="{{ route('shifts.options') }}" data-tom-select-placeholder="Pilih shift..." class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="">Pilih shift...</option></select></label>
+                    <label class="grid gap-2 text-sm font-semibold"><span>Shift <span class="text-rose-600" aria-hidden="true">*</span></span><select name="shift_id" data-wizard-required="Shift" aria-required="true" data-tom-select data-tom-select-remote="{{ route('shifts.options') }}" data-tom-select-depends-on="client_id" data-tom-select-depends-on-selector="[data-realization-form] [name=&quot;client_id&quot;]" data-tom-select-placeholder="Pilih shift..." class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="">Pilih shift...</option></select></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Nomor batch <span class="text-rose-600" aria-hidden="true">*</span></span><input type="text" name="batch_no" data-wizard-required="Nomor batch" aria-required="true" data-batch-number data-batch-number-url="{{ route('batches.next-number') }}" value="{{ $defaultBatchNumber }}" readonly class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600"><small class="font-normal text-slate-500">Format otomatis dan increment: B-yyyymmdd-0001</small></label>
-                    <label class="grid gap-2 text-sm font-semibold"><span>SKU <span class="text-rose-600" aria-hidden="true">*</span></span><select name="product_id" data-wizard-required="SKU" aria-required="true" data-product-select data-tom-select data-tom-select-remote="{{ route('products.options') }}" data-tom-select-placeholder="Pilih SKU..." class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="">Pilih SKU...</option></select></label>
+                    <label class="grid gap-2 text-sm font-semibold"><span>SKU <span class="text-rose-600" aria-hidden="true">*</span></span><select name="product_id" data-wizard-required="SKU" aria-required="true" data-product-select data-tom-select data-tom-select-remote="{{ route('products.options') }}" data-tom-select-depends-on="client_id" data-tom-select-depends-on-selector="[data-realization-form] [name=&quot;client_id&quot;]" data-tom-select-placeholder="Pilih SKU..." class="h-11 rounded-lg border border-line bg-white px-3 font-normal"><option value="">Pilih SKU...</option></select></label>
                     <label class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Nama produk</span><input type="text" data-product-name readonly placeholder="Otomatis terisi berdasarkan SKU" class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Satuan</span><input type="text" data-product-unit readonly placeholder="Otomatis terisi berdasarkan SKU" class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600"></label>
                     <label class="grid gap-2 text-sm font-semibold"><span>Estimasi output/jam</span><input type="text" data-product-estimate readonly placeholder="Otomatis terisi berdasarkan SKU" class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600"></label>
@@ -74,7 +89,7 @@
         </section>
 
         <div class="flex flex-col-reverse justify-between gap-3 sm:flex-row">
-            <a href="{{ route('realizations.index') }}" class="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100"><x-icon name="x-mark" size="size-4" /> Batal</a>
+            <a href="{{ route('realizations.index', ['client_id' => $currentClient->getKey()]) }}" class="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100"><x-icon name="x-mark" size="size-4" /> Batal</a>
             <div class="flex justify-end gap-3">
                 <button type="button" data-wizard-back class="hidden items-center gap-2 rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"><x-icon name="chevron-right" class="rotate-180" size="size-4" /> Sebelumnya</button>
                 <button type="button" data-wizard-next class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700">Berikutnya <x-icon name="chevron-right" size="size-4" /></button>

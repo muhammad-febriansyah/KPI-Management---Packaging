@@ -199,6 +199,7 @@ class WorkRealizationController extends Controller
         return view('realizations.create', [
             'currentClient' => $client->get(),
             'user' => $request->user(),
+            'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(),
             'defaultBatchNumber' => $this->generateNextBatchNumber($client->id()),
             'employees' => $employees,
             'groups' => $groups,

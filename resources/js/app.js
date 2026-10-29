@@ -1813,6 +1813,8 @@ const initializeRealizationBatchNumber = () => {
     const update = async () => {
         const currentRequest = ++requestSequence;
         const data = workDate.value ? { work_date: workDate.value } : {};
+        const clientId = document.querySelector('[data-realization-form] [name="client_id"]')?.value;
+        if (clientId) data.client_id = clientId;
 
         try {
             const response = await $.ajax({ url: input.dataset.batchNumberUrl, data, dataType: 'json' });

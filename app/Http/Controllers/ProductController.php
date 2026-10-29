@@ -111,7 +111,9 @@ class ProductController extends Controller
             ->where('client_id', $client->id())
             ->where('status', 'active')
             ->with('unit')
-            ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('sku', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%")))
+            ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q
+                ->whereRaw('LOWER(products.sku) LIKE ?', ['%'.mb_strtolower($search).'%'])
+                ->orWhereRaw('LOWER(products.name) LIKE ?', ['%'.mb_strtolower($search).'%'])))
             ->orderBy('name');
 
         $paginator = $query->paginate($perPage, ['id', 'sku', 'name', 'unit_id', 'employee_rate', 'estimated_output_per_hour'], 'page', $page);
