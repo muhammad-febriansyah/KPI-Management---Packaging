@@ -1387,7 +1387,7 @@ const initializeTomSelect = () => {
             ...(remoteUrl ? {
                 valueField: 'id',
                 labelField: 'text',
-                searchField: [],
+                searchField: ['text'],
                 // Without this the control opens empty and only fills once the user types,
                 // which reads as a broken dropdown. Loading the first page on focus keeps
                 // the search itself server-side, so a large catalog is still never dumped.
