@@ -47,10 +47,20 @@ class StoreWorkRealizationRequest extends FormRequest
     public function rules(): array
     {
         $clientId = app(CurrentClientService::class)->id();
+        $shiftRule = Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('status', 'active'));
+
+        if ($this->user()?->is_super_admin) {
+            $shiftRule->where(fn ($query) => $query->whereIn(
+                'client_id',
+                app(CurrentClientService::class)->availableFor($this->user())->modelKeys(),
+            ));
+        } else {
+            $shiftRule->where(fn ($query) => $query->where('client_id', $clientId));
+        }
 
         return [
             'work_date' => ['required', 'date'],
-            'shift_id' => ['required', Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('client_id', $clientId))],
+            'shift_id' => ['required', $shiftRule],
             'batch_no' => ['required', 'string', 'regex:/^B-\d{8}-\d{4}$/'],
             'batch_id' => ['nullable', Rule::exists('batches', 'id')->where(function ($query) use ($clientId): void {
                 $query->where('client_id', $clientId);

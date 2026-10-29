@@ -1813,6 +1813,11 @@ const initializeRealizationProductPreview = () => {
             name,
             form.elements.namedItem(name)?.value ?? '',
         ]));
+        const shiftSelect = form.querySelector('[name="shift_id"]');
+        draft.shift_id = shiftSelect?.value ?? '';
+        draft.shift_text = shiftSelect?.tomselect?.options?.[draft.shift_id]?.text
+            ?? shiftSelect?.selectedOptions[0]?.textContent?.trim()
+            ?? '';
         try {
             sessionStorage.setItem('realization-create-draft', JSON.stringify(draft));
         } catch {
@@ -1842,7 +1847,7 @@ const initializeRealizationProductPreview = () => {
 
         Object.entries(draft).forEach(([name, value]) => {
             const field = document.querySelector(`[data-realization-form] [name="${name}"]`);
-            if (field && typeof value === 'string') {
+            if (field && name !== 'shift_id' && typeof value === 'string') {
                 if (field._flatpickr) {
                     field._flatpickr.setDate(value, false, field._flatpickr.config.dateFormat);
                 } else {
@@ -1851,6 +1856,12 @@ const initializeRealizationProductPreview = () => {
                 field.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
+
+        const shiftField = document.querySelector('[data-realization-form] [name="shift_id"]');
+        if (shiftField?.tomselect && draft.shift_id && draft.shift_text) {
+            shiftField.tomselect.addOption({ id: String(draft.shift_id), text: draft.shift_text });
+            shiftField.tomselect.setValue(String(draft.shift_id), true);
+        }
     } catch {
         sessionStorage.removeItem('realization-create-draft');
     }
