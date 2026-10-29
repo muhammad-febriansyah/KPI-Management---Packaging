@@ -1914,6 +1914,7 @@ const initializeRealizationPricePreview = () => {
     };
 
     input.addEventListener('input', update);
+    input.addEventListener('change', update);
     productSelect?.addEventListener('change', update);
     document.querySelector('[data-assignment-section]')?.addEventListener('change', update);
     update();
