@@ -1380,6 +1380,7 @@ const initializeTomSelect = () => {
         const remoteUrl = select.dataset.tomSelectRemote;
         const dependsOnParam = select.dataset.tomSelectDependsOn;
         const dependsOnSelector = select.dataset.tomSelectDependsOnSelector;
+        const searchAcrossClients = select.dataset.tomSelectGlobalClient !== undefined;
 
         const tomSelect = new TomSelect(select, {
             placeholder: select.dataset.tomSelectPlaceholder ?? 'Pilih...',
@@ -1396,6 +1397,7 @@ const initializeTomSelect = () => {
                     const params = new URLSearchParams({ q: query });
                     const dependsOnValue = dependsOnParam && dependsOnSelector ? document.querySelector(dependsOnSelector)?.value : '';
                     if (dependsOnValue) params.set(dependsOnParam, dependsOnValue);
+                    if (searchAcrossClients) params.set('all_clients', '1');
                     fetch(`${remoteUrl}?${params}`, { headers: { Accept: 'application/json' } })
                         .then((response) => response.json())
                         .then((data) => callback(data.results ?? []))
@@ -1795,12 +1797,59 @@ const initializeRealizationProductPreview = () => {
         }
     };
 
-    select.addEventListener('change', update);
+    select.addEventListener('change', () => {
+        update();
+
+        const form = select.closest('[data-realization-form]');
+        const clientInput = form?.querySelector('[name="client_id"]');
+        const selectedOption = select.tomselect?.options?.[select.value];
+        const selectedClientId = Number(selectedOption?.client_id ?? select.selectedOptions[0]?.dataset.productClientId);
+
+        if (!form || !clientInput || !selectedClientId || selectedClientId === Number(clientInput.value)) {
+            return;
+        }
+
+        const draft = Object.fromEntries(['work_date', 'total_output', 'start_time', 'end_time', 'report'].map((name) => [
+            name,
+            form.elements.namedItem(name)?.value ?? '',
+        ]));
+        try {
+            sessionStorage.setItem('realization-create-draft', JSON.stringify(draft));
+        } catch {
+            // Continue client switch even if the browser blocks session storage.
+        }
+
+        const targetUrl = new URL(select.dataset.productSwitchUrl, window.location.origin);
+        targetUrl.searchParams.set('client_id', String(selectedClientId));
+        targetUrl.searchParams.set('product_id', select.value);
+        targetUrl.searchParams.set('resume_draft', '1');
+        window.location.assign(targetUrl);
+    });
     $(select).on('select2:select', (_event, payload) => {
         nameInput.value = payload?.params?.data?.name ?? payload?.params?.data?.text?.split(' — ').slice(1).join(' — ') ?? '';
     });
 
     update();
+
+    const pageUrl = new URL(window.location.href);
+    if (pageUrl.searchParams.get('resume_draft') !== '1') {
+        return;
+    }
+
+    try {
+        const draft = JSON.parse(sessionStorage.getItem('realization-create-draft') ?? '{}');
+        sessionStorage.removeItem('realization-create-draft');
+
+        Object.entries(draft).forEach(([name, value]) => {
+            const field = document.querySelector(`[data-realization-form] [name="${name}"]`);
+            if (field && typeof value === 'string') {
+                field.value = value;
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    } catch {
+        sessionStorage.removeItem('realization-create-draft');
+    }
 };
 
 const initializeRealizationBatchNumber = () => {

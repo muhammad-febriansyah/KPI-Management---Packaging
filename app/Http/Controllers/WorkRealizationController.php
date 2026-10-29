@@ -195,12 +195,17 @@ class WorkRealizationController extends Controller
             ->unique('id')
             ->sortBy('name')
             ->values();
+        $selectedProduct = $request->filled('product_id')
+            ? Product::query()->where('client_id', $client->id())->where('status', 'active')->with('client:id,code,name')->findOrFail($request->integer('product_id'))
+            : null;
 
         return view('realizations.create', [
             'currentClient' => $client->get(),
             'user' => $request->user(),
             'availableClients' => $request->user()->is_super_admin ? $client->availableFor($request->user()) : collect(),
             'defaultBatchNumber' => $this->generateNextBatchNumber($client->id()),
+            'selectedProduct' => $selectedProduct,
+            'clientSwitchedForProduct' => $request->boolean('resume_draft') && $selectedProduct !== null,
             'employees' => $employees,
             'groups' => $groups,
         ]);

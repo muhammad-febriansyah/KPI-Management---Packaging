@@ -106,22 +106,33 @@ class ProductController extends Controller
         $search = trim((string) $request->string('q'));
         $page = max(1, (int) $request->integer('page', 1));
         $perPage = 20;
+        $searchAcrossClients = $request->boolean('all_clients') && $request->user()->is_super_admin;
 
         $query = Product::query()
-            ->where('client_id', $client->id())
+            ->when(
+                $searchAcrossClients,
+                fn ($query) => $query->withoutGlobalScopes()
+                    ->whereIn('products.client_id', $client->availableFor($request->user())->modelKeys()),
+                fn ($query) => $query->where('client_id', $client->id()),
+            )
             ->where('status', 'active')
-            ->with('unit')
+            ->with(['unit', 'client:id,code,name'])
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q
                 ->whereRaw('LOWER(products.sku) LIKE ?', ['%'.mb_strtolower($search).'%'])
                 ->orWhereRaw('LOWER(products.name) LIKE ?', ['%'.mb_strtolower($search).'%'])))
             ->orderBy('name');
 
-        $paginator = $query->paginate($perPage, ['id', 'sku', 'name', 'unit_id', 'employee_rate', 'estimated_output_per_hour'], 'page', $page);
+        $paginator = $query->paginate($perPage, ['id', 'client_id', 'sku', 'name', 'unit_id', 'employee_rate', 'estimated_output_per_hour'], 'page', $page);
 
         return response()->json([
             'results' => $paginator->getCollection()->map(fn (Product $product): array => [
                 'id' => $product->id,
-                'text' => "{$product->sku} — {$product->name}",
+                'text' => $searchAcrossClients
+                    ? "{$product->sku} — {$product->name} · {$product->client?->code} — {$product->client?->name}"
+                    : "{$product->sku} — {$product->name}",
+                'client_id' => $product->client_id,
+                'client_code' => $product->client?->code,
+                'client_name' => $product->client?->name,
                 'name' => $product->name,
                 'unit_name' => $product->unit?->name,
                 'employee_rate' => $product->employee_rate,
