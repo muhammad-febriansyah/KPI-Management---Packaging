@@ -109,10 +109,7 @@ class WorkReportController extends Controller
                 'products.po_price',
                 DB::raw("COALESCE(realization.report, '') AS description"),
             ])
-            ->join('shifts', function ($join): void {
-                $join->on('shifts.id', '=', 'realization.shift_id')
-                    ->on('shifts.client_id', '=', 'realization.client_id');
-            })
+            ->join('shifts', 'shifts.id', '=', 'realization.shift_id')
             ->join('products', function ($join): void {
                 $join->on('products.id', '=', 'realization.product_id')
                     ->on('products.client_id', '=', 'realization.client_id');

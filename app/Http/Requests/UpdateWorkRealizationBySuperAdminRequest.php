@@ -52,7 +52,10 @@ class UpdateWorkRealizationBySuperAdminRequest extends FormRequest
 
         return [
             'work_date' => ['nullable', 'date'],
-            'shift_id' => ['nullable', Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('client_id', $clientId))],
+            'shift_id' => ['nullable', Rule::exists('shifts', 'id')->where(fn ($query) => $query
+                ->when(! $this->user()?->is_super_admin, fn ($query) => $query->where(fn ($query) => $query
+                    ->where('client_id', $clientId)
+                    ->orWhere('id', $realization?->shift_id))))],
             'batch_no' => [
                 'nullable',
                 'string',

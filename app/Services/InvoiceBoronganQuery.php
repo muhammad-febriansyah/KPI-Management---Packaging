@@ -26,10 +26,7 @@ class InvoiceBoronganQuery
             ->groupBy('assignment.client_id', 'assignment.work_realization_id');
 
         $query = DB::table('work_realizations as realization')
-            ->leftJoin('shifts', function ($join): void {
-                $join->on('shifts.id', '=', 'realization.shift_id')
-                    ->on('shifts.client_id', '=', 'realization.client_id');
-            })
+            ->leftJoin('shifts', 'shifts.id', '=', 'realization.shift_id')
             ->join('products', function ($join): void {
                 $join->on('products.id', '=', 'realization.product_id')
                     ->on('products.client_id', '=', 'realization.client_id');

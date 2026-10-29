@@ -191,6 +191,51 @@ it('lets a super admin assign an employee from another client', function () {
     ]);
 });
 
+it('stores a super admin realization under the product client even when the page client differs', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $pageClient = Client::factory()->create();
+    $productClient = Client::factory()->create();
+    $shift = Shift::factory()->create(['client_id' => $pageClient->getKey()]);
+    $employee = Employee::factory()->create([
+        'client_id' => $pageClient->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $pageClient->getKey()])
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($productClient, [
+            'client_id' => $pageClient->getKey(),
+            'shift_id' => $shift->getKey(),
+            'employee_ids' => [$employee->getKey()],
+        ]))
+        ->assertCreated();
+
+    $realization = WorkRealization::query()->sole();
+    expect($realization->client_id)->toBe($productClient->getKey())
+        ->and($realization->shift_id)->toBe($shift->getKey())
+        ->and($realization->batch->client_id)->toBe($productClient->getKey());
+});
+
+it('rejects a product from another client for a client admin', function () {
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $admin = User::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+    $role->permissions()->syncWithoutDetaching([Permission::query()->firstOrCreate(['code' => 'menu.realizations'], ['name' => 'Menu: Realisasi'])->getKey()]);
+    $admin->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $otherUnit = Unit::factory()->create(['client_id' => $otherClient->getKey()]);
+    $otherProduct = Product::factory()->create(['client_id' => $otherClient->getKey(), 'unit_id' => $otherUnit->getKey()]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
+            'product_id' => $otherProduct->getKey(),
+        ]))
+        ->assertJsonValidationErrors('product_id');
+
+    $this->assertDatabaseEmpty('work_realizations');
+});
+
 it('rejects an employee from another client for a client admin', function () {
     $client = Client::factory()->create();
     $otherClient = Client::factory()->create();

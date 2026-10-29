@@ -309,7 +309,14 @@ class WorkRealizationController extends Controller
         unset($data['result_image']);
 
         $product = filled($data['product_id'] ?? null)
-            ? Product::query()->where('client_id', $client->id())->findOrFail($data['product_id'])
+            ? Product::query()
+                ->when(
+                    $request->user()->is_super_admin,
+                    fn ($query) => $query->withoutGlobalScopes()->whereIn('client_id', $client->availableFor($request->user())->modelKeys()),
+                    fn ($query) => $query->where('client_id', $client->id()),
+                )
+                ->with('client')
+                ->findOrFail($data['product_id'])
             : null;
         $employeeIds = array_values(array_filter($data['employee_ids'] ?? [], fn ($employeeId): bool => filled($employeeId)));
         unset($data['employee_ids']);
@@ -317,7 +324,11 @@ class WorkRealizationController extends Controller
         $hasBatchNumber = filled($data['batch_no'] ?? null);
         unset($data['batch_no']);
 
-        DB::transaction(function () use ($data, $hasBatchNumber, $employeeIds, $client, $product, $request): void {
+        // A super admin's realization belongs to the client that owns the chosen SKU,
+        // whichever client the page or session happened to be on.
+        $realizationClient = $request->user()->is_super_admin && $product !== null ? $product->client : $client->get();
+
+        $client->runAs($realizationClient, fn () => DB::transaction(function () use ($data, $hasBatchNumber, $employeeIds, $client, $product, $request): void {
             if ($hasBatchNumber) {
                 $batchNumber = $this->generateNextBatchNumber($client->id(), $data['work_date'] ?? null, true);
                 $batch = Batch::query()->firstOrCreate(
@@ -350,7 +361,7 @@ class WorkRealizationController extends Controller
                 $employee->user?->notify(new RealizationAssigned($realization));
             }
             $this->rebalanceAssignments($realization);
-        });
+        }));
 
         return response()->json(['message' => 'Realisasi berhasil disimpan.'], 201);
     }

@@ -46,17 +46,11 @@ class StoreWorkRealizationRequest extends FormRequest
      */
     public function rules(): array
     {
-        $clientId = app(CurrentClientService::class)->id();
-        $shiftRule = Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('status', 'active'));
-
-        if ($this->user()?->is_super_admin) {
-            $shiftRule->where(fn ($query) => $query->whereIn(
-                'client_id',
-                app(CurrentClientService::class)->availableFor($this->user())->modelKeys(),
-            ));
-        } else {
-            $shiftRule->where(fn ($query) => $query->where('client_id', $clientId));
-        }
+        $currentClient = app(CurrentClientService::class);
+        $clientId = $currentClient->id();
+        $isSuperAdmin = (bool) $this->user()?->is_super_admin;
+        $clientIds = $isSuperAdmin ? $currentClient->availableFor($this->user())->modelKeys() : [$clientId];
+        $shiftRule = Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('status', 'active')->whereIn('client_id', $clientIds));
 
         return [
             'work_date' => ['required', 'date'],
@@ -69,7 +63,7 @@ class StoreWorkRealizationRequest extends FormRequest
                     $query->where('product_id', $this->input('product_id'));
                 }
             })],
-            'product_id' => ['required', Rule::exists('products', 'id')->where(fn ($query) => $query->where('client_id', $clientId)->where('status', 'active'))],
+            'product_id' => ['required', Rule::exists('products', 'id')->where(fn ($query) => $query->whereIn('client_id', $clientIds)->where('status', 'active'))],
             'total_output' => ['required', 'numeric', 'min:0'],
             'start_time' => ['required', 'date_format:H:i,H:i:s'],
             'end_time' => ['required', 'date_format:H:i,H:i:s'],
@@ -84,7 +78,7 @@ class StoreWorkRealizationRequest extends FormRequest
                 Rule::exists('employees', 'id')->where(fn ($query) => $query
                     ->where('status', 'active')
                     ->whereNotNull('user_id')
-                    ->when(! $this->user()?->is_super_admin, fn ($query) => $query->where('client_id', $clientId))),
+                    ->when(! $isSuperAdmin, fn ($query) => $query->where('client_id', $clientId))),
             ],
         ];
     }
