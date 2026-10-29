@@ -113,6 +113,10 @@ class AccessController extends Controller
                     $clientQuery = $user->access_client_id ? '?client_id='.$user->access_client_id : '';
                     $buttons[] = '<button type="button" data-user-reset data-url="'.route('settings.access.users.password', $user).$clientQuery.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#lock-closed"></use></svg>Reset password</button>';
 
+                    if ($user->role_code === 'employee') {
+                        $buttons[] = '<button type="button" data-user-promote-leader data-url="'.route('settings.access.users.promote-leader', $user).$clientQuery.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#arrow-trending-up"></use></svg>Jadikan Leader</button>';
+                    }
+
                     if ($user->getKey() !== request()->user()?->getKey()) {
                         $buttons[] = '<button type="button" data-user-status-toggle data-url="'.route('settings.access.users.status', $user).$clientQuery.'" data-status="'.$status.'" data-user-name="'.e($user->name).'" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold '.$classes.'"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#'.$icon.'"></use></svg>'.$label.'</button>';
                         $buttons[] = '<form method="POST" action="'.route('settings.access.users.destroy', $user).$clientQuery.'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"><svg aria-hidden="true" class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
@@ -382,6 +386,25 @@ class AccessController extends Controller
             'message' => $status === 'active' ? 'User berhasil diaktifkan.' : 'User berhasil dinonaktifkan.',
             'status' => $status,
         ]);
+    }
+
+    public function promoteToLeader(Request $request, User $user, CurrentClientService $client): JsonResponse
+    {
+        Gate::authorize('viewAny', Role::class);
+        $actionClient = $this->resolveActionClient($request, $user, $client);
+        $membership = $user->clients()->whereKey($actionClient->getKey())->first();
+        abort_unless($membership !== null, 404);
+        abort_unless(Role::query()->whereKey($membership->pivot->role_id)->value('code') === 'employee', 422, 'Hanya user dengan role Karyawan yang dapat dijadikan Leader.');
+
+        DB::transaction(function () use ($actionClient, $user): void {
+            $role = Role::query()->firstOrCreate(['code' => 'leader'], ['name' => 'Leader']);
+            $role->permissions()->syncWithoutDetaching(
+                Permission::query()->whereIn('code', ['menu.realizations', 'menu.my-payroll'])->pluck('id'),
+            );
+            $user->clients()->updateExistingPivot($actionClient->getKey(), ['role_id' => $role->getKey()]);
+        });
+
+        return response()->json(['message' => $user->name.' berhasil dijadikan Leader.']);
     }
 
     public function storeSuperAdmin(Request $request): JsonResponse

@@ -677,3 +677,65 @@ it('forbids editing the super-admin role\'s menus, even as a super admin', funct
 
     $response->assertForbidden();
 });
+
+it('shows the promote to leader action only for employee users', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employeeUser = User::factory()->create(['name' => 'Akun Karyawan']);
+    attachRole($employeeUser, $client, 'employee');
+    $leaderUser = User::factory()->create(['name' => 'Akun Leader']);
+    attachRole($leaderUser, $client, 'leader');
+
+    $rows = collect($this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access', ['draw' => 1, 'start' => 0, 'length' => 10]))
+        ->json('data'));
+
+    expect($rows->firstWhere('name', 'Akun Karyawan')['action'])
+        ->toContain('data-user-promote-leader')
+        ->toContain('Jadikan Leader');
+    expect($rows->firstWhere('name', 'Akun Leader')['action'])->not->toContain('data-user-promote-leader');
+});
+
+it('promotes an employee user to leader for the selected client', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $user = User::factory()->create();
+    attachRole($user, $client, 'employee');
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.users.promote-leader', $user).'?client_id='.$client->getKey())
+        ->assertOk();
+
+    $leaderRole = Role::query()->where('code', 'leader')->sole();
+    $this->assertDatabaseHas('client_user', ['client_id' => $client->getKey(), 'user_id' => $user->getKey(), 'role_id' => $leaderRole->getKey()]);
+    expect($leaderRole->permissions()->pluck('code')->all())->toContain('menu.realizations', 'menu.my-payroll');
+});
+
+it('rejects promoting a user whose role is not employee', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $user = User::factory()->create();
+    $clientRole = attachRole($user, $client, 'client');
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.users.promote-leader', $user))
+        ->assertUnprocessable();
+
+    $this->assertDatabaseHas('client_user', ['client_id' => $client->getKey(), 'user_id' => $user->getKey(), 'role_id' => $clientRole->getKey()]);
+});
+
+it('rejects a non super admin from promoting a user to leader', function () {
+    $client = Client::factory()->create();
+    $user = User::factory()->create();
+    attachRole($user, $client, 'client');
+    $employeeUser = User::factory()->create();
+    attachRole($employeeUser, $client, 'employee');
+
+    $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('settings.access.users.promote-leader', $employeeUser))
+        ->assertForbidden();
+});

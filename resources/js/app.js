@@ -790,6 +790,39 @@ const initializeUserStatusToggle = () => {
     });
 };
 
+const initializeUserPromoteLeader = () => {
+    document.addEventListener('click', async (event) => {
+        const button = event.target.closest?.('[data-user-promote-leader]');
+        if (!button) return;
+
+        const result = await Swal.fire({
+            title: 'Jadikan Leader?',
+            text: `Role ${button.dataset.userName ?? 'user ini'} akan diubah dari Karyawan menjadi Leader.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, jadikan Leader',
+            cancelButtonText: 'Batal',
+        });
+        if (!result.isConfirmed) return;
+
+        button.disabled = true;
+        try {
+            const response = await $.ajax({
+                url: button.dataset.url,
+                type: 'PUT',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
+                dataType: 'json',
+            });
+            reloadServerTables();
+            await Swal.fire({ title: 'Berhasil', text: response.message ?? 'User berhasil dijadikan Leader.', icon: 'success', timer: 1500, showConfirmButton: false });
+        } catch (error) {
+            await Swal.fire({ title: 'Gagal', text: error.responseJSON?.message ?? 'Role user tidak dapat diubah.', icon: 'error' });
+        } finally {
+            button.disabled = false;
+        }
+    });
+};
+
 const initializeUserCreateModal = () => {
     const modal = document.querySelector('[data-user-create-modal]');
     const trigger = document.querySelector('[data-access-create]');
@@ -2861,6 +2894,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAjaxDeletes();
     initializeRoleAccessForms();
     initializeUserStatusToggle();
+    initializeUserPromoteLeader();
     initializeUserCreateModal();
     initializeSuperAdminModal();
     initializeUserPasswordReset();

@@ -133,6 +133,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/settings/access/super-admins', [AccessController::class, 'storeSuperAdmin'])->name('settings.access.super-admins.store');
     Route::put('/settings/access/super-admins/{user}', [AccessController::class, 'updateSuperAdmin'])->name('settings.access.super-admins.update');
     Route::put('/settings/access/users/{user}/status', [AccessController::class, 'toggleUserStatus'])->name('settings.access.users.status')->middleware('client');
+    Route::put('/settings/access/users/{user}/promote-leader', [AccessController::class, 'promoteToLeader'])->name('settings.access.users.promote-leader')->middleware('client');
     Route::put('/settings/access/users/{user}/password', [AccessController::class, 'resetPassword'])->name('settings.access.users.password')->middleware('client');
     Route::delete('/settings/access/users/{user}', [AccessController::class, 'destroy'])->name('settings.access.users.destroy')->middleware('client');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit.index')->middleware('client');
