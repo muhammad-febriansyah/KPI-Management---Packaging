@@ -30,7 +30,7 @@ it('shows product import controls', function () {
 
 function buildProductImportFile(array $rows): UploadedFile
 {
-    $headings = ['Client Code', 'SKU', 'Nama Produk', 'Kode Satuan', 'Kode Group', 'Kode Cost Center', 'Harga PO', 'Tarif Karyawan', 'Output per Jam', 'Status'];
+    $headings = ['Client Code *', 'SKU', 'Nama Produk', 'Kode Satuan', 'Kode Group', 'Kode Cost Center', 'Harga PO', 'Tarif Karyawan', 'Output per Jam', 'Status'];
     $spreadsheet = new Spreadsheet;
     $spreadsheet->getActiveSheet()->fromArray([$headings, ...$rows]);
     $path = tempnam(sys_get_temp_dir(), 'product-import').'.xlsx';
@@ -53,7 +53,7 @@ it('downloads a product import template with code-based master columns', functio
         ->assertOk();
 
     Excel::assertDownloaded('template-master-produk.xlsx', function (ProductTemplateExport $export) use ($client, $unit, $group, $costCenter): bool {
-        return $export->headings() === ['Client Code', 'SKU', 'Nama Produk', 'Kode Satuan', 'Kode Group', 'Kode Cost Center', 'Harga PO', 'Tarif Karyawan', 'Output per Jam', 'Status']
+        return $export->headings() === ['Client Code *', 'SKU', 'Nama Produk', 'Kode Satuan', 'Kode Group', 'Kode Cost Center', 'Harga PO', 'Tarif Karyawan', 'Output per Jam', 'Status']
             && $export->array()[0] === [$client->code, 'SKU-CONTOH-001', 'Nama Produk Contoh', $unit->code, $group->code, $costCenter->code, 0, 0, 0, 'active'];
     });
 });
@@ -151,7 +151,7 @@ it('reports invalid master codes while importing valid product rows', function (
     $this->assertDatabaseMissing('products', ['client_id' => $client->getKey(), 'sku' => 'SKU-INVALID']);
 });
 
-it('uses the active client when client code is blank', function () {
+it('rejects product rows when client code is blank', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create(['code' => 'CL-PROD']);
     $unit = Unit::factory()->create(['client_id' => $client->getKey(), 'code' => 'PCS']);
@@ -159,10 +159,12 @@ it('uses the active client when client code is blank', function () {
         ['', 'SKU-ACTIVE', 'Produk Client Aktif', $unit->code, '', '', 0, 0, 0, 'active'],
     ]);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->post(route('products.import'), ['file' => $file])
-        ->assertOk();
+        ->post(route('products.import'), ['file' => $file]);
 
-    $this->assertDatabaseHas('products', ['client_id' => $client->getKey(), 'sku' => 'SKU-ACTIVE']);
+    $response->assertUnprocessable()
+        ->assertJsonPath('failures.0.row', 2);
+    expect($response->json('failures.0.errors.0'))->toContain('Client Code wajib diisi.');
+    $this->assertDatabaseMissing('products', ['client_id' => $client->getKey(), 'sku' => 'SKU-ACTIVE']);
 });

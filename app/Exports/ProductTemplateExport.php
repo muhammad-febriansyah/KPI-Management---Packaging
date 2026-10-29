@@ -46,7 +46,7 @@ class ProductTemplateExport implements FromArray, ShouldAutoSize, WithColumnForm
     /** @return array<int, string> */
     public function headings(): array
     {
-        return ['Client Code', 'SKU', 'Nama Produk', 'Kode Satuan', 'Kode Group', 'Kode Cost Center', 'Harga PO', 'Tarif Karyawan', 'Output per Jam', 'Status'];
+        return ['Client Code *', 'SKU', 'Nama Produk', 'Kode Satuan', 'Kode Group', 'Kode Cost Center', 'Harga PO', 'Tarif Karyawan', 'Output per Jam', 'Status'];
     }
 
     /** @return array<string, string> */
@@ -68,7 +68,7 @@ class ProductTemplateExport implements FromArray, ShouldAutoSize, WithColumnForm
     public function registerEvents(): array
     {
         $notes = [
-            'A1' => 'Opsional untuk user client. Jika kosong, client aktif dipakai. Super Admin wajib mengisi untuk import lintas client.',
+            'A1' => 'Wajib diisi dengan Client Code dari menu Master Data > Client.',
             'B1' => 'Wajib. SKU menjadi kunci unik per client; jika sudah ada, data produk diperbarui.',
             'C1' => 'Wajib diisi dengan nama produk.',
             'D1' => 'Wajib diisi dengan kode satuan aktif pada client terkait.',

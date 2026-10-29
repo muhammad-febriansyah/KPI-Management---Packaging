@@ -1,8 +1,10 @@
 <?php
 
 use App\Exports\ClientTemplateExport;
+use App\Exports\DeductionTemplateExport;
 use App\Exports\EmployeeTemplateExport;
 use App\Exports\GroupTemplateExport;
+use App\Exports\ProductTemplateExport;
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Group;
@@ -10,6 +12,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -23,6 +26,18 @@ function buildMasterImportFile(array $headings, array $rows, string $prefix): Up
     (new Xlsx($spreadsheet))->save($path);
 
     return new UploadedFile($path, 'import.xlsx', null, null, true);
+}
+
+function readTemplateCellComment(object $export, string $cell): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'master-template-comment');
+    file_put_contents($path, Excel::raw($export, Maatwebsite\Excel\Excel::XLSX));
+
+    try {
+        return IOFactory::load($path)->getActiveSheet()->getComment($cell)->getText()->getPlainText();
+    } finally {
+        unlink($path);
+    }
 }
 
 it('shows import controls on employee, group, and client master pages', function () {
@@ -49,6 +64,21 @@ it('downloads code-based templates for employee, group, and client', function ()
     Excel::assertDownloaded('template-master-karyawan.xlsx', fn (EmployeeTemplateExport $export): bool => $export->headings()[0] === 'Client Code' && $export->headings()[10] === 'Group Code' && $export->array()[0][10] === $group->code);
     Excel::assertDownloaded('template-master-group.xlsx', fn (GroupTemplateExport $export): bool => $export->headings() === ['Client Code', 'Group Code', 'Nama Group', 'Status']);
     Excel::assertDownloaded('template-master-client.xlsx', fn (ClientTemplateExport $export): bool => $export->headings() === ['Client Code', 'Nama Client', 'Timezone', 'Status']);
+});
+
+it('instructs master imports to use the client code from master data', function () {
+    $client = Client::factory()->create();
+    $expectedNote = 'Isi dengan Client Code dari menu Master Data > Client.';
+    $exports = [
+        new EmployeeTemplateExport($client, null),
+        new GroupTemplateExport($client),
+        new ProductTemplateExport($client, null, null, null),
+        new DeductionTemplateExport($client, null),
+    ];
+
+    foreach ($exports as $export) {
+        expect(readTemplateCellComment($export, 'A1'))->toBe($expectedNote);
+    }
 });
 
 it('imports clients using client code as upsert key', function () {

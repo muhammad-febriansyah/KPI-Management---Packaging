@@ -46,7 +46,7 @@ class EmployeeTemplateExport implements FromArray, ShouldAutoSize, WithColumnFor
     /** @return array<class-string, callable> */
     public function registerEvents(): array
     {
-        $notes = ['A1' => 'Kosongkan untuk memakai client aktif.', 'B1' => 'Opsional. Jika SIM ID sudah ada pada client, data karyawan diperbarui.', 'C1' => 'Wajib.', 'D1' => 'Opsional, harus unik jika diisi.', 'E1' => 'Wajib.', 'F1' => 'Format YYYY-MM-DD.', 'G1' => 'Wajib. Password awal akun dibuat dari tanggal ini dengan format ddmmyyyy.', 'H1' => 'male atau female.', 'I1' => 'permanent, contract, atau daily.', 'J1' => 'single, married, divorced, atau widowed.', 'K1' => 'Opsional, gunakan Group Code.', 'L1' => 'active atau inactive.'];
+        $notes = ['A1' => 'Isi dengan Client Code dari menu Master Data > Client.', 'B1' => 'Opsional. Jika SIM ID sudah ada pada client, data karyawan diperbarui.', 'C1' => 'Wajib.', 'D1' => 'Opsional, harus unik jika diisi.', 'E1' => 'Wajib.', 'F1' => 'Format YYYY-MM-DD.', 'G1' => 'Wajib. Password awal akun dibuat dari tanggal ini dengan format ddmmyyyy.', 'H1' => 'male atau female.', 'I1' => 'permanent, contract, atau daily.', 'J1' => 'single, married, divorced, atau widowed.', 'K1' => 'Opsional, gunakan Group Code.', 'L1' => 'active atau inactive.'];
 
         return [AfterSheet::class => function (AfterSheet $event) use ($notes): void {
             $event->sheet->getDelegate()->freezePane('A2');

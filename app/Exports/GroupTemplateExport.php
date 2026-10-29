@@ -47,7 +47,7 @@ class GroupTemplateExport implements FromArray, ShouldAutoSize, WithColumnFormat
     {
         return [AfterSheet::class => function (AfterSheet $event): void {
             $event->sheet->getDelegate()->freezePane('A2');
-            $event->sheet->getDelegate()->getComment('A1')->getText()->createTextRun('Kosongkan untuk memakai client aktif.');
+            $event->sheet->getDelegate()->getComment('A1')->getText()->createTextRun('Isi dengan Client Code dari menu Master Data > Client.');
             $event->sheet->getDelegate()->getComment('B1')->getText()->createTextRun('Wajib dan menjadi kunci group per client.');
             $event->sheet->getDelegate()->getComment('C1')->getText()->createTextRun('Wajib.');
             $event->sheet->getDelegate()->getComment('D1')->getText()->createTextRun('active atau inactive.');

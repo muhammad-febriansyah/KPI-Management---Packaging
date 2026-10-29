@@ -38,7 +38,6 @@ class ProductImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 ->whereIn('id', $this->allowedClientIds)
                 ->get()
                 ->keyBy(fn (Client $client): string => mb_strtolower($client->code));
-            $clientsById = $clients->keyBy('id');
             $units = $this->masterMap(Unit::class);
             $groups = $this->masterMap(Group::class);
             $costCenters = $this->masterMap(CostCenter::class);
@@ -48,7 +47,7 @@ class ProductImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 $rowNumber = $index + 2;
                 $data = $this->normalizeRow($row->toArray());
                 $validator = Validator::make($data, [
-                    'client_code' => ['nullable', 'string', 'max:50'],
+                    'client_code' => ['required', 'string', 'max:50'],
                     'sku' => ['required', 'string', 'max:100'],
                     'name' => ['required', 'string', 'max:180'],
                     'unit_code' => ['required', 'string', 'max:30'],
@@ -72,9 +71,7 @@ class ProductImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                     continue;
                 }
 
-                $client = filled($data['client_code'])
-                    ? $clients->get(mb_strtolower($data['client_code']))
-                    : $clientsById->get($this->currentClientId);
+                $client = $clients->get(mb_strtolower($data['client_code']));
 
                 if (! $client) {
                     $this->addFailure($rowNumber, [sprintf('Client dengan kode "%s" tidak ditemukan atau tidak dapat diakses.', $data['client_code'] ?: $this->currentClientId)]);

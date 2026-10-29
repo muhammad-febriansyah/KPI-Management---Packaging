@@ -61,7 +61,7 @@ class DeductionTemplateExport implements FromArray, ShouldAutoSize, WithColumnFo
     public function registerEvents(): array
     {
         $notes = [
-            'A1' => 'Wajib diisi dengan kode client. Kosong memakai client aktif saat import.',
+            'A1' => 'Isi dengan Client Code dari menu Master Data > Client.',
             'B1' => 'Format bulan: YYYY-MM. Contoh: 2026-09.',
             'C1' => 'Kosongkan untuk semua minggu. Isi 1 atau 2.',
             'D1' => 'Wajib diisi dengan No Karyawan atau SIM ID pada client terkait.',
