@@ -258,7 +258,6 @@ class WorkRealizationController extends Controller
         $search = trim((string) $request->string('q'));
         $searchAcrossClients = $request->boolean('all_clients') && $request->user()->is_super_admin;
         $shifts = Shift::query()
-            ->with('client:id,code,name')
             ->when(
                 $searchAcrossClients,
                 fn ($query) => $query->withoutGlobalScopes()
@@ -271,12 +270,7 @@ class WorkRealizationController extends Controller
             ->limit(30)
             ->get();
 
-        return response()->json(['results' => $shifts->map(fn (Shift $shift): array => [
-            'id' => $shift->id,
-            'text' => $searchAcrossClients
-                ? "{$shift->name} · {$shift->client?->code} — {$shift->client?->name}"
-                : $shift->name,
-        ])]);
+        return response()->json(['results' => $shifts->map(fn (Shift $shift): array => ['id' => $shift->id, 'text' => $shift->name])]);
     }
 
     public function batchOptions(Request $request, CurrentClientService $client): JsonResponse
