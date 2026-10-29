@@ -8,23 +8,6 @@
         <a href="{{ route('realizations.index', ['client_id' => $currentClient->getKey()]) }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><x-icon name="chevron-right" class="rotate-180" size="size-4"/> Kembali</a>
     </div>
 
-    @if($user->is_super_admin)
-        <form method="GET" action="{{ route('realizations.create') }}" class="mb-5 max-w-xl rounded-xl border border-line bg-white p-4 shadow-sm">
-            <label class="grid gap-2 text-sm font-semibold">
-                <span>Client <span class="text-rose-600" aria-hidden="true">*</span></span>
-                <select name="client_id" required data-client-filter class="h-11 rounded-lg border border-line bg-white px-3 font-normal">
-                    <option value="" disabled>Pilih client...</option>
-                    @foreach($availableClients as $availableClient)
-                        <option value="{{ $availableClient->getKey() }}" @selected($availableClient->is($currentClient))>{{ $availableClient->code }} — {{ $availableClient->name }}</option>
-                    @endforeach
-                </select>
-            </label>
-            @if($clientSwitchedForProduct)
-                <p class="mt-3 rounded-lg bg-primary-50 px-3 py-2 text-xs font-normal text-primary-700">Client otomatis mengikuti produk: {{ $currentClient->code }} — {{ $currentClient->name }}. Tanggal, output, waktu, dan report dipertahankan. Pilih ulang shift dan karyawan; unggah ulang foto bila diperlukan.</p>
-            @endif
-        </form>
-    @endif
-
     <form method="POST" enctype="multipart/form-data" data-realization-form data-realization-wizard action="{{ route('realizations.store') }}" data-redirect="{{ route('realizations.index', ['client_id' => $currentClient->getKey()]) }}" class="grid gap-5">
         <input type="hidden" name="_method" value="POST">
         <input type="hidden" name="client_id" value="{{ $currentClient->getKey() }}">
