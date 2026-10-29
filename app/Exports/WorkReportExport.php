@@ -32,10 +32,7 @@ class WorkReportExport implements FromQuery, ShouldAutoSize, WithHeadings, WithM
                 $join->on('assignment.work_realization_id', '=', 'realization.id')
                     ->on('assignment.client_id', '=', 'realization.client_id');
             })
-            ->join('employees', function ($join): void {
-                $join->on('employees.id', '=', 'assignment.employee_id')
-                    ->on('employees.client_id', '=', 'realization.client_id');
-            })
+            ->join('employees', 'employees.id', '=', 'assignment.employee_id')
             ->join('shifts', function ($join): void {
                 $join->on('shifts.id', '=', 'realization.shift_id')
                     ->on('shifts.client_id', '=', 'realization.client_id');

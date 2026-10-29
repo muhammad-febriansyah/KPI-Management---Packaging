@@ -57,9 +57,9 @@ class AssignWorkRealizationRequest extends FormRequest
                 'integer',
                 'distinct',
                 Rule::exists('employees', 'id')->where(fn ($query) => $query
-                    ->where('client_id', $clientId)
                     ->where('status', 'active')
-                    ->whereNotNull('user_id')),
+                    ->whereNotNull('user_id')
+                    ->when(! $this->user()?->is_super_admin, fn ($query) => $query->where('client_id', $clientId))),
             ],
         ];
     }

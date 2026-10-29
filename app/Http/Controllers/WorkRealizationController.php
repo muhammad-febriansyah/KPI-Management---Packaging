@@ -18,8 +18,10 @@ use App\Notifications\RealizationSubmitted;
 use App\Services\CurrentClientService;
 use App\Services\RichTextSanitizer;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -182,19 +184,8 @@ class WorkRealizationController extends Controller
     {
         abort_unless($request->user()->canAccessMenu('realizations', $client->get()), 403);
         Gate::authorize('create', WorkRealization::class);
-        $employees = Employee::query()
-            ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
-            ->where('client_id', $client->id())
-            ->where('status', 'active')
-            ->whereNotNull('user_id')
-            ->with('group:id,client_id,name')
-            ->orderBy('full_name')
-            ->get();
-        $groups = $employees->pluck('group')
-            ->filter(fn (?Group $group): bool => $group !== null && (int) $group->client_id === $client->id())
-            ->unique('id')
-            ->sortBy('name')
-            ->values();
+        $employees = $this->assignableEmployees($request->user(), $client->id());
+        $groups = $this->employeeGroups($employees);
         $selectedProduct = $request->filled('product_id')
             ? Product::query()->where('client_id', $client->id())->where('status', 'active')->with('client:id,code,name')->findOrFail($request->integer('product_id'))
             : null;
@@ -227,20 +218,9 @@ class WorkRealizationController extends Controller
         $canEditMasterData = $request->user()->isAdminFor($client->get());
         Gate::authorize($canEditMasterData ? 'adminUpdate' : 'update', $realization);
         $employees = $canEditMasterData
-            ? Employee::query()
-                ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
-                ->where('client_id', $client->id())
-                ->where('status', 'active')
-                ->whereNotNull('user_id')
-                ->with('group:id,client_id,name')
-                ->orderBy('full_name')
-                ->get()
+            ? $this->assignableEmployees($request->user(), $client->id(), $realization->employeeAssignments()->pluck('employee_id')->all())
             : collect();
-        $groups = $employees->pluck('group')
-            ->filter(fn (?Group $group): bool => $group !== null && (int) $group->client_id === $client->id())
-            ->unique('id')
-            ->sortBy('name')
-            ->values();
+        $groups = $this->employeeGroups($employees);
 
         return view('realizations.edit', [
             'realization' => $realization->load(['shift', 'batch', 'product.unit', 'employeeAssignments.employee']),
@@ -357,7 +337,7 @@ class WorkRealizationController extends Controller
             ]);
 
             foreach ($employeeIds as $employeeId) {
-                $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
+                $employee = Employee::query()->assignableBy($request->user(), $client->id())->findOrFail($employeeId);
                 $rate = $product?->employee_rate ?? 0;
                 $realization->employeeAssignments()->create([
                     'client_id' => $client->id(),
@@ -431,7 +411,10 @@ class WorkRealizationController extends Controller
         $batchNumber = $data['batch_no'] ?? null;
         unset($data['result_image'], $data['batch_no'], $data['employee_ids']);
 
-        DB::transaction(function () use (&$data, $batchNumber, $employeeIds, $product, $realization, $client): void {
+        $user = $request->user();
+        $alreadyAssignedIds = $realization->employeeAssignments()->pluck('employee_id')->all();
+
+        DB::transaction(function () use (&$data, $batchNumber, $employeeIds, $alreadyAssignedIds, $product, $realization, $client, $user): void {
             if (filled($batchNumber)) {
                 $batch = $realization->batch;
 
@@ -463,7 +446,7 @@ class WorkRealizationController extends Controller
                 $realization->employeeAssignments()->whereNotIn('employee_id', $employeeIds)->delete();
             }
             foreach ($employeeIds as $employeeId) {
-                $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
+                $employee = Employee::query()->assignableBy($user, $client->id(), $alreadyAssignedIds)->findOrFail($employeeId);
                 $assignment = $realization->employeeAssignments()->firstOrNew(['employee_id' => $employee->id]);
                 $assignment->fill([
                     'client_id' => $client->id(),
@@ -494,7 +477,7 @@ class WorkRealizationController extends Controller
         Gate::authorize('assign', $realization);
 
         foreach ($request->validated('employee_ids') as $employeeId) {
-            $employee = Employee::query()->where('client_id', $client->id())->findOrFail($employeeId);
+            $employee = Employee::query()->assignableBy($request->user(), $client->id())->findOrFail($employeeId);
             $rate = $realization->product?->employee_rate ?? 0;
 
             $assignment = $realization->employeeAssignments()->firstOrCreate(
@@ -515,5 +498,32 @@ class WorkRealizationController extends Controller
         $this->rebalanceAssignments($realization);
 
         return response()->json(['message' => 'Karyawan berhasil di-assign.']);
+    }
+
+    /**
+     * @param  array<int, int>  $alreadyAssignedIds
+     * @return EloquentCollection<int, Employee>
+     */
+    private function assignableEmployees(User $user, int $clientId, array $alreadyAssignedIds = []): EloquentCollection
+    {
+        return Employee::query()
+            ->assignableBy($user, $clientId, $alreadyAssignedIds)
+            ->select(['id', 'client_id', 'user_id', 'employee_no', 'full_name', 'group_id', 'rate_category'])
+            ->with('group:id,client_id,name')
+            ->orderBy('full_name')
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, Employee>  $employees
+     * @return Collection<int, Group>
+     */
+    private function employeeGroups(Collection $employees): Collection
+    {
+        return $employees->pluck('group')
+            ->filter()
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
     }
 }

@@ -15,6 +15,8 @@ class PayrollReportBuilder
      * so each is filtered to the given range before joining onto employees —
      * a left join straight onto realization_employees would still sum rows
      * outside the range, since only the work_realizations columns go null.
+     * Attendance counts every realization the employee worked on, whichever
+     * client owns it, because a super admin can assign across clients.
      */
     public function forClient(int $clientId, string $dateFrom, string $dateTo): Builder
     {
@@ -40,9 +42,8 @@ class PayrollReportBuilder
             ->groupBy('employee_deductions.employee_id');
 
         $attendance = DB::table('realization_employees')
-            ->join('work_realizations', function ($join) use ($clientId, $dateFrom, $dateTo): void {
+            ->join('work_realizations', function ($join) use ($dateFrom, $dateTo): void {
                 $join->on('work_realizations.id', '=', 'realization_employees.work_realization_id')
-                    ->where('work_realizations.client_id', $clientId)
                     ->whereBetween('work_realizations.work_date', [$dateFrom, $dateTo]);
             })
             ->select([

@@ -123,7 +123,7 @@ class WorkRealizationPolicy
     private function belongsToEmployee(User $user, WorkRealization $workRealization): bool
     {
         return $workRealization->employeeAssignments()
-            ->whereHas('employee', fn ($query) => $query->where('user_id', $user->id)->where('client_id', $workRealization->client_id))
+            ->whereHas('employee', fn ($query) => $query->where('user_id', $user->id))
             ->exists();
     }
 }

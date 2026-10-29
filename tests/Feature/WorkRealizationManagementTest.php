@@ -112,7 +112,7 @@ it('shows the realization create page instead of a modal', function () {
     $response->assertSee('Format otomatis dan increment: B-yyyymmdd-0001', false);
 });
 
-it('shows only assignment groups that belong to the active client', function () {
+it('shows assignment groups from every client to a super admin', function () {
     $admin = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $otherClient = Client::factory()->create();
@@ -134,7 +134,83 @@ it('shows only assignment groups that belong to the active client', function () 
         ->get(route('realizations.create'))
         ->assertOk()
         ->assertSee('Group Client Aktif')
+        ->assertSee('Group Client Lain');
+});
+
+it('shows only active-client assignment groups to a client admin', function () {
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $admin = User::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+    $role->permissions()->syncWithoutDetaching([Permission::query()->firstOrCreate(['code' => 'menu.realizations'], ['name' => 'Menu: Realisasi'])->getKey()]);
+    $admin->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $clientGroup = Group::factory()->create(['client_id' => $client->getKey(), 'name' => 'Group Client Aktif']);
+    $otherGroup = Group::factory()->create(['client_id' => $otherClient->getKey(), 'name' => 'Group Client Lain']);
+    Employee::factory()->create([
+        'client_id' => $client->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+        'group_id' => $clientGroup->getKey(),
+    ]);
+    Employee::factory()->create([
+        'client_id' => $otherClient->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+        'group_id' => $otherGroup->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('realizations.create'))
+        ->assertOk()
+        ->assertSee('Group Client Aktif')
         ->assertDontSee('Group Client Lain');
+});
+
+it('lets a super admin assign an employee from another client', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $productClient = Client::factory()->create();
+    $employeeClient = Client::factory()->create();
+    $employee = Employee::factory()->create([
+        'client_id' => $employeeClient->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $employeeClient->getKey()])
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($productClient, [
+            'client_id' => $productClient->getKey(),
+            'employee_ids' => [$employee->getKey()],
+        ]))
+        ->assertCreated();
+
+    $realization = WorkRealization::query()->sole();
+    expect($realization->client_id)->toBe($productClient->getKey());
+    $this->assertDatabaseHas('realization_employees', [
+        'client_id' => $productClient->getKey(),
+        'work_realization_id' => $realization->getKey(),
+        'employee_id' => $employee->getKey(),
+    ]);
+});
+
+it('rejects an employee from another client for a client admin', function () {
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $admin = User::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+    $role->permissions()->syncWithoutDetaching([Permission::query()->firstOrCreate(['code' => 'menu.realizations'], ['name' => 'Menu: Realisasi'])->getKey()]);
+    $admin->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+    $otherEmployee = Employee::factory()->create([
+        'client_id' => $otherClient->getKey(),
+        'user_id' => User::factory()->create()->getKey(),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->postJson(route('realizations.store'), realizationRequiredPayloadForClient($client, [
+            'employee_ids' => [$otherEmployee->getKey()],
+        ]))
+        ->assertJsonValidationErrors('employee_ids.0');
+
+    $this->assertDatabaseEmpty('work_realizations');
 });
 
 it('autofills and persists the realization batch number', function () {

@@ -245,3 +245,33 @@ it('filters payroll attendance and gross salary by the selected period', functio
     // numerically: the contract is that only the in-range 50000 row counts, not its PHP type.
     expect((int) $response->json('data.0.gross_salary'))->toBe(50000);
 });
+
+it('counts realizations from another client in the employee payroll', function () {
+    $user = User::factory()->superAdmin()->create();
+    $employeeClient = Client::factory()->create();
+    $realizationClient = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $employeeClient->getKey(), 'employee_no' => 'EMP001', 'full_name' => 'Ananda Julian']);
+    $shift = Shift::factory()->create(['client_id' => $realizationClient->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $realizationClient->getKey()]);
+    $productId = DB::table('products')->insertGetId([
+        'client_id' => $realizationClient->getKey(), 'sku' => 'SKU1', 'name' => 'Produk 1', 'unit_id' => $unit->getKey(),
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $realizationId = DB::table('work_realizations')->insertGetId([
+        'client_id' => $realizationClient->getKey(), 'work_date' => '2026-08-10', 'shift_id' => $shift->getKey(), 'product_id' => $productId,
+        'sku_snapshot' => 'SKU1', 'product_name_snapshot' => 'Produk 1', 'unit_name_snapshot' => 'PCS', 'total_output' => 100,
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $user->getKey(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('realization_employees')->insert([
+        'client_id' => $realizationClient->getKey(), 'work_realization_id' => $realizationId, 'employee_id' => $employee->getKey(),
+        'rate_category_snapshot' => 'baru', 'rate_per_unit_snapshot' => 100, 'gross_amount' => 50000, 'created_at' => now(),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $employeeClient->getKey()])
+        ->getJson(route('reports.payroll').'?draw=1&start=0&length=10&period=2026-08');
+
+    $response->assertOk();
+    $response->assertJsonPath('data.0.attendance_days', 1);
+    expect((int) $response->json('data.0.gross_salary'))->toBe(50000);
+});

@@ -90,10 +90,7 @@ class WorkReportController extends Controller
                 $join->on('assignment.work_realization_id', '=', 'realization.id')
                     ->on('assignment.client_id', '=', 'realization.client_id');
             })
-            ->join('employees', function ($join): void {
-                $join->on('employees.id', '=', 'assignment.employee_id')
-                    ->on('employees.client_id', '=', 'realization.client_id');
-            })
+            ->join('employees', 'employees.id', '=', 'assignment.employee_id')
             ->where('realization.client_id', $client->id())
             ->select([
                 'assignment.id as assignment_id',

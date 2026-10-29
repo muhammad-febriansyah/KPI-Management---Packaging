@@ -70,9 +70,11 @@ class UpdateWorkRealizationBySuperAdminRequest extends FormRequest
                 'integer',
                 'distinct',
                 Rule::exists('employees', 'id')->where(fn ($query) => $query
-                    ->where('client_id', $clientId)
                     ->where('status', 'active')
-                    ->whereNotNull('user_id')),
+                    ->whereNotNull('user_id')
+                    ->when(! $this->user()?->is_super_admin, fn ($query) => $query->where(fn ($query) => $query
+                        ->where('client_id', $clientId)
+                        ->orWhereIn('id', $realization?->employeeAssignments()->pluck('employee_id')->all() ?? [])))),
             ],
         ];
     }
