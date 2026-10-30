@@ -844,11 +844,12 @@ const initializeUserCreateModal = () => {
     let manualPasswordSelected = false;
     const setPasswordMode = (useDefault) => {
         if (!defaultPasswordValue || !manualPasswordFields || !defaultPasswordStatus || !defaultPasswordToggle) return;
+        const employeeSectionActive = !employeeSection.classList.contains('hidden');
         defaultPasswordValue.value = useDefault ? '1' : '0';
         manualPasswordFields.classList.toggle('hidden', useDefault);
         manualPasswordInputs.forEach((input) => {
-            input.disabled = useDefault;
-            input.required = !useDefault;
+            input.disabled = useDefault || !employeeSectionActive;
+            input.required = !useDefault && employeeSectionActive;
             if (useDefault) input.value = '';
         });
         defaultPasswordToggle.textContent = useDefault ? 'Atur password manual' : 'Gunakan tanggal lahir';
