@@ -1216,11 +1216,75 @@ const initializeEmployeeDetailModal = () => {
     const modal = document.querySelector('[data-employee-detail-modal]');
     if (!modal) return;
 
-    const close = () => { modal.classList.add('hidden'); modal.classList.remove('grid'); };
+    const table = modal.querySelector('[data-employee-detail-realizations]');
+    const avatar = modal.querySelector('[data-employee-detail-avatar]');
+    const avatarPlaceholder = modal.querySelector('[data-employee-detail-avatar-placeholder]');
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const rupiah = (value) => `Rp ${Number(value ?? 0).toLocaleString('id-ID')}`;
+    const initialsOf = (name) => (String(name ?? '').trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '?');
+
+    const destroyTable = () => {
+        if (table?._dataTable) {
+            table._dataTable.destroy();
+            table._dataTable = null;
+            table.querySelector('tbody')?.replaceChildren();
+        }
+    };
+    const close = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('grid');
+        destroyTable();
+    };
     modal.querySelectorAll('[data-employee-detail-close]').forEach((button) => button.addEventListener('click', close));
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
 
     const set = (attribute, value) => { const el = modal.querySelector(`[data-employee-detail-${attribute}]`); if (el) el.textContent = value || '—'; };
+    const setSummary = (summary) => {
+        set('total-realizations', String(summary?.total_realizations ?? 0));
+        set('total-output', Number(summary?.total_output ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 3 }));
+        set('total-gross', rupiah(summary?.total_gross));
+    };
+
+    const loadRealizations = (url) => {
+        destroyTable();
+        setSummary(null);
+        if (!table || !url) return;
+
+        const dataTable = new DataTable(table, {
+            processing: true,
+            serverSide: true,
+            ajax: { url, dataSrc: 'data' },
+            pageLength: 5,
+            lengthMenu: [5, 10, 25, 50],
+            pagingType: 'simple_numbers',
+            order: [[1, 'desc']],
+            columns: [
+                { data: null, orderable: false, searchable: false, className: 'px-4 py-3 text-slate-500', render: (_data, _type, _row, meta) => Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? meta?.settings?._displayStart ?? 0) + 1 },
+                { data: 'work_date', className: 'px-4 py-3 whitespace-nowrap', render: escapeHtml },
+                { data: 'batch_no', defaultContent: '—', className: 'px-4 py-3', render: (value) => escapeHtml(value || '—') },
+                { data: 'product', orderable: true, className: 'min-w-[220px] px-4 py-3', render: (value) => escapeHtml(value || '—') },
+                { data: 'shift_name', defaultContent: '—', className: 'px-4 py-3', render: (value) => escapeHtml(value || '—') },
+                { data: 'allocation_output', className: 'px-4 py-3 text-right whitespace-nowrap', render: (value, _type, row) => value === null || value === undefined ? '—' : `${Number(value).toLocaleString('id-ID', { maximumFractionDigits: 3 })} ${escapeHtml(row.unit_name_snapshot ?? '')}`.trim() },
+                { data: 'gross_amount', className: 'px-4 py-3 text-right whitespace-nowrap font-medium text-slate-900', render: rupiah },
+                { data: 'action', orderable: false, searchable: false, className: 'px-4 py-3' },
+            ],
+            language: {
+                searchPlaceholder: 'Cari tanggal, batch, SKU, atau shift',
+                search: '',
+                lengthMenu: 'Tampilkan _MENU_ data',
+                info: 'Menampilkan _START_–_END_ dari _TOTAL_ data',
+                infoEmpty: 'Tidak ada data',
+                infoFiltered: '(disaring dari _MAX_ total data)',
+                zeroRecords: 'Realisasi tidak ditemukan.',
+                emptyTable: 'Karyawan ini belum memiliki realisasi.',
+                processing: 'Memuat data…',
+                paginate: { next: 'Berikutnya', previous: 'Sebelumnya' },
+            },
+        });
+        dataTable.on('xhr', () => setSummary(dataTable.ajax.json()?.summary));
+        table._dataTable = dataTable;
+    };
 
     document.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-employee-detail]');
@@ -1233,6 +1297,7 @@ const initializeEmployeeDetailModal = () => {
         set('full-name', data.full_name);
         set('email', data.email);
         set('phone', data.phone);
+        set('birth-date', data.birth_date);
         set('join-date', data.join_date);
         set('gender', data.gender);
         set('employee-status', data.employee_status);
@@ -1240,8 +1305,16 @@ const initializeEmployeeDetailModal = () => {
         set('group', data.group_name);
         modal.querySelector('[data-employee-detail-status]').innerHTML = `<span class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold ${data.status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-50 text-slate-600'}">${data.status === 'active' ? 'Aktif' : 'Nonaktif'}</span>`;
 
+        if (avatar && avatarPlaceholder) {
+            avatar.classList.toggle('hidden', !data.avatar_url);
+            avatarPlaceholder.classList.toggle('hidden', Boolean(data.avatar_url));
+            if (data.avatar_url) avatar.src = data.avatar_url;
+            avatarPlaceholder.textContent = initialsOf(data.full_name);
+        }
+
         modal.classList.remove('hidden');
         modal.classList.add('grid');
+        loadRealizations(data.realizations_url);
     });
 };
 

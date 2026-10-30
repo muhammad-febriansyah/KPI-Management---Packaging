@@ -18,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -45,7 +46,7 @@ class EmployeeController extends Controller
                     ->when(in_array($selectedClientId, $availableClientIds, true), fn ($query) => $query->where('employees.client_id', $selectedClientId)),
                 fn ($query) => $query->where('client_id', $client->id()),
             )
-            ->with(['group', 'client'])
+            ->with(['group', 'client', 'user:id,avatar_path'])
             ->orderBy('full_name');
         if ($request->has('draw') || $request->expectsJson()) {
             return DataTables::eloquent($query)->addColumn('client_name', fn (Employee $employee): string => $employee->client?->name ?? '—')->addColumn('group_name', fn (Employee $employee): string => $employee->group?->name ?? '—')->editColumn('status', fn (Employee $employee): string => view('components.badge', [
@@ -54,6 +55,9 @@ class EmployeeController extends Controller
             ])->render())->addColumn('action', function (Employee $employee): string {
                 $employee->setAttribute('group_name', $employee->group?->name);
                 $detail = e(json_encode([
+                    'avatar_url' => $employee->user?->avatar_path ? Storage::disk('public')->url($employee->user->avatar_path) : null,
+                    'realizations_url' => route('employees.realizations', $employee),
+                    'birth_date' => $employee->birth_date ? date('d/m/Y', strtotime((string) $employee->birth_date)) : null,
                     'employee_no' => $employee->employee_no,
                     'sim_id' => $employee->sim_id,
                     'full_name' => $employee->full_name,
@@ -77,7 +81,7 @@ class EmployeeController extends Controller
                 $edit['join_date'] = $employee->join_date ? date('Y-m-d', strtotime((string) $employee->join_date)) : null;
                 $edit['birth_date'] = $employee->birth_date ? date('Y-m-d', strtotime((string) $employee->birth_date)) : null;
 
-                return '<button type="button" data-employee-detail="'.$detail.'" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-employee-edit data-url="'.route('employees.update', $employee).'" data-employee="'.e(json_encode($edit)).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('employees.destroy', $employee).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
+                return '<button type="button" data-employee-detail="'.$detail.'" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#eye"></use></svg>Detail</button> <button type="button" data-employee-edit data-url="'.route('employees.update', $employee).'" data-employee="'.e(json_encode($edit)).'" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#pencil"></use></svg>Edit</button> <form method="POST" action="'.route('employees.destroy', $employee).'" data-ajax-delete class="inline"><button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"><svg class="size-4 fill-none stroke-current"><use href="/images/heroicons.svg#trash"></use></svg>Hapus</button></form>';
             })->rawColumns(['action', 'status'])->toJson();
         }
 
@@ -124,6 +128,75 @@ class EmployeeController extends Controller
         abort_unless($client->availableFor($request->user())->contains('id', $clientId), 403);
 
         return response()->json(['sim_id' => $this->generateSimId($clientId)]);
+    }
+
+    public function realizations(Request $request, Employee $employee, CurrentClientService $client): JsonResponse
+    {
+        abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
+        Gate::authorize('viewAny', Employee::class);
+        abort_unless(
+            $request->user()->is_super_admin
+                ? $client->availableFor($request->user())->contains('id', $employee->client_id)
+                : $employee->client_id === $client->id(),
+            404,
+        );
+
+        $base = fn () => DB::table('realization_employees as assignment')
+            ->join('work_realizations as realization', 'realization.id', '=', 'assignment.work_realization_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'realization.shift_id')
+            ->leftJoin('batches', 'batches.id', '=', 'realization.batch_id')
+            ->where('assignment.employee_id', $employee->getKey())
+            ->when(! $request->user()->is_super_admin, fn ($query) => $query->where('realization.client_id', $client->id()));
+
+        $summary = $base()
+            ->selectRaw('COUNT(*) AS total_realizations, COALESCE(SUM(assignment.allocation_output), 0) AS total_output, COALESCE(SUM(assignment.gross_amount), 0) AS total_gross')
+            ->first();
+
+        $query = $base()->select([
+            'assignment.id',
+            'realization.id as realization_id',
+            'realization.client_id',
+            'realization.work_date',
+            'realization.sku_snapshot',
+            'realization.product_name_snapshot',
+            'realization.unit_name_snapshot',
+            'shifts.name as shift_name',
+            'batches.batch_no',
+            'assignment.allocation_output',
+            'assignment.gross_amount',
+        ]);
+
+        return DataTables::query($query)
+            ->filter(function ($query) use ($request): void {
+                $keyword = trim((string) $request->input('search.value', ''));
+
+                if ($keyword === '') {
+                    return;
+                }
+
+                $query->where(fn ($query) => $query
+                    ->where('realization.sku_snapshot', 'like', "%{$keyword}%")
+                    ->orWhere('realization.product_name_snapshot', 'like', "%{$keyword}%")
+                    ->orWhere('batches.batch_no', 'like', "%{$keyword}%")
+                    ->orWhere('shifts.name', 'like', "%{$keyword}%")
+                    ->orWhereRaw("DATE_FORMAT(realization.work_date, '%d/%m/%Y') like ?", ["%{$keyword}%"]));
+            })
+            ->orderColumn('work_date', 'realization.work_date $1, assignment.id $1')
+            ->orderColumn('batch_no', 'batches.batch_no $1')
+            ->orderColumn('product', 'realization.sku_snapshot $1')
+            ->orderColumn('shift_name', 'shifts.name $1')
+            ->orderColumn('allocation_output', 'assignment.allocation_output $1')
+            ->orderColumn('gross_amount', 'assignment.gross_amount $1')
+            ->editColumn('work_date', fn (object $row): string => date('d/m/Y', strtotime((string) $row->work_date)))
+            ->addColumn('product', fn (object $row): string => trim(($row->sku_snapshot ?? '').' — '.($row->product_name_snapshot ?? ''), ' —'))
+            ->addColumn('action', fn (object $row): string => '<a href="'.route('realizations.show', ['realization' => $row->realization_id, 'client_id' => $row->client_id]).'" class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100">Lihat</a>')
+            ->rawColumns(['action'])
+            ->with('summary', [
+                'total_realizations' => (int) $summary->total_realizations,
+                'total_output' => (float) $summary->total_output,
+                'total_gross' => (int) $summary->total_gross,
+            ])
+            ->toJson();
     }
 
     public function template(Request $request, CurrentClientService $client): BinaryFileResponse

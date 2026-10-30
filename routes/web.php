@@ -82,6 +82,7 @@ Route::middleware('auth')->group(function (): void {
     Route::resource('employees', EmployeeController::class)->except(['show', 'create', 'edit'])->middleware('client');
     Route::get('/employees/group-options', [EmployeeController::class, 'groupOptions'])->name('employees.group-options')->middleware('client');
     Route::get('/employees/next-sim-id', [EmployeeController::class, 'nextSimId'])->name('employees.next-sim-id')->middleware('client');
+    Route::get('/employees/{employee}/realizations', [EmployeeController::class, 'realizations'])->name('employees.realizations')->middleware('client');
     Route::get('/employees/export', [EmployeeController::class, 'export'])->name('employees.export')->middleware('client');
     Route::get('/employees/template', [EmployeeController::class, 'template'])->name('employees.template')->middleware('client');
     Route::post('/employees/import', [EmployeeController::class, 'import'])->name('employees.import')->middleware('client');

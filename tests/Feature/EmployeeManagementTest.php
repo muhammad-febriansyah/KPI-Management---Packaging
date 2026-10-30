@@ -3,9 +3,13 @@
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Group;
+use App\Models\Permission;
 use App\Models\Role;
+use App\Models\Shift;
+use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 uses(RefreshDatabase::class);
@@ -417,5 +421,123 @@ it('refuses a SIM ID preview for a client the user cannot access', function () {
     $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
         ->getJson(route('employees.next-sim-id', ['client_id' => $otherClient->getKey()]))
+        ->assertForbidden();
+});
+
+/**
+ * Records a realization on the client and assigns the employee to it.
+ */
+function assignEmployeeToRealization(Employee $employee, Client $client, User $creator, string $sku, string $workDate, float $output, int $gross, ?string $batchNo = null): int
+{
+    $shift = Shift::factory()->create(['client_id' => $client->getKey(), 'name' => 'Shift '.$sku]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey(), 'name' => 'Box']);
+    $productId = DB::table('products')->insertGetId([
+        'client_id' => $client->getKey(), 'sku' => $sku, 'name' => 'Produk '.$sku, 'unit_id' => $unit->getKey(),
+        'po_price' => 0, 'employee_rate' => 0, 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $batchId = $batchNo === null ? null : DB::table('batches')->insertGetId([
+        'client_id' => $client->getKey(), 'batch_no' => $batchNo, 'product_id' => $productId, 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $realizationId = DB::table('work_realizations')->insertGetId([
+        'client_id' => $client->getKey(), 'work_date' => $workDate, 'shift_id' => $shift->getKey(), 'batch_id' => $batchId, 'product_id' => $productId,
+        'sku_snapshot' => $sku, 'product_name_snapshot' => 'Produk '.$sku, 'unit_name_snapshot' => 'Box', 'total_output' => $output,
+        'start_time' => '08:00', 'end_time' => '16:00', 'created_by' => $creator->getKey(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('realization_employees')->insert([
+        'client_id' => $client->getKey(), 'work_realization_id' => $realizationId, 'employee_id' => $employee->getKey(),
+        'rate_category_snapshot' => 'baru', 'rate_per_unit_snapshot' => 100, 'allocation_output' => $output, 'gross_amount' => $gross, 'created_at' => now(),
+    ]);
+
+    return $realizationId;
+}
+
+it('shows an amber detail button with the avatar and realizations url in the employee row', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $account = User::factory()->create(['avatar_path' => 'avatars/budi.jpg']);
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'user_id' => $account->getKey(), 'full_name' => 'Budi Uji']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'full_name' => 'Tanpa Akun']);
+
+    $rows = collect($this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.index', ['draw' => 1, 'start' => 0, 'length' => 10]))
+        ->json('data'));
+
+    $withAvatar = $rows->firstWhere('full_name', 'Budi Uji')['action'];
+    expect($withAvatar)
+        ->toContain('bg-amber-100')
+        ->not->toContain('bg-slate-100')
+        ->toContain(e(json_encode(route('employees.realizations', $employee))))
+        ->toContain('avatars\/budi.jpg');
+    expect($rows->firstWhere('full_name', 'Tanpa Akun')['action'])->toContain('&quot;avatar_url&quot;:null');
+});
+
+it('lists an employee\'s realizations server side with search, paging, and totals', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+    assignEmployeeToRealization($employee, $client, $admin, 'SKU-AAA', '2026-10-01', 10, 1000, 'B-20261001-0001');
+    assignEmployeeToRealization($employee, $client, $admin, 'SKU-BBB', '2026-10-02', 5.5, 550);
+    assignEmployeeToRealization($employee, $otherClient, $admin, 'SKU-CCC', '2026-10-03', 4, 400);
+    $request = fn (array $query = []) => $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.realizations', $employee).'?'.http_build_query($query + ['draw' => 1, 'start' => 0, 'length' => 10, 'order' => [['column' => 1, 'dir' => 'desc']], 'columns' => collect(['', 'work_date', 'batch_no', 'product', 'shift_name', 'allocation_output', 'gross_amount', 'action'])->map(fn (string $name): array => ['data' => $name, 'searchable' => $name === '' || $name === 'action' ? 'false' : 'true', 'orderable' => $name === '' || $name === 'action' ? 'false' : 'true', 'search' => ['value' => '', 'regex' => 'false']])->all()]));
+
+    $all = $request()->assertOk();
+    expect($all->json('recordsTotal'))->toBe(3)
+        ->and(collect($all->json('data'))->pluck('sku_snapshot')->all())->toBe(['SKU-CCC', 'SKU-BBB', 'SKU-AAA'])
+        ->and($all->json('data.2.work_date'))->toBe('01/10/2026')
+        ->and($all->json('summary.total_realizations'))->toBe(3)
+        ->and($all->json('summary.total_output'))->toBe(19.5)
+        ->and($all->json('summary.total_gross'))->toBe(1950);
+    expect($all->json('data.0.action'))->toContain('client_id='.$otherClient->getKey());
+
+    $request(['search' => ['value' => 'B-20261001']])->assertJsonPath('recordsFiltered', 1)->assertJsonPath('data.0.sku_snapshot', 'SKU-AAA');
+    $request(['search' => ['value' => '02/10/2026']])->assertJsonPath('recordsFiltered', 1)->assertJsonPath('data.0.sku_snapshot', 'SKU-BBB');
+    $request(['search' => ['value' => 'SKU-']])->assertJsonPath('recordsFiltered', 3);
+    $paged = $request(['start' => 2, 'length' => 2]);
+    expect($paged->json('data'))->toHaveCount(1)
+        ->and($paged->json('recordsFiltered'))->toBe(3);
+});
+
+it('limits a client admin to realizations owned by the active client', function () {
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $creator = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+    $otherEmployee = Employee::factory()->create(['client_id' => $otherClient->getKey()]);
+    assignEmployeeToRealization($employee, $client, $creator, 'SKU-OWN', '2026-10-01', 10, 1000);
+    assignEmployeeToRealization($employee, $otherClient, $creator, 'SKU-FOREIGN', '2026-10-02', 4, 400);
+    $admin = User::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+    $role->permissions()->syncWithoutDetaching([Permission::query()->firstOrCreate(['code' => 'menu.employees'], ['name' => 'Menu: Karyawan'])->getKey()]);
+    $admin->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.realizations', $employee).'?draw=1&start=0&length=10')
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('sku_snapshot')->all())->toBe(['SKU-OWN'])
+        ->and($response->json('summary.total_realizations'))->toBe(1)
+        ->and($response->json('summary.total_gross'))->toBe(1000);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.realizations', $otherEmployee))
+        ->assertNotFound();
+});
+
+it('forbids the employee realizations list without the employees menu', function () {
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey()]);
+    $user = User::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'employee'], ['name' => 'Karyawan']);
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.realizations', $employee))
         ->assertForbidden();
 });
