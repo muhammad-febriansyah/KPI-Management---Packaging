@@ -29,7 +29,7 @@ function validEmployeePayload(array $overrides = []): array
     ], $overrides);
 }
 
-it('generates the SIM ID itself and ignores one sent by the form', function () {
+it('generates an employee ID and stores the manually entered SIM ID', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -39,11 +39,11 @@ it('generates the SIM ID itself and ignores one sent by the form', function () {
 
     $response->assertCreated();
     $employee = Employee::query()->where('client_id', $client->getKey())->firstOrFail();
-    expect($employee->employee_no)->toMatch('/^\d{9}$/');
+    expect($employee->employee_no)->toBe('ID'.now()->format('Ym').'001');
     $this->assertDatabaseHas('employees', [
         'client_id' => $client->getKey(),
         'id' => $employee->getKey(),
-        'sim_id' => now()->format('\\I\\DYm').'001',
+        'sim_id' => 'PEG1234',
         'email' => 'ananda@example.com',
         'marital_status' => 'married',
     ]);
@@ -52,7 +52,7 @@ it('generates the SIM ID itself and ignores one sent by the form', function () {
     expect(Hash::check('01011995', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
 });
 
-it('shows email and a read-only SIM ID but no password in the employee master form', function () {
+it('shows a read-only employee ID and an editable SIM ID in the employee master form', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -62,8 +62,9 @@ it('shows email and a read-only SIM ID but no password in the employee master fo
 
     $response->assertOk()
         ->assertSee('name="email"', false)
-        ->assertSee('name="sim_id" readonly', false)
-        ->assertDontSee('name="employee_no"', false)
+        ->assertSee('name="employee_no" readonly', false)
+        ->assertSee('name="sim_id" maxlength="100"', false)
+        ->assertSee('class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Status karyawan', false)
         ->assertDontSee('name="password"', false)
         ->assertSee('Password default: tanggal lahir dengan format ddmmyyyy.', false)
         ->assertSee('name="birth_date"', false)
@@ -205,6 +206,25 @@ it('allows sim id and email to be left blank', function () {
         ->postJson(route('employees.store'), validEmployeePayload(['sim_id' => '', 'email' => '']));
 
     $response->assertCreated();
+    $this->assertDatabaseHas('employees', ['client_id' => $client->getKey(), 'sim_id' => null, 'email' => null]);
+});
+
+it('increments employee IDs across clients while preserving their manual SIM IDs', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $firstClient = Client::factory()->create();
+    $secondClient = Client::factory()->create();
+    $prefix = 'ID'.now()->format('Ym');
+
+    $this->actingAs($admin)->withSession(['current_client_id' => $firstClient->getKey()])
+        ->postJson(route('employees.store'), validEmployeePayload(['sim_id' => 'SIM-A']))
+        ->assertCreated();
+    $this->actingAs($admin)->withSession(['current_client_id' => $firstClient->getKey()])
+        ->postJson(route('employees.store'), validEmployeePayload(['client_id' => $secondClient->getKey(), 'sim_id' => 'SIM-B', 'email' => 'second@example.com']))
+        ->assertCreated();
+
+    $this->assertDatabaseHas('employees', ['client_id' => $firstClient->getKey(), 'employee_no' => $prefix.'001', 'sim_id' => 'SIM-A']);
+    $this->assertDatabaseHas('employees', ['client_id' => $secondClient->getKey(), 'employee_no' => $prefix.'002', 'sim_id' => 'SIM-B']);
+    $this->assertDatabaseHas('users', ['username' => $prefix.'002']);
 });
 
 it('updates an employee with sim id, email, and marital status', function () {
@@ -392,7 +412,7 @@ it('includes humanized labels in the detail payload for the datatable', function
         ->toContain('&quot;group_name&quot;:&quot;Group A&quot;');
 });
 
-it('previews the next SIM ID for the chosen client', function () {
+it('previews the next globally unique employee ID', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
     $otherClient = Client::factory()->create();
@@ -400,18 +420,18 @@ it('previews the next SIM ID for the chosen client', function () {
 
     $preview = fn (Client $target) => $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->getJson(route('employees.next-sim-id', ['client_id' => $target->getKey()]));
+        ->getJson(route('employees.next-employee-number', ['client_id' => $target->getKey()]));
 
-    $preview($client)->assertOk()->assertJsonPath('sim_id', $prefix.'001');
+    $preview($client)->assertOk()->assertJsonPath('employee_no', $prefix.'001');
 
-    Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => $prefix.'007']);
-    Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => 'LAMA-001']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => $prefix.'007']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => $prefix.'099']);
 
-    $preview($client)->assertOk()->assertJsonPath('sim_id', $prefix.'008');
-    $preview($otherClient)->assertOk()->assertJsonPath('sim_id', $prefix.'001');
+    $preview($client)->assertOk()->assertJsonPath('employee_no', $prefix.'008');
+    $preview($otherClient)->assertOk()->assertJsonPath('employee_no', $prefix.'008');
 });
 
-it('refuses a SIM ID preview for a client the user cannot access', function () {
+it('refuses an employee ID preview for a client the user cannot access', function () {
     $client = Client::factory()->create();
     $otherClient = Client::factory()->create();
     $user = User::factory()->create();
@@ -420,7 +440,7 @@ it('refuses a SIM ID preview for a client the user cannot access', function () {
 
     $this->actingAs($user)
         ->withSession(['current_client_id' => $client->getKey()])
-        ->getJson(route('employees.next-sim-id', ['client_id' => $otherClient->getKey()]))
+        ->getJson(route('employees.next-employee-number', ['client_id' => $otherClient->getKey()]))
         ->assertForbidden();
 });
 

@@ -118,6 +118,7 @@ it('imports groups and employees by client and group codes', function () {
 
     $employee = Employee::query()->withoutGlobalScopes()->where('client_id', $targetClient->getKey())->where('sim_id', 'SIM-001')->firstOrFail();
     expect($employee->group_id)->toBe($group->getKey());
+    expect($employee->employee_no)->toBe('ID'.now()->format('Ym').'001');
     $this->assertDatabaseHas('users', ['id' => $employee->user_id, 'username' => $employee->employee_no, 'email' => 'karyawan.satu@example.com']);
     $this->assertDatabaseHas('client_user', ['client_id' => $targetClient->getKey(), 'user_id' => $employee->user_id, 'status' => 'active']);
 });

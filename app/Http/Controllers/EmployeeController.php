@@ -8,12 +8,12 @@ use App\Http\Controllers\Concerns\DeletesRestrictedRecords;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Imports\EmployeeImport;
-use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Group;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\CurrentClientService;
+use App\Services\EmployeeNumberGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -121,13 +121,13 @@ class EmployeeController extends Controller
         return response()->json(['results' => $groups->map(fn (Group $group): array => ['id' => $group->id, 'text' => $group->name])]);
     }
 
-    public function nextSimId(Request $request, CurrentClientService $client): JsonResponse
+    public function nextEmployeeNumber(Request $request, CurrentClientService $client, EmployeeNumberGenerator $numbers): JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         $clientId = $request->integer('client_id');
         abort_unless($client->availableFor($request->user())->contains('id', $clientId), 403);
 
-        return response()->json(['sim_id' => $this->generateSimId($clientId)]);
+        return response()->json(['employee_no' => $numbers->next()]);
     }
 
     public function realizations(Request $request, Employee $employee, CurrentClientService $client): JsonResponse
@@ -247,7 +247,7 @@ class EmployeeController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreEmployeeRequest $request, CurrentClientService $client): JsonResponse
+    public function store(StoreEmployeeRequest $request, CurrentClientService $client, EmployeeNumberGenerator $numbers): JsonResponse
     {
         abort_unless($request->user()->canAccessMenu('employees', $client->get()), 403);
         $data = $request->validated();
@@ -257,13 +257,11 @@ class EmployeeController extends Controller
         unset($data['client_id']);
         $password = $data['password'] ?? null;
         unset($data['password']);
-        $employee = $client->runAs($targetClient, fn (): Employee => DB::transaction(function () use ($data, $password, $targetClientId): Employee {
-            $employeeNumber = $this->generateEmployeeNumber($targetClientId);
-            $simId = $this->generateSimId($targetClientId);
+        $employee = $client->runAs($targetClient, fn (): Employee => DB::transaction(function () use ($data, $password, $targetClientId, $numbers): Employee {
+            $employeeNumber = $numbers->next();
             $employee = Employee::query()->create($data + [
                 'client_id' => $targetClientId,
                 'employee_no' => $employeeNumber,
-                'sim_id' => $simId,
                 'rate_category' => 'baru',
                 'status' => 'active',
             ]);
@@ -342,37 +340,6 @@ class EmployeeController extends Controller
         });
 
         return response()->json(['message' => 'Karyawan berhasil dihapus.']);
-    }
-
-    private function generateEmployeeNumber(int $clientId): string
-    {
-        do {
-            $employeeNumber = (string) random_int(100000000, 999999999);
-        } while (Employee::query()->where('client_id', $clientId)->where('employee_no', $employeeNumber)->exists() || User::query()->where('username', $employeeNumber)->exists());
-
-        return $employeeNumber;
-    }
-
-    private function generateSimId(int $clientId): string
-    {
-        Client::query()->whereKey($clientId)->lockForUpdate()->firstOrFail();
-
-        $prefix = 'ID'.now()->format('Ym');
-        $lastSequence = Employee::query()
-            ->where('client_id', $clientId)
-            ->where('sim_id', 'like', $prefix.'%')
-            ->lockForUpdate()
-            ->pluck('sim_id')
-            ->map(function (?string $simId) use ($prefix): int {
-                if (preg_match('/^'.preg_quote($prefix, '/').'([0-9]{3,})$/', (string) $simId, $matches) !== 1) {
-                    return 0;
-                }
-
-                return (int) $matches[1];
-            })
-            ->max() ?? 0;
-
-        return $prefix.str_pad((string) ($lastSequence + 1), 3, '0', STR_PAD_LEFT);
     }
 
     private function syncEmployeeUser(Employee $employee, int $clientId, ?string $password = null): User

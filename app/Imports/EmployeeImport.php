@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Scopes\ClientScope;
 use App\Models\User;
 use App\Services\CurrentClientService;
+use App\Services\EmployeeNumberGenerator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -119,7 +120,7 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 ];
 
                 app(CurrentClientService::class)->runAs($client, function () use ($payload, $client): void {
-                    $employee = Employee::query()->create($payload + ['employee_no' => $this->generateEmployeeNumber($client->id), 'rate_category' => 'baru']);
+                    $employee = Employee::query()->create($payload + ['employee_no' => app(EmployeeNumberGenerator::class)->next(), 'rate_category' => 'baru']);
 
                     $this->syncEmployeeUser($employee, $client->id);
                 });
@@ -165,15 +166,6 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
         }
 
         return $this->normalizeCode($value);
-    }
-
-    private function generateEmployeeNumber(int $clientId): string
-    {
-        do {
-            $employeeNumber = (string) random_int(100000000, 999999999);
-        } while (Employee::query()->where('client_id', $clientId)->where('employee_no', $employeeNumber)->exists() || User::query()->where('username', $employeeNumber)->exists());
-
-        return $employeeNumber;
     }
 
     private function syncEmployeeUser(Employee $employee, int $clientId): void
