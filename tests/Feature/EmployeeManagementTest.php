@@ -63,7 +63,8 @@ it('shows a read-only employee ID and an editable SIM ID in the employee master 
     $response->assertOk()
         ->assertSee('name="email"', false)
         ->assertSee('name="employee_no" readonly', false)
-        ->assertSee('name="sim_id" maxlength="100"', false)
+        ->assertSee('name="sim_id" maxlength="100" required', false)
+        ->assertSee('name="email" autocomplete="email" required', false)
         ->assertSee('class="grid gap-2 text-sm font-semibold sm:col-span-2"><span>Status karyawan', false)
         ->assertDontSee('name="password"', false)
         ->assertSee('Password default: tanggal lahir dengan format ddmmyyyy.', false)
@@ -197,7 +198,7 @@ it('creates an employee account that can log in with the generated id', function
     $this->assertAuthenticatedAs(User::query()->findOrFail($employee->user_id));
 });
 
-it('allows sim id and email to be left blank', function () {
+it('requires SIM ID and email when storing an employee', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -205,8 +206,21 @@ it('allows sim id and email to be left blank', function () {
         ->withSession(['current_client_id' => $client->getKey()])
         ->postJson(route('employees.store'), validEmployeePayload(['sim_id' => '', 'email' => '']));
 
-    $response->assertCreated();
-    $this->assertDatabaseHas('employees', ['client_id' => $client->getKey(), 'sim_id' => null, 'email' => null]);
+    $response->assertInvalid(['sim_id', 'email']);
+    $this->assertDatabaseCount('employees', 0);
+});
+
+it('requires SIM ID and email when updating an employee', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => 'SIM-LAMA', 'email' => 'lama@example.com']);
+
+    $response = $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->putJson(route('employees.update', $employee), validEmployeePayload(['sim_id' => '', 'email' => '']));
+
+    $response->assertInvalid(['sim_id', 'email']);
+    $this->assertDatabaseHas('employees', ['id' => $employee->getKey(), 'sim_id' => 'SIM-LAMA', 'email' => 'lama@example.com']);
 });
 
 it('increments employee IDs across clients while preserving their manual SIM IDs', function () {

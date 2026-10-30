@@ -47,7 +47,7 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 $data = $this->normalizeRow($row->toArray());
                 $validator = Validator::make($data, [
                     'client_code' => ['nullable', 'string', 'max:50'], 'sim_id' => ['required', 'string', 'max:100'],
-                    'full_name' => ['required', 'string', 'max:150'], 'email' => ['nullable', 'email', 'max:150'],
+                    'full_name' => ['required', 'string', 'max:150'], 'email' => ['required', 'email', 'max:150'],
                     'phone' => ['required', 'string', 'max:30'], 'join_date' => ['required', 'date'], 'birth_date' => ['required', 'date', 'before:today'],
                     'gender' => ['required', Rule::in(['male', 'female'])], 'employee_status' => ['required', Rule::in(['permanent', 'contract', 'daily'])],
                     'marital_status' => ['required', Rule::in(['single', 'married', 'divorced', 'widowed'])],
@@ -95,7 +95,7 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                     $seenEmails[$emailKey] = $rowNumber;
                 }
 
-                $emailValidator = Validator::make(['email' => $data['email']], ['email' => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')]], [], ['email' => 'Email']);
+                $emailValidator = Validator::make(['email' => $data['email']], ['email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')]], [], ['email' => 'Email']);
                 if ($emailValidator->fails()) {
                     $this->addFailure($rowNumber, $emailValidator->errors()->all());
 

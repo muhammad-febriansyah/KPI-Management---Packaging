@@ -40,9 +40,9 @@ class UpdateEmployeeRequest extends FormRequest
             'client_id' => $this->user()?->is_super_admin
                 ? ['sometimes', 'nullable', 'integer', Rule::in($allowedClientIds)]
                 : ['nullable', 'integer', Rule::in([$currentClientId])],
-            'sim_id' => ['nullable', 'string', 'max:100'],
+            'sim_id' => ['required', 'string', 'max:100'],
             'full_name' => ['required', 'string', 'max:150'],
-            'email' => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId)],
+            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($userId)],
             'phone' => ['required', 'string', 'max:30'],
             'join_date' => ['required', 'date'],
             'birth_date' => ['nullable', 'date', 'before:today'],

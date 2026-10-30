@@ -22,7 +22,7 @@ class EmployeeTemplateExport implements FromArray, ShouldAutoSize, WithColumnFor
     /** @return array<int, array<int, mixed>> */
     public function array(): array
     {
-        return [[$this->client->code, 'SIM-CONTOH-001', 'Nama Karyawan Contoh', '', '081234567890', now()->format('Y-m-d'), '1995-01-01', 'male', 'permanent', 'single', $this->group?->code ?? '', 'active']];
+        return [[$this->client->code, 'SIM-CONTOH-001', 'Nama Karyawan Contoh', 'karyawan.contoh@example.com', '081234567890', now()->format('Y-m-d'), '1995-01-01', 'male', 'permanent', 'single', $this->group?->code ?? '', 'active']];
     }
 
     /** @return array<int, string> */
@@ -46,7 +46,7 @@ class EmployeeTemplateExport implements FromArray, ShouldAutoSize, WithColumnFor
     /** @return array<class-string, callable> */
     public function registerEvents(): array
     {
-        $notes = ['A1' => 'Isi dengan Client Code dari menu Master Data > Client.', 'B1' => 'Wajib. Harus unik: tidak boleh sama dengan SIM ID lain pada client yang sama, baik di file ini maupun yang sudah terdaftar.', 'C1' => 'Wajib.', 'D1' => 'Opsional, harus unik jika diisi.', 'E1' => 'Wajib.', 'F1' => 'Format YYYY-MM-DD.', 'G1' => 'Wajib. Password awal akun dibuat dari tanggal ini dengan format ddmmyyyy.', 'H1' => 'male atau female.', 'I1' => 'permanent, contract, atau daily.', 'J1' => 'single, married, divorced, atau widowed.', 'K1' => 'Opsional, gunakan Group Code.', 'L1' => 'active atau inactive.'];
+        $notes = ['A1' => 'Isi dengan Client Code dari menu Master Data > Client.', 'B1' => 'Wajib. Harus unik: tidak boleh sama dengan SIM ID lain pada client yang sama, baik di file ini maupun yang sudah terdaftar.', 'C1' => 'Wajib.', 'D1' => 'Wajib dan harus unik.', 'E1' => 'Wajib.', 'F1' => 'Format YYYY-MM-DD.', 'G1' => 'Wajib. Password awal akun dibuat dari tanggal ini dengan format ddmmyyyy.', 'H1' => 'male atau female.', 'I1' => 'permanent, contract, atau daily.', 'J1' => 'single, married, divorced, atau widowed.', 'K1' => 'Opsional, gunakan Group Code.', 'L1' => 'active atau inactive.'];
 
         return [AfterSheet::class => function (AfterSheet $event) use ($notes): void {
             $event->sheet->getDelegate()->freezePane('A2');
