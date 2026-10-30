@@ -45,7 +45,7 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                 $rowNumber = $index + 2;
                 $data = $this->normalizeRow($row->toArray());
                 $validator = Validator::make($data, [
-                    'client_code' => ['nullable', 'string', 'max:50'], 'sim_id' => ['nullable', 'string', 'max:100'],
+                    'client_code' => ['nullable', 'string', 'max:50'], 'sim_id' => ['required', 'string', 'max:100'],
                     'full_name' => ['required', 'string', 'max:150'], 'email' => ['nullable', 'email', 'max:150'],
                     'phone' => ['required', 'string', 'max:30'], 'join_date' => ['required', 'date'], 'birth_date' => ['required', 'date', 'before:today'],
                     'gender' => ['required', Rule::in(['male', 'female'])], 'employee_status' => ['required', Rule::in(['permanent', 'contract', 'daily'])],
@@ -70,17 +70,20 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                     continue;
                 }
 
-                $simKey = filled($data['sim_id']) ? $client->id.'|'.mb_strtolower($data['sim_id']) : null;
-                if ($simKey && isset($seenSimIds[$simKey])) {
+                $simKey = $client->id.'|'.mb_strtolower($data['sim_id']);
+                if (isset($seenSimIds[$simKey])) {
                     $this->addFailure($rowNumber, [sprintf('SIM ID "%s" duplikat pada file import (baris %d).', $data['sim_id'], $seenSimIds[$simKey])]);
 
                     continue;
                 }
-                if ($simKey) {
-                    $seenSimIds[$simKey] = $rowNumber;
+                $seenSimIds[$simKey] = $rowNumber;
+
+                if (isset($employees[$simKey])) {
+                    $this->addFailure($rowNumber, [sprintf('SIM ID "%s" sudah terdaftar pada client %s.', $data['sim_id'], $client->code)]);
+
+                    continue;
                 }
 
-                $employee = $simKey ? ($employees[$simKey] ?? null) : null;
                 $emailKey = filled($data['email']) ? mb_strtolower($data['email']) : null;
                 if ($emailKey && isset($seenEmails[$emailKey])) {
                     $this->addFailure($rowNumber, [sprintf('Email "%s" duplikat pada file import (baris %d).', $data['email'], $seenEmails[$emailKey])]);
@@ -91,7 +94,7 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                     $seenEmails[$emailKey] = $rowNumber;
                 }
 
-                $emailValidator = Validator::make(['email' => $data['email']], ['email' => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')->ignore($employee?->user_id)]], [], ['email' => 'Email']);
+                $emailValidator = Validator::make(['email' => $data['email']], ['email' => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')]], [], ['email' => 'Email']);
                 if ($emailValidator->fails()) {
                     $this->addFailure($rowNumber, $emailValidator->errors()->all());
 
@@ -115,12 +118,8 @@ class EmployeeImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
                     'group_id' => $group?->id, 'status' => $data['status'] ?: 'active',
                 ];
 
-                app(CurrentClientService::class)->runAs($client, function () use ($employee, $payload, $client): void {
-                    if (! $employee) {
-                        $employee = Employee::query()->create($payload + ['employee_no' => $this->generateEmployeeNumber($client->id), 'rate_category' => 'baru']);
-                    } else {
-                        $employee->update($payload);
-                    }
+                app(CurrentClientService::class)->runAs($client, function () use ($payload, $client): void {
+                    $employee = Employee::query()->create($payload + ['employee_no' => $this->generateEmployeeNumber($client->id), 'rate_category' => 'baru']);
 
                     $this->syncEmployeeUser($employee, $client->id);
                 });

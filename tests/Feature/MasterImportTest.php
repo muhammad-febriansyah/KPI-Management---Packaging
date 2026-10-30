@@ -137,3 +137,30 @@ it('reports invalid group codes without discarding valid employee rows', functio
     $this->assertDatabaseHas('employees', ['client_id' => $client->getKey(), 'sim_id' => 'SIM-VALID']);
     $this->assertDatabaseMissing('employees', ['client_id' => $client->getKey(), 'sim_id' => 'SIM-INVALID']);
 });
+
+it('rejects employee import rows with a missing, repeated, or already registered SIM ID', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create(['code' => 'CL-SIM']);
+    $otherClient = Client::factory()->create(['code' => 'CL-OTHER']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => 'SIM-TAKEN']);
+    $headings = ['Client Code', 'SIM ID', 'Nama Lengkap', 'Email', 'Nomor Telepon', 'Tanggal Masuk', 'Tanggal Lahir', 'Jenis Kelamin', 'Status Karyawan', 'Status Perkawinan', 'Group Code', 'Status'];
+    $row = fn (string $clientCode, string $simId, string $name): array => [$clientCode, $simId, $name, '', '081234567890', '2026-09-01', '1995-01-01', 'male', 'permanent', 'single', '', 'active'];
+    $file = buildMasterImportFile($headings, [
+        $row($client->code, '', 'Tanpa SIM'),
+        $row($client->code, 'SIM-TAKEN', 'Sudah Terdaftar'),
+        $row($client->code, 'SIM-NEW', 'Baru Satu'),
+        $row($client->code, 'sim-new', 'Baru Dua'),
+        $row($otherClient->code, 'SIM-TAKEN', 'Client Lain'),
+    ], 'employee-sim-import');
+
+    $response = $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->post(route('employees.import'), ['file' => $file]);
+
+    $response->assertStatus(207);
+    expect(collect($response->json('failures'))->pluck('row')->all())->toBe([2, 3, 5]);
+    expect($response->json('failures.0.errors.0'))->toContain('SIM ID');
+    expect($response->json('failures.1.errors.0'))->toContain('sudah terdaftar');
+    expect($response->json('failures.2.errors.0'))->toContain('duplikat');
+    expect(Employee::query()->withoutGlobalScopes()->where('client_id', $client->getKey())->where('sim_id', 'SIM-TAKEN')->count())->toBe(1);
+    $this->assertDatabaseHas('employees', ['client_id' => $client->getKey(), 'sim_id' => 'SIM-NEW']);
+    $this->assertDatabaseHas('employees', ['client_id' => $otherClient->getKey(), 'sim_id' => 'SIM-TAKEN']);
+});
