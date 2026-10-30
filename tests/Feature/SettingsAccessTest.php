@@ -739,3 +739,39 @@ it('rejects a non super admin from promoting a user to leader', function () {
         ->putJson(route('settings.access.users.promote-leader', $employeeUser))
         ->assertForbidden();
 });
+
+it('shows read-only username and SIM ID fields in the employee user form', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('settings.access'))
+        ->assertOk()
+        ->assertSee('data-user-employee-username readonly', false)
+        ->assertSee('data-user-employee-sim-id readonly', false);
+});
+
+it('returns the SIM ID in the employee options and edit payload', function () {
+    $client = Client::factory()->create();
+    $admin = User::factory()->superAdmin()->create();
+    $employee = Employee::factory()->create(['client_id' => $client->getKey(), 'employee_no' => 'EMP777', 'sim_id' => 'ID202610001', 'full_name' => 'Budi Uji']);
+
+    $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access.employee-options', ['q' => 'Budi']))
+        ->assertOk()
+        ->assertJsonPath('results.0.employee_no', 'EMP777')
+        ->assertJsonPath('results.0.sim_id', 'ID202610001');
+
+    $user = User::factory()->create(['name' => 'Budi Uji', 'username' => 'EMP777']);
+    attachRole($user, $client, 'employee');
+    $employee->update(['user_id' => $user->getKey()]);
+
+    $action = collect($this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('settings.access', ['draw' => 1, 'start' => 0, 'length' => 10]))
+        ->json('data'))->firstWhere('name', 'Budi Uji')['action'];
+
+    expect($action)->toContain('ID202610001');
+});

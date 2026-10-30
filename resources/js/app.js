@@ -841,6 +841,12 @@ const initializeUserCreateModal = () => {
     const manualPasswordFields = employeeSection?.querySelector('[data-user-manual-password-fields]');
     const manualPasswordInputs = manualPasswordFields?.querySelectorAll('input[name="password"], input[name="password_confirmation"]') ?? [];
     const selectedEmployee = () => employeeSelect?.tomselect?.options?.[employeeSelect.value] ?? null;
+    const usernameDisplay = employeeSection?.querySelector('[data-user-employee-username]');
+    const simIdDisplay = employeeSection?.querySelector('[data-user-employee-sim-id]');
+    const showEmployeeIdentity = (username, simId) => {
+        if (usernameDisplay) usernameDisplay.value = username ?? '';
+        if (simIdDisplay) simIdDisplay.value = simId ?? '';
+    };
     let manualPasswordSelected = false;
     const setPasswordMode = (useDefault) => {
         if (!defaultPasswordValue || !manualPasswordFields || !defaultPasswordStatus || !defaultPasswordToggle) return;
@@ -891,6 +897,7 @@ const initializeUserCreateModal = () => {
         form.action = '';
         form.elements._method.value = 'POST';
         form.querySelectorAll('[data-tom-select]').forEach((select) => select.tomselect?.clear(true));
+        showEmployeeIdentity('', '');
         form.querySelectorAll('input[name="create_role"]').forEach((input) => { input.disabled = false; });
         form.querySelectorAll('input[name="password"], input[name="password_confirmation"]').forEach((input) => {
             input.disabled = false;
@@ -949,6 +956,7 @@ const initializeUserCreateModal = () => {
             employeeSelect.tomselect.addOption({ value: String(item.employee_id), text: item.employee_text ?? String(item.employee_id) });
             employeeSelect.tomselect.setValue(String(item.employee_id), true);
             employeeSelect.tomselect.disable();
+            showEmployeeIdentity(item.username, item.sim_id);
         }
 
         activeSection?.querySelectorAll('input[name="password"], input[name="password_confirmation"]').forEach((input) => {
@@ -973,6 +981,7 @@ const initializeUserCreateModal = () => {
     form.querySelectorAll('input[name="create_role"]').forEach((input) => input.addEventListener('change', () => setRole(input.value)));
     employeeSelect?.addEventListener('change', () => {
         manualPasswordSelected = false;
+        showEmployeeIdentity(selectedEmployee()?.employee_no, selectedEmployee()?.sim_id);
         syncDefaultPasswordToggle();
     });
     defaultPasswordToggle?.addEventListener('click', () => {

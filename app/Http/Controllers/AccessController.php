@@ -546,6 +546,7 @@ class AccessController extends Controller
             'client_text' => $user->access_client_code.' — '.$user->access_client_name,
             'employee_id' => $user->employee?->getKey(),
             'employee_text' => $user->employee ? $user->employee->full_name.' — '.$user->employee->employee_no : null,
+            'sim_id' => $user->employee?->sim_id,
         ];
     }
 
