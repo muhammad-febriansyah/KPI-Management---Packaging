@@ -120,6 +120,8 @@ it('blocks direct mutation endpoints when the matching menu is not granted', fun
     ])->assertForbidden();
 
     $this->actingAs($user)->withSession(['current_client_id' => $client->getKey()])->postJson(route('employees.store'), [
+        'client_id' => $client->getKey(),
+        'sim_id' => 'NO-MENU-001',
         'full_name' => 'Tidak boleh',
         'email' => 'blocked@example.com',
         'phone' => '081234567890',
