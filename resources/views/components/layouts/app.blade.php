@@ -48,6 +48,7 @@
         ]],
         ['key' => 'reports-group', 'label' => 'Laporan', 'icon' => 'document-chart-bar', 'children' => [
             ['key' => 'work-reports', 'label' => 'Hasil Pekerjaan', 'route' => 'reports.work'],
+            ['key' => 'invoice-report', 'label' => 'Report Invoice', 'route' => 'reports.invoice'],
             ['key' => 'reports', 'label' => 'Gaji', 'route' => 'reports.payroll'],
         ]],
         ['key' => 'settings-group', 'label' => 'Setting', 'icon' => 'shield-check', 'children' => [

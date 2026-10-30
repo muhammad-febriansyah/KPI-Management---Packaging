@@ -19,6 +19,7 @@ return [
     'my-payroll' => 'Gaji Saya',
     'deductions' => 'Potongan Gaji',
     'work-reports' => 'Hasil Pekerjaan',
+    'invoice-report' => 'Report Invoice',
     'reports' => 'Laporan Gaji',
     'settings' => 'User & Hak Akses',
 ];

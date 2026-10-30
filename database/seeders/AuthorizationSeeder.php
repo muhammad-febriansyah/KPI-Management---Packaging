@@ -62,13 +62,13 @@ class AuthorizationSeeder extends Seeder
         }
 
         $defaultRoleMenus = [
-            'admin' => ['dashboard', 'units', 'groups', 'cost-centers', 'products', 'employees', 'shifts', 'realizations', 'invoices', 'deductions', 'work-reports', 'reports', 'settings'],
+            'admin' => ['dashboard', 'units', 'groups', 'cost-centers', 'products', 'employees', 'shifts', 'realizations', 'invoices', 'deductions', 'work-reports', 'invoice-report', 'reports', 'settings'],
             'leader' => ['realizations', 'invoices', 'my-payroll'],
             'employee' => ['my-payroll'],
             // A client inputs its own products and product masters, and follows the work
-            // through Hasil Pekerjaan. Assigning employees, potongan gaji and laporan gaji
+            // through Hasil Pekerjaan and Report Invoice. Assigning employees, potongan gaji and laporan gaji
             // stay with PT SIM, so the client role is not granted those menus.
-            'client' => ['dashboard', 'products', 'work-reports'],
+            'client' => ['dashboard', 'products', 'work-reports', 'invoice-report'],
         ];
 
         foreach ($defaultRoleMenus as $code => $menuKeys) {

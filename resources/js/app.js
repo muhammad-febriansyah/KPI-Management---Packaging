@@ -1212,6 +1212,63 @@ const initializeEmployeeNumberPreview = () => {
     document.querySelector('[data-employee-create]')?.addEventListener('click', () => setTimeout(refresh, 0));
 };
 
+const initializeInvoiceReport = () => {
+    const table = document.querySelector('[data-invoice-report-table]');
+    if (!table) return;
+
+    const filters = document.querySelector('[data-invoice-report-filters]');
+    const fromInput = filters?.querySelector('[data-invoice-report-from]');
+    const toInput = filters?.querySelector('[data-invoice-report-to]');
+    const exportLink = filters?.querySelector('[data-invoice-report-export]');
+    const total = document.querySelector('[data-invoice-report-total]');
+    const exportUrl = exportLink?.getAttribute('href') ?? '';
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const text = (value) => escapeHtml(value || '—');
+    const currentFilters = () => ({ period_from: fromInput?.value ?? '', period_to: toInput?.value ?? '' });
+    const syncExportLink = () => {
+        if (!exportLink) return;
+        const params = new URLSearchParams(Object.entries(currentFilters()).filter(([, value]) => value));
+        exportLink.href = params.toString() ? `${exportUrl}?${params}` : exportUrl;
+    };
+
+    const dataTable = new DataTable(table, {
+        processing: true,
+        serverSide: true,
+        ajax: { url: table.dataset.url, dataSrc: 'data', data: (params) => Object.assign(params, currentFilters()) },
+        pageLength: 10,
+        pagingType: 'simple_numbers',
+        order: [[1, 'desc']],
+        columns: [
+            { data: null, orderable: false, searchable: false, className: 'px-4 py-3 text-slate-500', render: (_data, _type, _row, meta) => Number(meta?.row ?? 0) + Number(meta?.settings?._iDisplayStart ?? 0) + 1 },
+            { data: 'period', className: 'px-4 py-3 whitespace-nowrap', render: text },
+            { data: 'sku', className: 'px-4 py-3', render: text },
+            { data: 'cost_center', className: 'px-4 py-3', render: text },
+            { data: 'qty', searchable: false, className: 'px-4 py-3 text-right whitespace-nowrap', render: text },
+            { data: 'unit', className: 'px-4 py-3', render: text },
+            { data: 'po_price', searchable: false, className: 'px-4 py-3 text-right whitespace-nowrap', render: text },
+            { data: 'total_po', searchable: false, className: 'px-4 py-3 text-right whitespace-nowrap font-medium text-slate-900', render: text },
+        ],
+        language: {
+            searchPlaceholder: 'Cari periode, SKU, atau cost center',
+            search: '',
+            lengthMenu: 'Tampilkan _MENU_ data',
+            info: 'Menampilkan _START_–_END_ dari _TOTAL_ data',
+            infoEmpty: 'Tidak ada data',
+            infoFiltered: '(disaring dari _MAX_ total data)',
+            zeroRecords: 'Data tidak ditemukan.',
+            emptyTable: 'Belum ada data realisasi.',
+            processing: 'Memuat data…',
+            paginate: { next: 'Berikutnya', previous: 'Sebelumnya' },
+        },
+    });
+    dataTable.on('xhr', () => { if (total) total.textContent = dataTable.ajax.json()?.summary?.total_po ?? 'Rp 0'; });
+    filters?.querySelector('[data-invoice-report-submit]')?.addEventListener('click', () => {
+        syncExportLink();
+        dataTable.ajax.reload();
+    });
+    syncExportLink();
+};
+
 const initializeEmployeeDetailModal = () => {
     const modal = document.querySelector('[data-employee-detail-modal]');
     if (!modal) return;
@@ -3026,6 +3083,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeManageModals();
     initializeProductDetailModal();
     initializeEmployeeDetailModal();
+    initializeInvoiceReport();
     initializeEmployeeNumberPreview();
     initializeClientDetailModal();
     initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['client_id', 'code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });

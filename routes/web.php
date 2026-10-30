@@ -11,6 +11,7 @@ use App\Http\Controllers\DeductionController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InvoiceReportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PayrollReportController;
 use App\Http\Controllers\PayslipController;
@@ -121,6 +122,8 @@ Route::middleware(['auth', 'audit'])->group(function (): void {
     Route::get('/reports/payroll/export/pdf', [PayrollReportController::class, 'exportPdf'])->name('reports.payroll.export.pdf')->middleware('client');
     Route::get('/reports/payroll/payslip', [PayslipController::class, 'bulk'])->name('reports.payroll.payslip.bulk')->middleware('client');
     Route::get('/reports/payroll/payslip/{employee}', [PayslipController::class, 'show'])->name('reports.payroll.payslip')->middleware('client');
+    Route::get('/reports/invoice', [InvoiceReportController::class, 'index'])->name('reports.invoice')->middleware('client');
+    Route::get('/reports/invoice/export/excel', [InvoiceReportController::class, 'exportExcel'])->name('reports.invoice.export.excel')->middleware('client');
     Route::get('/reports/work', WorkReportController::class)->name('reports.work')->middleware('client');
     Route::get('/reports/work/export/excel', [WorkReportController::class, 'exportExcel'])->name('reports.work.export.excel')->middleware('client');
     Route::get('/settings/access', [AccessController::class, 'index'])->name('settings.access')->middleware('client');
