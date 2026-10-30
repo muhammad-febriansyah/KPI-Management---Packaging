@@ -161,7 +161,7 @@ class AccessController extends Controller
                     ->orWhere('sim_id', 'like', "%{$search}%");
             }))
             ->orderBy('full_name')
-            ->paginate(20, ['id', 'employee_no', 'sim_id', 'full_name', 'birth_date', 'user_id'], 'page', $page);
+            ->paginate(20, ['id', 'employee_no', 'sim_id', 'full_name', 'email', 'birth_date', 'user_id'], 'page', $page);
 
         return response()->json([
             'results' => $paginator->getCollection()->map(fn (Employee $employee): array => [
@@ -170,6 +170,7 @@ class AccessController extends Controller
                 'name' => $employee->full_name,
                 'employee_no' => $employee->employee_no,
                 'sim_id' => $employee->sim_id,
+                'email' => $employee->email,
                 'birth_date' => $employee->birth_date ? date('Y-m-d', strtotime((string) $employee->birth_date)) : null,
                 'has_account' => $employee->user_id !== null,
             ]),

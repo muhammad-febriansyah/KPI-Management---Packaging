@@ -762,7 +762,8 @@ it('returns the SIM ID in the employee options and edit payload', function () {
         ->getJson(route('settings.access.employee-options', ['q' => 'Budi']))
         ->assertOk()
         ->assertJsonPath('results.0.employee_no', 'EMP777')
-        ->assertJsonPath('results.0.sim_id', 'ID202610001');
+        ->assertJsonPath('results.0.sim_id', 'ID202610001')
+        ->assertJsonPath('results.0.email', $employee->email);
 
     $user = User::factory()->create(['name' => 'Budi Uji', 'username' => 'EMP777']);
     attachRole($user, $client, 'employee');

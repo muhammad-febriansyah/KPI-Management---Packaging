@@ -982,6 +982,8 @@ const initializeUserCreateModal = () => {
     employeeSelect?.addEventListener('change', () => {
         manualPasswordSelected = false;
         showEmployeeIdentity(selectedEmployee()?.employee_no, selectedEmployee()?.sim_id);
+        const loginEmail = employeeSection?.querySelector('input[name="email"]');
+        if (loginEmail) loginEmail.value = selectedEmployee()?.email ?? '';
         syncDefaultPasswordToggle();
     });
     defaultPasswordToggle?.addEventListener('click', () => {
