@@ -567,7 +567,7 @@ const initializeServerTables = () => {
             ] : resource === 'cost-centers' ? [
                 { data: 'code' }, { data: 'name' }, { data: 'client_name', orderable: false, searchable: false }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'shifts' ? [
-                { data: 'code' }, { data: 'name' }, { data: 'start_time' }, { data: 'end_time' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
+                { data: 'code' }, { data: 'name' }, { data: 'client_name' }, { data: 'start_time' }, { data: 'end_time' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'employees' ? [
                 { data: 'employee_no' }, { data: 'full_name' }, { data: 'client_name' }, { data: 'group_name' }, { data: 'status' }, { data: 'action', orderable: false, searchable: false },
             ] : resource === 'products' ? [
@@ -3030,7 +3030,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeClientDetailModal();
     initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['client_id', 'code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
-    initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
+    initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['target_client_id', 'code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
     initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'employee_no', 'sim_id', 'full_name', 'email', 'phone', 'join_date', 'birth_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. ID karyawan dibuat otomatis.', successUpdate: 'Karyawan berhasil diperbarui.' });
     initializeMasterModal({ name: 'client-master', plural: 'clients', fields: ['code', 'name', 'status'], confirmTitle: 'client', successCreate: 'Client berhasil ditambahkan.', successUpdate: 'Client berhasil diperbarui.' });
     initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });

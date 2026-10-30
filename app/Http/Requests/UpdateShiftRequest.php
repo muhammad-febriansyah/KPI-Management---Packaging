@@ -26,8 +26,21 @@ class UpdateShiftRequest extends FormRequest
     public function rules(): array
     {
         $shift = $this->route('shift');
-        $clientId = app(CurrentClientService::class)->id();
+        $client = app(CurrentClientService::class);
+        $clientId = $this->integer('target_client_id') ?: $client->id();
+        $allowedClientIds = $this->user()?->is_super_admin
+            ? $client->availableFor($this->user())->modelKeys()
+            : [$client->id()];
 
-        return ['code' => ['required', 'string', 'max:30', Rule::unique('shifts', 'code')->where(fn ($query) => $query->where('client_id', $clientId))->ignore($shift instanceof Shift ? $shift->getKey() : null)], 'name' => ['required', 'string', 'max:100'], 'start_time' => ['required', 'date_format:H:i,H:i:s'], 'end_time' => ['required', 'date_format:H:i,H:i:s'], 'status' => ['required', Rule::in(['active', 'inactive'])]];
+        return [
+            'target_client_id' => $this->user()?->is_super_admin
+                ? ['sometimes', 'required', 'integer', Rule::in($allowedClientIds)]
+                : ['nullable', 'integer', Rule::in($allowedClientIds)],
+            'code' => ['required', 'string', 'max:30', Rule::unique('shifts', 'code')->where(fn ($query) => $query->where('client_id', $clientId))->ignore($shift instanceof Shift ? $shift->getKey() : null)],
+            'name' => ['required', 'string', 'max:100'],
+            'start_time' => ['required', 'date_format:H:i,H:i:s'],
+            'end_time' => ['required', 'date_format:H:i,H:i:s'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+        ];
     }
 }
