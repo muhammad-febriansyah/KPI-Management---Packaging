@@ -49,7 +49,7 @@ class EmployeeController extends Controller
             ->with(['group', 'client', 'user:id,avatar_path'])
             ->orderBy('full_name');
         if ($request->has('draw') || $request->expectsJson()) {
-            return DataTables::eloquent($query)->addColumn('client_name', fn (Employee $employee): string => $employee->client?->name ?? '—')->addColumn('group_name', fn (Employee $employee): string => $employee->group?->name ?? '—')->editColumn('status', fn (Employee $employee): string => view('components.badge', [
+            return DataTables::eloquent($query)->addColumn('client_name', fn (Employee $employee): string => $employee->client ? "{$employee->client->code} — {$employee->client->name}" : '—')->addColumn('group_name', fn (Employee $employee): string => $employee->group?->name ?? '—')->editColumn('status', fn (Employee $employee): string => view('components.badge', [
                 'variant' => $employee->status === 'active' ? 'success' : 'neutral',
                 'slot' => $employee->status === 'active' ? 'Aktif' : 'Nonaktif',
             ])->render())->addColumn('action', function (Employee $employee): string {

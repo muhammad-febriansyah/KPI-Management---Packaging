@@ -86,6 +86,7 @@ it('shows a searchable client selector for super admins', function () {
     $response->assertOk()
         ->assertSee('name="client_id"', false)
         ->assertSee('data-select2-remote="'.route('clients.options').'"', false)
+        ->assertSee('Asal Client')
         ->assertDontSee('data-disabled-on-edit', false)
         ->assertSee('data-select2-placeholder=', false)
         ->assertSee('data-employee-client-filter', false)
@@ -116,8 +117,8 @@ it('includes the employee birth date in the edit payload using the datepicker fo
 
 it('shows and filters employees from all clients for super admins', function () {
     $user = User::factory()->superAdmin()->create();
-    $currentClient = Client::factory()->create();
-    $otherClient = Client::factory()->create();
+    $currentClient = Client::factory()->create(['code' => 'CL-A', 'name' => 'Client Aktif']);
+    $otherClient = Client::factory()->create(['code' => 'CL-B', 'name' => 'Client Lain']);
     Employee::factory()->create(['client_id' => $currentClient->getKey(), 'full_name' => 'Karyawan Client Aktif']);
     Employee::factory()->create(['client_id' => $otherClient->getKey(), 'full_name' => 'Karyawan Client Lain']);
 
@@ -128,6 +129,8 @@ it('shows and filters employees from all clients for super admins', function () 
 
     expect(collect($allResponse->json('data'))->pluck('full_name'))
         ->toContain('Karyawan Client Aktif', 'Karyawan Client Lain');
+    expect(collect($allResponse->json('data'))->firstWhere('full_name', 'Karyawan Client Lain')['client_name'])
+        ->toBe('CL-B — Client Lain');
 
     $response = $this->actingAs($user)
         ->withSession(['current_client_id' => $currentClient->getKey()])
