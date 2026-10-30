@@ -165,3 +165,27 @@ it('limits leader dashboard metrics and charts to the leader group', function ()
         ->assertViewHas('outputTrend', fn (array $trend): bool => array_sum(array_column($trend, 'value')) === 12.0)
         ->assertViewHas('shiftSummaries', fn ($summaries): bool => (float) $summaries->first()->total_output === 12.0);
 });
+
+it('shows dashboard output without trailing decimal zeros', function () {
+    $admin = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $shift = Shift::factory()->create(['client_id' => $client->getKey()]);
+    $unit = Unit::factory()->create(['client_id' => $client->getKey()]);
+    $product = Product::factory()->create(['client_id' => $client->getKey(), 'unit_id' => $unit->getKey()]);
+    $record = fn (string $workDate, float $output) => WorkRealization::query()->create([
+        'client_id' => $client->getKey(), 'work_date' => $workDate, 'shift_id' => $shift->getKey(), 'product_id' => $product->getKey(),
+        'total_output' => $output, 'created_by' => $admin->getKey(),
+    ]);
+    $record(today()->toDateString(), 50);
+    $record(today()->startOfMonth()->toDateString(), 150.5);
+
+    $response = $this->actingAs($admin)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->get(route('dashboard'))
+        ->assertOk();
+
+    $response->assertSee('200,5', false)
+        ->assertDontSee('50,000', false)
+        ->assertDontSee('200,500', false)
+        ->assertSeeInOrder(['Output hari ini', '50', 'Output bulan ini', '200,5']);
+});

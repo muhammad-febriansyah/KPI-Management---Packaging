@@ -1,10 +1,11 @@
 @php
     $formatMoney = fn (int|float|string $amount): string => 'Rp '.number_format((float) $amount, 0, ',', '.');
+    $formatOutput = fn (int|float|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',');
     $payrollDeduction = $payrollSummary['deductions'];
     $shiftChart = $shiftSummaries->map(fn (object $summary): array => ['label' => $summary->shift?->name ?? 'Tanpa shift', 'value' => (float) $summary->total_output])->values()->all();
     $kpis = [
         ['label' => 'Realisasi area hari ini', 'value' => number_format($metrics['realizationsToday'], 0, ',', '.'), 'helper' => 'Group yang menjadi lingkup Anda', 'icon' => 'clipboard-document-list'],
-        ['label' => 'Output area hari ini', 'value' => number_format($metrics['outputToday'], 3, ',', '.'), 'helper' => 'Total output group Anda', 'icon' => 'cube'],
+        ['label' => 'Output area hari ini', 'value' => $formatOutput($metrics['outputToday']), 'helper' => 'Total output group Anda', 'icon' => 'cube'],
         ['label' => 'Batch aktif area', 'value' => number_format($metrics['activeBatches'], 0, ',', '.'), 'helper' => 'Produk pada group Anda', 'icon' => 'document-chart-bar'],
         ['label' => 'Karyawan terlibat', 'value' => number_format($metrics['assignedEmployeesToday'], 0, ',', '.'), 'helper' => 'Assignment group hari ini', 'icon' => 'users'],
         ['label' => 'Belum di-assign', 'value' => number_format($metrics['unassignedToday'], 0, ',', '.'), 'helper' => 'Realisasi area hari ini', 'icon' => 'bell'],
@@ -54,7 +55,7 @@
 
     <section class="mt-3 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]" aria-label="Grafik operasional">
         <x-card class="min-w-0" :padding="false">
-            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Tren output area</h2><p class="mt-0.5 text-[11px] text-slate-500">7 hari terakhir</p></div><span class="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">{{ number_format(collect($outputTrend)->sum('value'), 3, ',', '.') }} total</span></div>
+            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Tren output area</h2><p class="mt-0.5 text-[11px] text-slate-500">7 hari terakhir</p></div><span class="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">{{ $formatOutput(collect($outputTrend)->sum('value')) }} total</span></div>
             <div class="p-4 sm:p-5"><div data-dashboard-output-chart data-values='@json($outputTrend)' class="min-h-[230px]" role="img" aria-label="Grafik tren output area tujuh hari terakhir"></div><div class="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] text-slate-400">@foreach ($outputTrend as $point)<span><strong class="block font-semibold text-slate-600">{{ number_format($point['value'], 0, ',', '.') }}</strong>{{ $point['label'] }}</span>@endforeach</div></div>
         </x-card>
         <x-card class="min-w-0" :padding="false">
@@ -88,7 +89,7 @@
                                     <td class="max-w-[180px] truncate px-3 py-2.5" title="{{ $realization->product_name_snapshot }}">{{ $realization->product_name_snapshot ?: '—' }}</td>
                                     <td class="px-3 py-2.5">{{ $realization->shift?->name ?? '—' }}</td>
                                     <td class="px-3 py-2.5">{{ $realization->batch?->batch_no ?? '—' }}</td>
-                                    <td class="whitespace-nowrap px-3 py-2.5">{{ number_format($realization->total_output, 3, ',', '.') }}</td>
+                                    <td class="whitespace-nowrap px-3 py-2.5">{{ $formatOutput($realization->total_output) }}</td>
                                     <td class="whitespace-nowrap px-3 py-2.5"><x-badge :variant="$realization->employee_assignments_count > 0 ? 'success' : 'warning'">{{ $realization->employee_assignments_count > 0 ? 'Sudah di-assign' : 'Belum di-assign' }}</x-badge></td>
                                     <td class="whitespace-nowrap px-3 py-2.5"><a href="{{ route('realizations.show', $realization) }}" class="font-semibold text-primary-600">Detail</a></td>
                                 </tr>
@@ -108,7 +109,7 @@
                     @foreach ($shiftSummaries as $summary)
                         <div class="rounded-lg border border-line px-3 py-3">
                             <div class="flex items-center justify-between gap-3"><span class="text-xs font-semibold text-slate-700">{{ $summary->shift?->name ?? 'Tanpa shift' }}</span><span class="text-[11px] text-slate-500">{{ $summary->realizations_count }} realisasi</span></div>
-                            <p class="mt-1 text-lg font-semibold text-slate-950">{{ number_format($summary->total_output, 3, ',', '.') }}</p>
+                            <p class="mt-1 text-lg font-semibold text-slate-950">{{ $formatOutput($summary->total_output) }}</p>
                             <p class="text-[11px] text-slate-500">Total output group Anda</p>
                         </div>
                     @endforeach

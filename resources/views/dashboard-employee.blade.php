@@ -1,12 +1,13 @@
 @php
     $formatMoney = fn (int|float|string $amount): string => 'Rp '.number_format((float) $amount, 0, ',', '.');
+    $formatOutput = fn (int|float|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',');
     $netSalary = $payrollSummary['net'];
     $netIsNegative = $netSalary < 0;
     $kpis = [
         ['label' => 'Hari kerja', 'value' => $payroll ? number_format($payroll->attendance_days, 0, ',', '.') : '—', 'helper' => 'Bulan berjalan', 'icon' => 'chart-bar'],
-        ['label' => 'Output hari ini', 'value' => number_format($metrics['outputToday'], 3, ',', '.'), 'helper' => 'Realisasi pribadi', 'icon' => 'cube'],
+        ['label' => 'Output hari ini', 'value' => $formatOutput($metrics['outputToday']), 'helper' => 'Realisasi pribadi', 'icon' => 'cube'],
         ['label' => 'Realisasi bulan ini', 'value' => number_format($metrics['realizationsThisMonth'], 0, ',', '.'), 'helper' => 'Pekerjaan tercatat', 'icon' => 'clipboard-document-list'],
-        ['label' => 'Output bulan ini', 'value' => number_format($metrics['outputThisMonth'], 3, ',', '.'), 'helper' => 'Akumulasi pribadi', 'icon' => 'document-chart-bar'],
+        ['label' => 'Output bulan ini', 'value' => $formatOutput($metrics['outputThisMonth']), 'helper' => 'Akumulasi pribadi', 'icon' => 'document-chart-bar'],
     ];
 @endphp
 
@@ -45,7 +46,7 @@
 
     <section class="mt-3 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <x-card class="min-w-0" :padding="false">
-            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Tren output pribadi</h2><p class="mt-0.5 text-[11px] text-slate-500">7 hari terakhir</p></div><span class="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">{{ number_format(collect($outputTrend)->sum('value'), 3, ',', '.') }} total</span></div>
+            <div class="flex min-h-[60px] items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-5"><div><h2 class="text-sm font-semibold text-slate-900">Tren output pribadi</h2><p class="mt-0.5 text-[11px] text-slate-500">7 hari terakhir</p></div><span class="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">{{ $formatOutput(collect($outputTrend)->sum('value')) }} total</span></div>
             <div class="p-4 sm:p-5"><div data-dashboard-output-chart data-values='@json($outputTrend)' class="min-h-[230px]" role="img" aria-label="Grafik tren output pribadi tujuh hari terakhir"></div><div class="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] text-slate-400" aria-label="Ringkasan nilai output harian">@foreach ($outputTrend as $point)<span><strong class="block font-semibold text-slate-600">{{ number_format($point['value'], 0, ',', '.') }}</strong>{{ $point['label'] }}</span>@endforeach</div></div>
         </x-card>
         <x-card class="min-w-0" :padding="false">

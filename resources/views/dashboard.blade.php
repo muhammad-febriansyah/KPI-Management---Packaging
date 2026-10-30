@@ -1,8 +1,9 @@
 @php
+    $formatOutput = fn (int|float|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',');
     $kpis = [
-        ['label' => 'Output hari ini', 'value' => number_format($metrics['output'], 3, ',', '.'), 'helper' => 'Total output aktual', 'icon' => 'cube'],
-        ['label' => 'Output bulan ini', 'value' => number_format($metrics['outputThisMonth'], 3, ',', '.'), 'helper' => 'Total output periode berjalan', 'icon' => 'cube'],
-        ['label' => 'Pencapaian target bulan ini', 'value' => $metrics['targetAchievement'] === null ? '—' : number_format($metrics['targetAchievement'], 0, ',', '.').'%', 'helper' => $metrics['targetAchievement'] === null ? 'Target belum tersedia' : 'Estimasi target '.number_format($metrics['targetThisMonth'], 3, ',', '.').' unit', 'icon' => 'chart-bar'],
+        ['label' => 'Output hari ini', 'value' => $formatOutput($metrics['output']), 'helper' => 'Total output aktual', 'icon' => 'cube'],
+        ['label' => 'Output bulan ini', 'value' => $formatOutput($metrics['outputThisMonth']), 'helper' => 'Total output periode berjalan', 'icon' => 'cube'],
+        ['label' => 'Pencapaian target bulan ini', 'value' => $metrics['targetAchievement'] === null ? '—' : number_format($metrics['targetAchievement'], 0, ',', '.').'%', 'helper' => $metrics['targetAchievement'] === null ? 'Target belum tersedia' : 'Estimasi target '.$formatOutput($metrics['targetThisMonth']).' unit', 'icon' => 'chart-bar'],
     ];
 @endphp
 
@@ -87,7 +88,7 @@
                                 <td class="whitespace-nowrap px-3 py-2.5">{{ $realization->work_date?->translatedFormat('d M Y') ?? '—' }}</td>
                                 <td class="px-3 py-2.5">{{ $realization->product?->name ?? $realization->product_name_snapshot ?? '—' }}</td>
                                 <td class="px-3 py-2.5">{{ $realization->shift?->name ?? '—' }}</td>
-                                <td class="whitespace-nowrap px-3 py-2.5">{{ number_format((float) $realization->total_output, 3, ',', '.') }}</td>
+                                <td class="whitespace-nowrap px-3 py-2.5">{{ $formatOutput((float) $realization->total_output) }}</td>
                                 <td class="px-3 py-2.5">{{ $realization->is_complaint ? 'Ada komplain' : 'Normal' }}</td>
                             </tr>
                         @empty
