@@ -25,7 +25,7 @@ function validEmployeePayload(array $overrides = []): array
     ], $overrides);
 }
 
-it('stores an employee with sim id, email, and marital status', function () {
+it('generates the SIM ID itself and ignores one sent by the form', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -39,7 +39,7 @@ it('stores an employee with sim id, email, and marital status', function () {
     $this->assertDatabaseHas('employees', [
         'client_id' => $client->getKey(),
         'id' => $employee->getKey(),
-        'sim_id' => 'PEG1234',
+        'sim_id' => now()->format('\\I\\DYm').'001',
         'email' => 'ananda@example.com',
         'marital_status' => 'married',
     ]);
@@ -48,7 +48,7 @@ it('stores an employee with sim id, email, and marital status', function () {
     expect(Hash::check('01011995', User::query()->findOrFail($employee->user_id)->password))->toBeTrue();
 });
 
-it('keeps email and password out of the employee master form', function () {
+it('shows email and a read-only SIM ID but no password in the employee master form', function () {
     $user = User::factory()->superAdmin()->create();
     $client = Client::factory()->create();
 
@@ -57,7 +57,9 @@ it('keeps email and password out of the employee master form', function () {
         ->get(route('employees.index'));
 
     $response->assertOk()
-        ->assertDontSee('name="email"', false)
+        ->assertSee('name="email"', false)
+        ->assertSee('name="sim_id" readonly', false)
+        ->assertDontSee('name="employee_no"', false)
         ->assertDontSee('name="password"', false)
         ->assertSee('Password default: tanggal lahir dengan format ddmmyyyy.', false)
         ->assertSee('name="birth_date"', false)
@@ -384,4 +386,36 @@ it('includes humanized labels in the detail payload for the datatable', function
         ->toContain('&quot;employee_status&quot;:&quot;Kontrak&quot;')
         ->toContain('&quot;marital_status&quot;:&quot;Cerai mati&quot;')
         ->toContain('&quot;group_name&quot;:&quot;Group A&quot;');
+});
+
+it('previews the next SIM ID for the chosen client', function () {
+    $user = User::factory()->superAdmin()->create();
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $prefix = now()->format('\\I\\DYm');
+
+    $preview = fn (Client $target) => $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.next-sim-id', ['client_id' => $target->getKey()]));
+
+    $preview($client)->assertOk()->assertJsonPath('sim_id', $prefix.'001');
+
+    Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => $prefix.'007']);
+    Employee::factory()->create(['client_id' => $client->getKey(), 'sim_id' => 'LAMA-001']);
+
+    $preview($client)->assertOk()->assertJsonPath('sim_id', $prefix.'008');
+    $preview($otherClient)->assertOk()->assertJsonPath('sim_id', $prefix.'001');
+});
+
+it('refuses a SIM ID preview for a client the user cannot access', function () {
+    $client = Client::factory()->create();
+    $otherClient = Client::factory()->create();
+    $user = User::factory()->create();
+    $role = Role::query()->firstOrCreate(['code' => 'admin'], ['name' => 'Admin']);
+    $user->clients()->attach($client, ['role_id' => $role->getKey(), 'is_default' => true, 'status' => 'active']);
+
+    $this->actingAs($user)
+        ->withSession(['current_client_id' => $client->getKey()])
+        ->getJson(route('employees.next-sim-id', ['client_id' => $otherClient->getKey()]))
+        ->assertForbidden();
 });

@@ -3,15 +3,15 @@
         <div class="mb-5 flex items-center justify-between">
             <div>
                 <h2 data-employee-modal-title class="text-lg font-semibold">Tambah karyawan</h2>
-                <p class="mt-1 text-xs text-slate-500">Akun login dibuat otomatis menggunakan ID karyawan. Password dapat diatur dari menu Akses.</p>
+                <p class="mt-1 text-xs text-slate-500">ID karyawan dibuat otomatis dan tidak perlu diisi. SIM ID dibuat saat disimpan dengan format IDyyyymm001.</p>
             </div>
             <button type="button" data-employee-close aria-label="Tutup"><x-icon name="x-mark" /></button>
         </div>
         <form data-employee-form class="grid gap-4">
             <input type="hidden" name="_method" value="POST">
             <div class="grid gap-4 sm:grid-cols-2">
-                <label class="grid gap-2 text-sm font-semibold"><span>ID Karyawan <span class="text-danger">*</span></span><input name="employee_no" readonly placeholder="Dibuat otomatis oleh sistem" class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600"></label>
-                <label class="grid gap-2 text-sm font-semibold"><span>SIM ID</span><input name="sim_id" placeholder="Contoh: PEG1234" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
+                <label class="grid gap-2 text-sm font-semibold"><span>SIM ID</span><input name="sim_id" readonly data-readonly-on-create placeholder="Dibuat otomatis saat disimpan" class="h-11 rounded-lg border border-line bg-slate-50 px-3 font-normal text-slate-600"><small class="font-normal text-slate-500">Format IDyyyymm001; nomor urut bertambah otomatis.</small></label>
+                <label class="grid gap-2 text-sm font-semibold"><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="Contoh: nama@perusahaan.com" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
                 <label class="grid gap-2 text-sm font-semibold"><span>Nama lengkap <span class="text-danger">*</span></span><input name="full_name" required placeholder="Masukkan nama lengkap" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
                 <label class="grid gap-2 text-sm font-semibold"><span>Nomor telepon <span class="text-danger">*</span></span><input name="phone" required placeholder="Contoh: 081234567890" class="h-11 rounded-lg border border-line px-3 font-normal"></label>
                 <label class="grid gap-2 text-sm font-semibold"><span>Tanggal masuk <span class="text-danger">*</span></span><input type="text" name="join_date" data-datepicker required autocomplete="off" placeholder="Pilih tanggal" class="h-11 rounded-lg border border-line px-3 font-normal"></label>

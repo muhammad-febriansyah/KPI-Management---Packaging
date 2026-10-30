@@ -1185,6 +1185,33 @@ const initializeProductDetailModal = () => {
     });
 };
 
+const initializeEmployeeSimIdPreview = () => {
+    const simField = document.querySelector('[data-sim-id-preview]');
+    const form = simField?.closest('form');
+    const clientField = form?.querySelector('[name="client_id"]');
+    if (!simField || !form || !clientField) return;
+
+    let requestSequence = 0;
+    const refresh = async () => {
+        if (form.elements._method?.value === 'PUT') return;
+
+        const currentRequest = ++requestSequence;
+        simField.value = '';
+        if (!clientField.value) return;
+
+        try {
+            const response = await $.ajax({ url: simField.dataset.simIdUrl, data: { client_id: clientField.value }, dataType: 'json' });
+            if (currentRequest === requestSequence && form.elements._method?.value !== 'PUT') simField.value = response.sim_id ?? '';
+        } catch {
+            // The server assigns the SIM ID on save, so a failed preview only leaves the field empty.
+        }
+    };
+
+    $(clientField).on('change', refresh);
+    // Wait for the modal's own open handler to reset the form before reading the client.
+    document.querySelector('[data-employee-create]')?.addEventListener('click', () => setTimeout(refresh, 0));
+};
+
 const initializeEmployeeDetailModal = () => {
     const modal = document.querySelector('[data-employee-detail-modal]');
     if (!modal) return;
@@ -1687,6 +1714,11 @@ const initializeMasterModal = ({ name, plural, fields, confirmTitle, successCrea
         });
         form.querySelectorAll('[data-required-on-create]').forEach((input) => {
             input.required = !item;
+        });
+        form.querySelectorAll('[data-readonly-on-create]').forEach((input) => {
+            input.readOnly = !item;
+            input.classList.toggle('bg-slate-50', !item);
+            input.classList.toggle('text-slate-600', !item);
         });
         form.querySelectorAll('[data-default-on-create]').forEach((input) => {
             input.value = item ? '' : input.dataset.defaultOnCreate;
@@ -2921,11 +2953,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeManageModals();
     initializeProductDetailModal();
     initializeEmployeeDetailModal();
+    initializeEmployeeSimIdPreview();
     initializeClientDetailModal();
     initializeMasterModal({ name: 'cost-center', plural: 'cost-centers', fields: ['client_id', 'code', 'name', 'status'], confirmTitle: 'cost center', successCreate: 'Cost center berhasil ditambahkan.', successUpdate: 'Cost center berhasil diperbarui.' });
     initializeMasterModal({ name: 'group', plural: 'groups', fields: ['code', 'name', 'status'], confirmTitle: 'group', successCreate: 'Group berhasil ditambahkan.', successUpdate: 'Group berhasil diperbarui.' });
     initializeMasterModal({ name: 'shift', plural: 'shifts', fields: ['code', 'name', 'start_time', 'end_time', 'status'], confirmTitle: 'shift', successCreate: 'Shift berhasil ditambahkan.', successUpdate: 'Shift berhasil diperbarui.' });
-    initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'employee_no', 'sim_id', 'full_name', 'phone', 'join_date', 'birth_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. Akun login menggunakan ID karyawan.', successUpdate: 'Karyawan berhasil diperbarui.' });
+    initializeMasterModal({ name: 'employee', plural: 'employees', fields: ['client_id', 'sim_id', 'full_name', 'email', 'phone', 'join_date', 'birth_date', 'gender', 'employee_status', 'marital_status', 'group_id'], confirmTitle: 'karyawan', successCreate: 'Karyawan berhasil ditambahkan. SIM ID dibuat otomatis.', successUpdate: 'Karyawan berhasil diperbarui.' });
     initializeMasterModal({ name: 'client-master', plural: 'clients', fields: ['code', 'name', 'status'], confirmTitle: 'client', successCreate: 'Client berhasil ditambahkan.', successUpdate: 'Client berhasil diperbarui.' });
     initializeMasterModal({ name: 'product', plural: 'products', fields: ['client_id', 'sku', 'name', 'unit_id', 'group_id', 'cost_center_id', 'po_price', 'employee_rate', 'estimated_output_per_hour', 'status'], confirmTitle: 'produk', successCreate: 'Produk berhasil ditambahkan.', successUpdate: 'Produk berhasil diperbarui.' });
     initializeMasterModal({ name: 'client', plural: 'clients', fields: ['code', 'name', 'account_name', 'login_username', 'login_email', 'password', 'password_confirmation', 'status'], confirmTitle: 'client', successCreate: 'Client dan akun login berhasil ditambahkan.', successUpdate: 'Client dan akun login berhasil diperbarui.' });
