@@ -34,7 +34,7 @@ class AuditLogController extends Controller
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'action' => ['nullable', 'string', 'max:50'],
         ]);
-        $query = AuditLog::query()->with('user')->where(fn ($builder) => $builder->where('client_id', $client->id())->orWhereNull('client_id'))->latest('created_at');
+        $query = AuditLog::query()->with('user')->latest('created_at');
         $query->when($validated['date_from'] ?? null, fn ($q, string $dateFrom) => $q->where('created_at', '>=', $dateFrom.' 00:00:00'))
             ->when($validated['date_to'] ?? null, fn ($q, string $dateTo) => $q->where('created_at', '<=', $dateTo.' 23:59:59'))
             ->when(($validated['action'] ?? null) && ($validated['action'] ?? null) !== 'all', fn ($q) => $q->where('action', $validated['action']));
@@ -51,6 +51,12 @@ class AuditLogController extends Controller
 
     private function describeActivity(AuditLog $log): string
     {
+        $description = $log->new_values['description'] ?? null;
+
+        if (is_string($description) && trim($description) !== '') {
+            return $description;
+        }
+
         if ($log->action === 'login') {
             return 'Masuk ke sistem';
         }
@@ -63,6 +69,7 @@ class AuditLogController extends Controller
             'create' => 'Menambahkan',
             'update' => 'Mengubah',
             'delete' => 'Menghapus',
+            'import' => 'Mengimpor',
             default => null,
         };
 

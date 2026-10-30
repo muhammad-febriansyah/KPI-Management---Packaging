@@ -34,7 +34,7 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
-Route::middleware('auth')->group(function (): void {
+Route::middleware(['auth', 'audit'])->group(function (): void {
     Route::bind('product', function (string $value): Product {
         $query = Product::query();
 
